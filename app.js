@@ -27,6 +27,8 @@ const TASK_SETUP_DEFAULTS = {
   "Capture decisions and the next visible action": { preparation: "Keep one decision note pinned and ready", placement: "Leave the note open beside the work", launchCue: "When the focused work block ends, write the decision before standing up", fallback: "Record one next action in a single sentence" }
 };
 
+const CONNECTION_DEFAULT = { type: "", person: "", plan: "", completed: false, completedAt: "", restMinutes: 30, restCompleted: false, restCompletedAt: "" };
+
 const DIMENSIONS = [
   ["Sleep and energy", "Was I getting enough rest and waking with usable energy?"],
   ["Mental clarity", "Did I feel present, focused, and emotionally regulated?"],
@@ -48,7 +50,7 @@ function weekStartKey(date = new Date()) {
 }
 
 const defaultState = () => ({
-  version: 6,
+  version: 7,
   week: { startedAt: weekStartKey(), outcome: "Create consistent movement in the business", secondary: "Protect health, clarity, and recovery while executing", evidence: "Complete one meaningful business deliverable and identify the next milestone.", why: "Build proof that focused mornings compound into real momentum." },
   tasks: [
     { id: crypto.randomUUID(), name: "Define this week's business needle-mover", impact: 3, complexity: 2, energy: "high", duration: 30, dueDate: "", alignment: "primary", ...TASK_SETUP_DEFAULTS["Define this week's business needle-mover"], createdAt: new Date().toISOString(), done: false },
@@ -177,7 +179,7 @@ function normalizeState(input) {
   return {
     ...base,
     ...input,
-    version: 6,
+    version: 7,
     week: { ...base.week, ...(input.week || {}), startedAt: input.week?.startedAt || weekStartKey() },
     tasks: normalizeTasks(input.tasks, base.tasks),
     inbox: Array.isArray(input.inbox) ? input.inbox : [],
@@ -266,7 +268,8 @@ function addDays(date, amount) {
 
 function todayState() {
   const key = dayKey();
-  state.daily[key] = { energy: 0, clarity: 0, availableMinutes: 120, mode: "standard", routine: [], win: "", friction: "", tomorrow: "", tomorrowTaskId: "", tomorrowReady: false, ...(state.daily[key] || {}) };
+  const existing = state.daily[key] || {};
+  state.daily[key] = { energy: 0, clarity: 0, availableMinutes: 120, mode: "standard", routine: [], win: "", friction: "", tomorrow: "", tomorrowTaskId: "", tomorrowReady: false, ...existing, connection: { ...CONNECTION_DEFAULT, ...(existing.connection || {}) } };
   return state.daily[key];
 }
 
@@ -347,6 +350,17 @@ function taskReason(task, daily = todayState()) {
 function recentDailyRecords(length = 7) {
   const earliest = startOfDay(addDays(new Date(), -(length - 1)));
   return Object.entries(state.daily).filter(([key]) => dateFromKey(key) >= earliest).sort(([a], [b]) => a.localeCompare(b));
+}
+
+function connectionSignal(daily = todayState()) {
+  const records = recentDailyRecords(7).map(([, item]) => item);
+  const connectedDays = records.filter(item => item.connection?.completed).length;
+  const restDays = records.filter(item => item.connection?.restCompleted).length;
+  const recentTypes = records.filter(item => item.connection?.completed && item.connection.type).map(item => item.connection.type);
+  const options = ["call", "text", "plan", "inperson"];
+  const recommendedType = options.find(type => !recentTypes.slice(-3).includes(type)) || options[(recentTypes.length + 1) % options.length];
+  const labels = { call: "Call someone", text: "Send a real message", plan: "Create a link-up", inperson: "Spend time together" };
+  return { connectedDays, restDays, recommendedType, recommendation: labels[recommendedType], completed: Boolean(daily.connection?.completed), restCompleted: Boolean(daily.connection?.restCompleted) };
 }
 
 function recoverySignal(daily = todayState()) {
@@ -527,6 +541,7 @@ function weeklyCoach() {
   insights.push(metrics.tasksDone ? `${metrics.tasksDone} action${metrics.tasksDone === 1 ? "" : "s"} completed; protect the work that directly moved the weekly outcome.` : "No completed action is recorded yet; choose one finish line small enough to close.");
   insights.push(friction ? `Repeated friction to design around: ${friction}` : "Record friction in the evening check-in so the system can distinguish effort problems from design problems.");
   insights.push(routine.ready ? `${routine.step} is at ${routine.rate}% across ${routine.attempts} attempts. ${routine.message}` : routine.message);
+  insights.push(metrics.connectionDays || metrics.restDays ? `Human connection was protected on ${metrics.connectionDays} day${metrics.connectionDays === 1 ? "" : "s"}; deliberate rest on ${metrics.restDays}. Keep both visible before adding more work.` : "No connection or protected rest is recorded yet. A sustainable week needs contact with people and time with no performance demand.");
   return { title, summary: recovery.note, insights };
 }
 
@@ -554,7 +569,9 @@ function weekMetrics(startKey = state.week.startedAt, tasks = state.tasks, ratin
     clarity: average(days.map(day => day.clarity)),
     routine: routinePossible ? Math.round((routineDone / routinePossible) * 100) : 0,
     tasksDone: tasks.filter(task => task.done).length,
-    daysChecked: days.filter(day => day.energy || day.clarity || day.routine?.some(Boolean)).length
+    connectionDays: days.filter(day => day.connection?.completed).length,
+    restDays: days.filter(day => day.connection?.restCompleted).length,
+    daysChecked: days.filter(day => day.energy || day.clarity || day.routine?.some(Boolean) || day.connection?.completed || day.connection?.restCompleted).length
   };
 }
 
@@ -591,12 +608,13 @@ function renderToday() {
     <div class="engine-grid">${engineStat("Safe to spend", currency(totals.safeToSpend), "After protected money", "money")}${engineStat("Routine", `${routineDone}/${mode.routine.length}`, `${mode.label} mode`, "today")}${engineStat("Recovery", plan.recovery.key === "restore" ? "Protect" : plan.recovery.key === "expand" ? "Expand" : "Steady", plan.recovery.label, "today")}${engineStat("Execution", primary ? "1 next" : "Clear", primary?.name || "No open actions", "week")}${engineStat("Life admin", lifeDue ? `${lifeDue} due` : "Clear", "Next 7 days", "architecture")}</div>
     <div class="grid two-column">
       <div class="stack">
-        ${dailyCommandCard(plan)}
+        ${dailyCommandCard(plan, daily)}
         <article class="card"><div class="card-head"><div><p class="eyebrow">Daily routine OS</p><h2>${escapeHTML(mode.label)} mode</h2><p>${escapeHTML(mode.note)}</p></div><span class="tag">${routineDone}/${mode.routine.length}</span></div><div class="routine-list">${mode.routine.map((item, index) => routineTemplate(item, index, daily.routine[index])).join("")}</div></article>
         <article class="card"><div class="card-head"><div><p class="eyebrow">Execution OS</p><h2>Best use of this energy</h2></div><button class="text-button" data-add="task">+ Add</button></div><div class="task-list">${openTasks.length ? openTasks.slice(0, 4).map(taskTemplate).join("") : '<div class="empty">No open actions. Choose the next meaningful outcome.</div>'}</div></article>
       </div>
       <aside class="stack">
         <article class="card card-muted"><div class="card-head"><div><p class="eyebrow">State check-in</p><h2>What capacity is here?</h2></div></div><span class="micro-label">Energy</span><div class="energy-picker">${[1,2,3,4,5].map(value => `<button class="energy-button ${daily.energy === value ? "selected" : ""}" data-energy="${value}"><span>${["○","◔","◑","◕","●"][value-1]}</span><small>${value}</small></button>`).join("")}</div><span class="micro-label clarity-label">Mental clarity</span><div class="energy-picker compact-picker">${[1,2,3,4,5].map(value => `<button class="energy-button ${daily.clarity === value ? "selected" : ""}" data-clarity="${value}"><small>${value}</small></button>`).join("")}</div><span class="micro-label time-label">Focused time available</span><div class="time-picker">${[[45,"45m"],[90,"1.5h"],[180,"3h"],[300,"5h"]].map(([value,label]) => `<button class="time-button ${Number(daily.availableMinutes) === value ? "selected" : ""}" data-available-minutes="${value}">${label}</button>`).join("")}</div><div class="mode-row">${Object.entries(state.modes).map(([key, value]) => `<button class="mode-button ${daily.mode === key ? "selected" : ""}" data-mode="${key}">${escapeHTML(value.label)}</button>`).join("")}</div><p class="suggestion"><strong>${escapeHTML(plan.recovery.label)}.</strong> ${escapeHTML(plan.recovery.note)}</p></article>
+        ${connectionRestCard(daily)}
         <article class="card weekly-anchor-card"><p class="eyebrow">Primary weekly outcome</p><h2>${escapeHTML(state.week.outcome || "Define the result that would make this week count.")}</h2><p>${escapeHTML(state.week.evidence || "Name the evidence that will prove it is complete.")}</p></article>
         ${tomorrowSetupCard(daily, openTasks)}
         <article class="card"><div class="card-head"><div><p class="eyebrow">Evening feedback loop</p><h2>Close the day cleanly</h2></div></div>${dailyField("win", "What moved today?", "Name the meaningful progress.")}${dailyField("friction", "What caused friction?", "Situation, cue, or missing preparation.")}${dailyField("tomorrow", "Tomorrow's main outcome", "One finish condition for tomorrow.")}<p class="money-note">Recorded spending today: <strong>${currency(spentToday())}</strong></p></article>
@@ -604,12 +622,25 @@ function renderToday() {
     </div>`;
 }
 
-function dailyCommandCard(plan) {
+function dailyCommandCard(plan, daily = todayState()) {
   const rows = [`<div class="command-row foundation"><i>01</i><span><strong>Foundations</strong><small>${plan.routineMinutes ? `${plan.routineMinutes} minutes remain in ${plan.mode.label} mode` : "Routine foundations complete"}</small></span></div>`];
+  const connection = connectionSignal(daily);
+  if (!connection.completed) rows.push(`<div class="command-row connection"><i>♥</i><span><strong>One human connection</strong><small>${escapeHTML(connection.recommendation)} · keep people inside the plan</small></span><button class="mini-arrow" data-scroll-target="connection-card" aria-label="Open human connection">›</button></div>`);
+  if (!connection.restCompleted) rows.push(`<div class="command-row rest"><i>R</i><span><strong>Protected rest</strong><small>${Number(daily.connection.restMinutes) || 30} minutes with no performance demand</small></span><button class="mini-check" data-rest-complete aria-label="Mark protected rest complete">✓</button></div>`);
   plan.tasks.forEach((task, index) => rows.push(`<div class="command-row"><i>${String(index + 2).padStart(2, "0")}</i><span><strong>${escapeHTML(task.name)}</strong><small>${escapeHTML(taskReason(task))} · ${task.duration} min</small></span><button class="mini-check" data-task-toggle="${task.id}" aria-label="Complete ${escapeHTML(task.name)}">✓</button></div>`));
   if (plan.maintenance) rows.push(`<div class="command-row alert"><i>!</i><span><strong>${escapeHTML(plan.maintenance.item.name)}</strong><small>Life maintenance · ${escapeHTML(maintenanceDueLabel(plan.maintenance))}</small></span><button class="mini-arrow" data-view-target="architecture">›</button></div>`);
   if (plan.bill) rows.push(`<div class="command-row alert"><i>£</i><span><strong>${escapeHTML(plan.bill.bill.name)}</strong><small>${currency(plan.bill.bill.amount)} · ${escapeHTML(billDueLabel(plan.bill))}</small></span><button class="mini-arrow" data-view-target="money">›</button></div>`);
   return `<article class="card card-green command-card"><div class="command-head"><div><p class="eyebrow">Adaptive daily plan</p><h2>${escapeHTML(plan.recovery.label)}</h2><p>${escapeHTML(plan.recovery.note)}</p></div><span>${plan.capacity} min</span></div><div class="command-list">${rows.join("")}</div><div class="command-anchor"><span>Anchored to</span><strong>${escapeHTML(state.week.outcome || "your weekly outcome")}</strong></div></article>`;
+}
+
+function connectionRestCard(daily = todayState()) {
+  const connection = daily.connection;
+  const signal = connectionSignal(daily);
+  const types = [["call", "Call", "☎"], ["text", "Text", "↗"], ["plan", "Link up", "+"], ["inperson", "In person", "♥"]];
+  const recentPeople = [...new Set(recentDailyRecords(30).map(([, item]) => item.connection?.person?.trim()).filter(Boolean))].slice(-8).reverse();
+  const humanDone = Boolean(connection.completed);
+  const restDone = Boolean(connection.restCompleted);
+  return `<article class="card connection-card ${humanDone && restDone ? "complete" : ""}" id="connection-card"><div class="card-head"><div><p class="eyebrow">Connection + recovery</p><h2>${humanDone && restDone ? "Human day protected." : "People and rest are foundations."}</h2><p>One genuine interaction and one period with no performance demand.</p></div><span class="connection-score">${signal.connectedDays}/7</span></div><section class="connection-section"><div class="section-mini-head"><span>Human interaction</span><small>${humanDone ? "Completed" : `Suggested: ${signal.recommendation}`}</small></div><div class="connection-picker">${types.map(([type, label, icon]) => `<button class="connection-type ${connection.type === type ? "selected" : ""}" data-connection-type="${type}" aria-pressed="${connection.type === type}"><i>${icon}</i><span>${label}</span></button>`).join("")}</div><div class="connection-fields"><div class="field"><label for="connection-person">Who?</label><input id="connection-person" data-connection-field="person" list="recent-people" value="${escapeHTML(connection.person)}" placeholder="Name or relationship" /></div><div class="field"><label for="connection-plan">What will you do?</label><textarea id="connection-plan" data-connection-field="plan" placeholder="Call after dinner, send a proper message, suggest Saturday…">${escapeHTML(connection.plan)}</textarea></div></div>${recentPeople.length ? `<datalist id="recent-people">${recentPeople.map(person => `<option value="${escapeHTML(person)}"></option>`).join("")}</datalist>` : ""}<button class="connection-complete ${humanDone ? "done" : ""}" data-connection-complete ${connection.type ? "" : "disabled"}>${humanDone ? "Connection completed ✓" : "Mark interaction complete"}</button></section><section class="rest-section"><div class="section-mini-head"><span>Protected rest</span><small>${restDone ? "Completed" : `${signal.restDays}/7 days protected`}</small></div><div class="rest-picker">${[15,30,60,90].map(minutes => `<button class="rest-time ${Number(connection.restMinutes) === minutes ? "selected" : ""}" data-rest-minutes="${minutes}">${minutes}m</button>`).join("")}</div><p>No work, optimisation, admin, or guilt. Walk, listen to music, sit outside, play, or simply stop.</p><button class="connection-complete rest-complete ${restDone ? "done" : ""}" data-rest-complete>${restDone ? "Rest protected ✓" : "Mark rest complete"}</button></section></article>`;
 }
 
 function tomorrowSetupCard(daily, openTasks = rankedTasks(daily)) {
@@ -1137,7 +1168,7 @@ async function checkReminders() {
   const today = dayKey(now);
   const checks = [
     { key: `morning-${today}`, due: minutesSince(reminder.morning, now), window: 120, title: "Choose your honest capacity", body: "Check your energy, select a mode, and protect one meaningful outcome." },
-    { key: `evening-${today}`, due: minutesSince(reminder.evening, now), window: 180, title: "Make tomorrow easy", body: "Capture the win, choose tomorrow's task, and prepare its environment before motivation is needed." }
+    { key: `evening-${today}`, due: minutesSince(reminder.evening, now), window: 180, title: "Close the human day", body: "Protect one real interaction, take deliberate rest, then prepare tomorrow's first action." }
   ];
   if (String(now.getDay()) === String(reminder.weeklyDay)) checks.push({ key: `weekly-${today}`, due: minutesSince(reminder.weeklyTime, now), window: 240, title: "Weekly review", body: "Close the loop, choose recovery, and define what matters next." });
   for (const item of checks) {
@@ -1406,6 +1437,41 @@ document.addEventListener("click", event => {
   const target = event.target.closest("button, [data-edit-script]");
   if (!target || document.body.classList.contains("locked")) return;
   if (target.dataset.viewTarget) return goToView(target.dataset.viewTarget);
+  if (target.dataset.scrollTarget) {
+    document.getElementById(target.dataset.scrollTarget)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+  if (target.dataset.connectionType) {
+    const connection = todayState().connection;
+    connection.type = target.dataset.connectionType;
+    connection.completed = false;
+    connection.completedAt = "";
+    saveState("Connection chosen");
+    return render();
+  }
+  if (target.hasAttribute("data-connection-complete")) {
+    const connection = todayState().connection;
+    if (!connection.type) return showToast("Choose how you will connect first");
+    connection.completed = !connection.completed;
+    connection.completedAt = connection.completed ? new Date().toISOString() : "";
+    saveState(connection.completed ? "Human connection protected" : "Connection reopened");
+    return render();
+  }
+  if (target.dataset.restMinutes) {
+    const connection = todayState().connection;
+    connection.restMinutes = Number(target.dataset.restMinutes);
+    connection.restCompleted = false;
+    connection.restCompletedAt = "";
+    saveState("Rest time protected");
+    return render();
+  }
+  if (target.hasAttribute("data-rest-complete")) {
+    const connection = todayState().connection;
+    connection.restCompleted = !connection.restCompleted;
+    connection.restCompletedAt = connection.restCompleted ? new Date().toISOString() : "";
+    saveState(connection.restCompleted ? "Rest protected" : "Rest reopened");
+    return render();
+  }
   if (target.dataset.energy) {
     const daily = todayState();
     daily.energy = Number(target.dataset.energy);
@@ -1524,6 +1590,11 @@ document.addEventListener("keydown", event => {
 document.addEventListener("change", event => {
   const target = event.target;
   if (target.matches("[data-bill-frequency]")) updateBillEditorFields();
+  if (target.dataset.connectionField) {
+    todayState().connection[target.dataset.connectionField] = target.value.trim();
+    saveState("Connection plan saved");
+    return;
+  }
   if (target.dataset.tomorrowTask !== undefined) {
     const daily = todayState();
     daily.tomorrowTaskId = target.value;

@@ -5,6 +5,7 @@ A dependency-free, mobile-first personal operating system connecting five engine
 ## Included systems
 
 - Adaptive daily command centre using energy, available time, routines, deadlines, bills, and life-maintenance dates
+- Daily human-connection and protected-rest foundations with seven-day consistency feedback
 - Deadline-aware task scheduling with weekly-outcome alignment and nightly Tomorrow Setup
 - Editable Minimum, Standard, and Peak routine modes
 - Cue-response architecture with task preparation, placement, launch, fallback, and if-then scripts
