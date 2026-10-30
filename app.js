@@ -77,6 +77,7 @@ function todayState() { const key = dayKey(); state.daily[key] = { energy: 0, cl
 function monthlyState() { const key = monthKey(); state.monthly[key] = { financial: "", growth: "", business: "", lifestyle: "", adjustment: "", ...(state.monthly[key] || {}) }; return state.monthly[key]; }
 function suggestedMode(energy) { return energy <= 2 ? "minimum" : energy <= 4 ? "standard" : "peak"; }
 function formatDate() { return new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long" }).format(new Date()); }
+function greeting() { const hour = new Date().getHours(); return hour < 12 ? "Good morning." : hour < 18 ? "Good afternoon." : "Good evening."; }
 function escapeHTML(value = "") { return String(value).replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char])); }
 function currency(value) { return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 2 }).format(Number(value) || 0); }
 function energyLabel(value) { return ({ low: "Low energy", medium: "Medium energy", high: "High energy" })[value]; }
@@ -104,7 +105,7 @@ function renderToday() {
   const openTasks = state.tasks.filter(task => !task.done).sort((a, b) => taskScore(b, daily.energy || 3) - taskScore(a, daily.energy || 3));
   const primary = openTasks[0];
   document.getElementById("view-today").innerHTML = `
-    <div class="page-head"><p class="eyebrow">${escapeHTML(formatDate())}</p><h1 id="today-heading">Your command centre.</h1><p>Protect the foundations, move one meaningful outcome, and keep the rest of life visible.</p></div>
+    <div class="page-head"><p class="eyebrow">${escapeHTML(formatDate())} · Command centre</p><h1 id="today-heading">${greeting()}</h1><p>Protect the foundations, move one meaningful outcome, and keep the rest of life visible.</p></div>
     <div class="engine-grid">${engineStat("Money", currency(totals.available), "Available now", "money")}${engineStat("Routine", `${routineDone}/${mode.routine.length}`, `${mode.label} mode`, "today")}${engineStat("Mental", daily.clarity ? `${daily.clarity}/5` : "—", "Clarity", "today")}${engineStat("Execution", primary ? "1 next" : "Clear", primary?.name || "No open actions", "week")}${engineStat("Life", state.life.relationships || state.life.enjoyment ? "Planned" : "Open", "Relationships + enjoyment", "review")}</div>
     <div class="grid two-column">
       <div class="stack">
