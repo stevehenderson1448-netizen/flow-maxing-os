@@ -318,6 +318,7 @@ function rankedTasks(daily = todayState()) {
 }
 
 function taskReason(task, daily = todayState()) {
+  if (task.done) return "Completed this week";
   const due = taskDueDays(task);
   if (due !== null && due < 0) return `${Math.abs(due)} day${Math.abs(due) === 1 ? "" : "s"} overdue`;
   if (due === 0) return "Due today";
@@ -414,11 +415,11 @@ function billScheduleEntry(bill, reference = new Date()) {
   const current = billCycle(bill, reference);
   const currentPaid = bill.paidPeriods.includes(current.period);
   const outstanding = nextOutstandingBillCycle(bill, reference);
-  if (!outstanding) return { bill, due: current.due, period: current.period, days: daysFromToday(current.due, reference), status: "paid", actionPaid: true };
+  if (!outstanding) return { bill, due: current.due, period: current.period, days: daysFromToday(current.due, reference), status: "paid", actionPaid: true, hasOutstanding: false };
   const days = daysFromToday(outstanding.due, reference);
   const actionPaid = currentPaid && days > 0;
   const status = actionPaid ? "paid" : days < 0 ? "overdue" : days === 0 ? "today" : days <= Math.max(3, bill.remindDays) ? "soon" : "upcoming";
-  return { bill, ...outstanding, days, status, actionPaid, actionPeriod: actionPaid ? current.period : outstanding.period };
+  return { bill, ...outstanding, days, status, actionPaid, hasOutstanding: true, actionPeriod: actionPaid ? current.period : outstanding.period };
 }
 
 function monthlyBillEquivalent(bill) {
@@ -434,8 +435,10 @@ function maintenanceCycle(item, reference = new Date(), offset = 0) {
     const baseYear = Math.max(reference.getFullYear(), original.getFullYear()) + offset;
     return { period: String(baseYear), due: clampedDate(baseYear, original.getMonth(), original.getDate()) };
   }
-  const target = new Date(reference.getFullYear(), reference.getMonth() + offset, 1);
-  if (original > reference && offset === 0) target.setFullYear(original.getFullYear(), original.getMonth(), 1);
+  const base = original > reference
+    ? new Date(original.getFullYear(), original.getMonth(), 1)
+    : new Date(reference.getFullYear(), reference.getMonth(), 1);
+  const target = new Date(base.getFullYear(), base.getMonth() + offset, 1);
   return { period: monthKey(target), due: clampedDate(target.getFullYear(), target.getMonth(), original.getDate()) };
 }
 
@@ -463,9 +466,9 @@ function moneyTotals() {
   });
   const billSchedule = state.finances.bills.map(bill => billScheduleEntry(bill)).sort((a, b) => a.due - b.due);
   const monthlyBills = state.finances.bills.reduce((sum, item) => sum + monthlyBillEquivalent(item), 0);
-  const overdueBills = billSchedule.filter(item => !item.actionPaid && item.days < 0).reduce((sum, item) => sum + Number(item.bill.amount || 0), 0);
-  const dueSoon = billSchedule.filter(item => !item.actionPaid && item.days >= 0 && item.days <= 7).reduce((sum, item) => sum + Number(item.bill.amount || 0), 0);
-  const dueThirty = billSchedule.filter(item => !item.actionPaid && item.days >= 0 && item.days <= 30).reduce((sum, item) => sum + Number(item.bill.amount || 0), 0);
+  const overdueBills = billSchedule.filter(item => item.hasOutstanding && item.days < 0).reduce((sum, item) => sum + Number(item.bill.amount || 0), 0);
+  const dueSoon = billSchedule.filter(item => item.hasOutstanding && item.days >= 0 && item.days <= 7).reduce((sum, item) => sum + Number(item.bill.amount || 0), 0);
+  const dueThirty = billSchedule.filter(item => item.hasOutstanding && item.days >= 0 && item.days <= 30).reduce((sum, item) => sum + Number(item.bill.amount || 0), 0);
   const obligations = state.finances.obligations.reduce((sum, item) => sum + Math.max(0, Number(item.target || 0) - Number(item.paid || 0)), 0);
   const obligationPlan = state.finances.obligations.reduce((sum, item) => sum + Number(item.monthlyPayment || 0), 0);
   const investments = state.finances.investments.reduce((sum, item) => sum + Number(item.current || 0), 0);
@@ -492,7 +495,7 @@ function buildDailyPlan(daily = todayState()) {
       remaining = Math.max(0, remaining - Number(task.duration));
     }
   });
-  const bill = moneyTotals().billSchedule.find(entry => !entry.actionPaid && entry.days <= 3);
+  const bill = moneyTotals().billSchedule.find(entry => entry.hasOutstanding && entry.days <= 3);
   const maintenance = maintenanceSchedule().find(entry => !entry.actionDone && entry.days <= 3);
   return { recovery, mode, routineMinutes, capacity, tasks, bill, maintenance, plannedMinutes: capacity - remaining };
 }
@@ -547,7 +550,15 @@ function render() {
   renderReview();
   document.querySelectorAll(".view").forEach(view => view.classList.toggle("active", view.id === `view-${activeView}`));
   document.querySelectorAll(".nav-item").forEach(item => item.classList.toggle("active", item.dataset.viewTarget === activeView));
+  document.querySelectorAll("[data-auto-resize]").forEach(resizeOutcomeInput);
   refreshSettings();
+}
+
+function resizeOutcomeInput(input) {
+  if (!input) return;
+  input.style.height = "auto";
+  const borders = input.offsetHeight - input.clientHeight;
+  input.style.height = `${Math.max(72, input.scrollHeight + borders)}px`;
 }
 
 function renderToday() {
@@ -598,7 +609,7 @@ function dailyField(key, label, placeholder) {
 
 function taskTemplate(task) {
   const due = taskDueDays(task);
-  const dueTag = due === null ? "" : `<span class="tag ${due < 0 ? "tag-danger" : due <= 3 ? "tag-warm" : ""}">${due < 0 ? `${Math.abs(due)}d overdue` : due === 0 ? "Due today" : `Due ${formatCompactDate(task.dueDate)}`}</span>`;
+  const dueTag = task.done || due === null ? "" : `<span class="tag ${due < 0 ? "tag-danger" : due <= 3 ? "tag-warm" : ""}">${due < 0 ? `${Math.abs(due)}d overdue` : due === 0 ? "Due today" : `Due ${formatCompactDate(task.dueDate)}`}</span>`;
   return `<div class="task-card ${task.done ? "done" : ""}"><button class="check-button ${task.done ? "done" : ""}" data-task-toggle="${task.id}" aria-label="Toggle task"></button><div class="task-copy"><p class="task-name">${escapeHTML(task.name)}</p><small class="smart-reason">${escapeHTML(taskReason(task))}</small><div class="task-meta"><span class="tag tag-impact">${escapeHTML(task.alignment)}</span><span class="tag">Impact ${task.impact}</span><span class="tag">${escapeHTML(energyLabel(task.energy))}</span><span class="tag">${task.duration} min</span>${dueTag}</div></div><button class="edit-button" data-edit-task="${task.id}" aria-label="Edit task">•••</button></div>`;
 }
 
@@ -646,7 +657,7 @@ function subscriptionTemplate(entry) {
   const bill = entry.bill;
   const reviewAge = bill.lastReviewed ? daysFromToday(new Date(bill.lastReviewed)) * -1 : 999;
   const priceUp = Number(bill.previousAmount) > 0 && Number(bill.amount) > Number(bill.previousAmount);
-  const flag = priceUp ? `Price rose from ${currency(bill.previousAmount)}` : entry.days <= 30 && !entry.actionPaid ? billDueLabel(entry) : reviewAge > 90 ? "Not reviewed in 90+ days" : "Reviewed and visible";
+  const flag = priceUp ? `Price rose from ${currency(bill.previousAmount)}` : entry.hasOutstanding && entry.days <= 30 ? billDueLabel(entry) : reviewAge > 90 ? "Not reviewed in 90+ days" : "Reviewed and visible";
   return `<div class="subscription-row ${priceUp || reviewAge > 90 ? "flagged" : ""}"><div><strong>${escapeHTML(bill.name)}</strong><small>${escapeHTML(flag)}</small></div><span>${currency(bill.amount)}</span><button class="tiny-button" data-review-subscription="${bill.id}">Reviewed</button><button class="edit-button" data-edit-bill="${bill.id}" aria-label="Edit subscription">•••</button></div>`;
 }
 
@@ -687,7 +698,7 @@ function renderWeek() {
   const done = state.tasks.filter(task => task.done);
   document.getElementById("view-week").innerHTML = `
     <div class="page-head"><p class="eyebrow">Direction + Execution OS</p><h1 id="week-heading">Define the win.</h1><p>Choose no more than two meaningful outcomes. Everything else is maintenance, exploration, or deliberately deferred.</p></div>
-    <article class="week-outcome"><div class="field"><label for="week-outcome">Primary weekly outcome</label><input class="outcome-input" id="week-outcome" data-week-field="outcome" value="${escapeHTML(state.week.outcome)}" placeholder="One measurable result" /></div><div class="field"><label for="week-evidence">Evidence of completion</label><textarea id="week-evidence" data-week-field="evidence" placeholder="What proves this is finished?">${escapeHTML(state.week.evidence)}</textarea></div><div class="inline-fields"><div class="field"><label for="week-secondary">Secondary outcome</label><input id="week-secondary" data-week-field="secondary" value="${escapeHTML(state.week.secondary)}" /></div><div class="field"><label for="week-why">Why now?</label><input id="week-why" data-week-field="why" value="${escapeHTML(state.week.why)}" /></div></div></article>
+    <article class="week-outcome"><div class="field"><label for="week-outcome">Primary weekly outcome</label><textarea class="outcome-input" id="week-outcome" data-week-field="outcome" data-auto-resize rows="2" placeholder="One measurable result">${escapeHTML(state.week.outcome)}</textarea></div><div class="field"><label for="week-evidence">Evidence of completion</label><textarea id="week-evidence" data-week-field="evidence" placeholder="What proves this is finished?">${escapeHTML(state.week.evidence)}</textarea></div><div class="inline-fields week-details"><div class="field"><label for="week-secondary">Secondary outcome</label><textarea class="week-compact-input" id="week-secondary" data-week-field="secondary" data-auto-resize rows="2">${escapeHTML(state.week.secondary)}</textarea></div><div class="field"><label for="week-why">Why now?</label><textarea class="week-compact-input" id="week-why" data-week-field="why" data-auto-resize rows="2">${escapeHTML(state.week.why)}</textarea></div></div></article>
     <div class="grid two-column focus-grid">
       <div class="stack">
         <article class="card"><div class="card-head"><div><p class="eyebrow">Flow-matched actions</p><h2>Open work, ranked for your state</h2></div><button class="button button-secondary button-small" data-add="task">+ Action</button></div><div class="task-list">${open.length ? open.map(taskTemplate).join("") : '<div class="empty">No open actions. Add the first visible step.</div>'}</div></article>
@@ -798,7 +809,9 @@ function closeWeek() {
   state.history.unshift({ id: crypto.randomUUID(), start, end, closedAt: new Date().toISOString(), week: clone(state.week), tasks: clone(state.tasks), reflection: clone(state.reflection), metrics: weekMetrics(start) });
   state.history = state.history.slice(0, 52);
   state.tasks = state.tasks.filter(task => !task.done).map(task => ({ ...task, done: false }));
-  state.week = { startedAt: dayKey(), outcome: state.reflection.next || "", secondary: "", evidence: "", why: "" };
+  const followingWeek = addDays(dateFromKey(start), 7);
+  const currentWeek = dateFromKey(weekStartKey());
+  state.week = { startedAt: dayKey(followingWeek < currentWeek ? currentWeek : followingWeek), outcome: state.reflection.next || "", secondary: "", evidence: "", why: "" };
   state.reflection = { win: "", friction: "", lesson: "", next: "", recovery: "maintain", ratings: [3, 3, 3, 3, 3] };
   saveState("Week archived. Next week is ready.");
   render();
@@ -849,9 +862,20 @@ function openEditor(type, id = null) {
   if (type === "security") fields.innerHTML = securityEditor();
   if (type === "handoff") fields.innerHTML = handoffEditor();
   if (type === "handoffImport") fields.innerHTML = handoffImportEditor();
+  connectEditorLabels(fields, type);
   dialog.showModal();
   if (type === "bill") updateBillEditorFields();
   setTimeout(() => fields.querySelector("input:not([type=checkbox]), textarea")?.focus(), 60);
+}
+
+function connectEditorLabels(fields, type) {
+  fields.querySelectorAll(".field").forEach((field, index) => {
+    const label = field.querySelector(":scope > label");
+    const control = field.querySelector(":scope > input, :scope > textarea, :scope > select");
+    if (!label || !control) return;
+    control.id ||= `editor-${type}-${index}`;
+    label.htmlFor = control.id;
+  });
 }
 
 function taskEditor(item) {
@@ -1084,7 +1108,7 @@ async function checkReminders() {
     }
   }
   for (const entry of state.finances.bills.map(bill => billScheduleEntry(bill, now))) {
-    if (entry.actionPaid || entry.days > entry.bill.remindDays) continue;
+    if (!entry.hasOutstanding || entry.days > entry.bill.remindDays) continue;
     const key = `bill-${entry.bill.id}-${entry.period}-${today}`;
     if (reminder.lastFired[key]) continue;
     const timing = entry.days < 0 ? `${Math.abs(entry.days)} day${Math.abs(entry.days) === 1 ? "" : "s"} overdue` : entry.days === 0 ? "due today" : `due in ${entry.days} day${entry.days === 1 ? "" : "s"}`;
@@ -1438,6 +1462,12 @@ document.addEventListener("click", event => {
   }
 });
 
+document.addEventListener("keydown", event => {
+  if ((event.key !== "Enter" && event.key !== " ") || !event.target.matches("[data-edit-script]")) return;
+  event.preventDefault();
+  openEditor("script", event.target.dataset.editScript);
+});
+
 document.addEventListener("change", event => {
   const target = event.target;
   if (target.matches("[data-bill-frequency]")) updateBillEditorFields();
@@ -1450,11 +1480,12 @@ document.addEventListener("change", event => {
   if (target.dataset.rating !== undefined) state.reflection.ratings[Number(target.dataset.rating)] = Number(target.value);
   if (target.matches("[data-week-field],[data-daily-field],[data-balance],[data-reflection],[data-life-field],[data-monthly-field],[data-rating]")) {
     saveState("Saved");
-    if (target.dataset.rating !== undefined) render();
+    if (target.dataset.rating !== undefined || target.dataset.balance) render();
   }
 });
 
 document.addEventListener("input", event => {
+  if (event.target.matches("[data-auto-resize]")) resizeOutcomeInput(event.target);
   if (event.target.dataset.rating !== undefined) {
     state.reflection.ratings[Number(event.target.dataset.rating)] = Number(event.target.value);
     event.target.closest(".rating-control").querySelector("span").textContent = `${event.target.value}/5`;

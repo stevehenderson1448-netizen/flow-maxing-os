@@ -1,4 +1,4 @@
-const CACHE = "50x-life-os-v7";
+const CACHE = "50x-life-os-v8";
 const ASSETS = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest", "./icon.svg", "./icon-180.png"];
 
 self.addEventListener("install", event => {
@@ -21,11 +21,11 @@ self.addEventListener("fetch", event => {
     }).catch(() => caches.match("./index.html")));
     return;
   }
-  event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
+  event.respondWith(fetch(event.request).then(response => {
     const copy = response.clone();
     caches.open(CACHE).then(cache => cache.put(event.request, copy));
     return response;
-  })));
+  }).catch(() => caches.match(event.request)));
 });
 
 self.addEventListener("notificationclick", event => {
