@@ -2,6 +2,12 @@
 
 A dependency-free, mobile-first personal operating system for weekly outcomes, energy-matched work, cue-response habits, if-then scripts, daily modes, reflection, and recovery.
 
+## Live app
+
+https://stevehenderson1448-netizen.github.io/flow-maxing-os/
+
+Open the live app on a phone and add it to the home screen. Once opened online, its core interface also works offline. Personal entries remain in that browser; use Settings to export regular backups.
+
 ## Run locally
 
 From this folder:
