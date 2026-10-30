@@ -15,8 +15,17 @@ const CUE_DEFAULTS = [
   { name: "Reading", cue: "After breakfast", response: "I open the book already placed nearby", setup: "Leave the current book at the breakfast spot", remove: "Do not open news or feeds before reading" },
   { name: "Focused work", cue: "When I sit at my prepared desk", response: "I open yesterday's selected task and begin", setup: "Prepare the task and files the night before", remove: "Close unrelated tabs and silence notifications" },
   { name: "Movement", cue: "When my main work block ends", response: "I put on prepared exercise clothes", setup: "Lay out clothes and shoes in advance", remove: "Avoid sitting down to scroll first" },
-  { name: "Evening shutdown", cue: "When I plug in my phone for the night", response: "I write tomorrow's priority and close work", setup: "Keep a notebook beside the charging station", remove: "Turn off unnecessary work alerts" }
+  { name: "Evening shutdown", cue: "When I plug in my phone for the night", response: "I write tomorrow's priority and close work", setup: "Keep a notebook beside the charging station", remove: "Turn off unnecessary work alerts" },
+  { name: "Tomorrow setup", cue: "When my evening reflection ends", response: "I choose tomorrow's important task and prepare everything needed to begin", setup: "Put the materials at the exact place where the action will start", remove: "Do not leave decisions or packing for the morning" },
+  { name: "Gym preparation", cue: "When I finish dinner and tomorrow includes training", response: "I pack my gym clothes, shoes, water bottle, towel, and headphones", setup: "Put the packed bag and shoes beside the door", remove: "Do not rely on rushed morning packing" },
+  { name: "Leave on time", cue: "When I check tomorrow's calendar during shutdown", response: "I gather the keys, documents, directions, and anything I need to take", setup: "Place everything together beside the door", remove: "Do not search for essentials when it is time to leave" }
 ];
+
+const TASK_SETUP_DEFAULTS = {
+  "Define this week's business needle-mover": { preparation: "Review the weekly outcome and open the decision notes", placement: "Leave the notes open on the clear desk", launchCue: "After morning meditation, sit at the desk and read the weekly outcome", fallback: "Write one sentence naming the result that matters most" },
+  "Complete one focused business work block": { preparation: "Choose the exact deliverable, open its files, and close unrelated tabs", placement: "Leave the charged laptop at the clear desk with the first file open", launchCue: "After meditation and breakfast, sit down and start the prepared file", fallback: "Work on the first visible action for 10 minutes" },
+  "Capture decisions and the next visible action": { preparation: "Keep one decision note pinned and ready", placement: "Leave the note open beside the work", launchCue: "When the focused work block ends, write the decision before standing up", fallback: "Record one next action in a single sentence" }
+};
 
 const DIMENSIONS = [
   ["Sleep and energy", "Was I getting enough rest and waking with usable energy?"],
@@ -39,12 +48,12 @@ function weekStartKey(date = new Date()) {
 }
 
 const defaultState = () => ({
-  version: 5,
+  version: 6,
   week: { startedAt: weekStartKey(), outcome: "Create consistent movement in the business", secondary: "Protect health, clarity, and recovery while executing", evidence: "Complete one meaningful business deliverable and identify the next milestone.", why: "Build proof that focused mornings compound into real momentum." },
   tasks: [
-    { id: crypto.randomUUID(), name: "Define this week's business needle-mover", impact: 3, complexity: 2, energy: "high", duration: 30, dueDate: "", alignment: "primary", createdAt: new Date().toISOString(), done: false },
-    { id: crypto.randomUUID(), name: "Complete one focused business work block", impact: 3, complexity: 3, energy: "high", duration: 90, dueDate: "", alignment: "primary", createdAt: new Date().toISOString(), done: false },
-    { id: crypto.randomUUID(), name: "Capture decisions and the next visible action", impact: 2, complexity: 1, energy: "low", duration: 15, dueDate: "", alignment: "supporting", createdAt: new Date().toISOString(), done: false }
+    { id: crypto.randomUUID(), name: "Define this week's business needle-mover", impact: 3, complexity: 2, energy: "high", duration: 30, dueDate: "", alignment: "primary", ...TASK_SETUP_DEFAULTS["Define this week's business needle-mover"], createdAt: new Date().toISOString(), done: false },
+    { id: crypto.randomUUID(), name: "Complete one focused business work block", impact: 3, complexity: 3, energy: "high", duration: 90, dueDate: "", alignment: "primary", ...TASK_SETUP_DEFAULTS["Complete one focused business work block"], createdAt: new Date().toISOString(), done: false },
+    { id: crypto.randomUUID(), name: "Capture decisions and the next visible action", impact: 2, complexity: 1, energy: "low", duration: 15, dueDate: "", alignment: "supporting", ...TASK_SETUP_DEFAULTS["Capture decisions and the next visible action"], createdAt: new Date().toISOString(), done: false }
   ],
   inbox: [],
   history: [],
@@ -86,7 +95,9 @@ function normalizeModes(inputModes) {
 
 function normalizeTasks(inputTasks, fallback) {
   const source = Array.isArray(inputTasks) ? inputTasks : fallback;
-  return source.map(item => ({
+  return source.map(item => {
+    const setup = TASK_SETUP_DEFAULTS[item.name] || {};
+    return {
     id: item.id || crypto.randomUUID(),
     name: String(item.name || "Untitled action"),
     impact: Math.min(3, Math.max(1, Number(item.impact) || 2)),
@@ -95,9 +106,14 @@ function normalizeTasks(inputTasks, fallback) {
     duration: Math.max(5, Number(item.duration) || 30),
     dueDate: String(item.dueDate || ""),
     alignment: ["primary", "supporting", "maintenance"].includes(item.alignment) ? item.alignment : "supporting",
+    preparation: String(item.preparation || setup.preparation || ""),
+    placement: String(item.placement || setup.placement || ""),
+    launchCue: String(item.launchCue || setup.launchCue || ""),
+    fallback: String(item.fallback || setup.fallback || ""),
     createdAt: item.createdAt || new Date().toISOString(),
     done: Boolean(item.done)
-  }));
+    };
+  });
 }
 
 function normalizeBills(finances, fallback) {
@@ -161,7 +177,7 @@ function normalizeState(input) {
   return {
     ...base,
     ...input,
-    version: 5,
+    version: 6,
     week: { ...base.week, ...(input.week || {}), startedAt: input.week?.startedAt || weekStartKey() },
     tasks: normalizeTasks(input.tasks, base.tasks),
     inbox: Array.isArray(input.inbox) ? input.inbox : [],
@@ -250,7 +266,7 @@ function addDays(date, amount) {
 
 function todayState() {
   const key = dayKey();
-  state.daily[key] = { energy: 0, clarity: 0, availableMinutes: 120, mode: "standard", routine: [], win: "", friction: "", tomorrow: "", ...(state.daily[key] || {}) };
+  state.daily[key] = { energy: 0, clarity: 0, availableMinutes: 120, mode: "standard", routine: [], win: "", friction: "", tomorrow: "", tomorrowTaskId: "", tomorrowReady: false, ...(state.daily[key] || {}) };
   return state.daily[key];
 }
 
@@ -582,6 +598,7 @@ function renderToday() {
       <aside class="stack">
         <article class="card card-muted"><div class="card-head"><div><p class="eyebrow">State check-in</p><h2>What capacity is here?</h2></div></div><span class="micro-label">Energy</span><div class="energy-picker">${[1,2,3,4,5].map(value => `<button class="energy-button ${daily.energy === value ? "selected" : ""}" data-energy="${value}"><span>${["○","◔","◑","◕","●"][value-1]}</span><small>${value}</small></button>`).join("")}</div><span class="micro-label clarity-label">Mental clarity</span><div class="energy-picker compact-picker">${[1,2,3,4,5].map(value => `<button class="energy-button ${daily.clarity === value ? "selected" : ""}" data-clarity="${value}"><small>${value}</small></button>`).join("")}</div><span class="micro-label time-label">Focused time available</span><div class="time-picker">${[[45,"45m"],[90,"1.5h"],[180,"3h"],[300,"5h"]].map(([value,label]) => `<button class="time-button ${Number(daily.availableMinutes) === value ? "selected" : ""}" data-available-minutes="${value}">${label}</button>`).join("")}</div><div class="mode-row">${Object.entries(state.modes).map(([key, value]) => `<button class="mode-button ${daily.mode === key ? "selected" : ""}" data-mode="${key}">${escapeHTML(value.label)}</button>`).join("")}</div><p class="suggestion"><strong>${escapeHTML(plan.recovery.label)}.</strong> ${escapeHTML(plan.recovery.note)}</p></article>
         <article class="card weekly-anchor-card"><p class="eyebrow">Primary weekly outcome</p><h2>${escapeHTML(state.week.outcome || "Define the result that would make this week count.")}</h2><p>${escapeHTML(state.week.evidence || "Name the evidence that will prove it is complete.")}</p></article>
+        ${tomorrowSetupCard(daily, openTasks)}
         <article class="card"><div class="card-head"><div><p class="eyebrow">Evening feedback loop</p><h2>Close the day cleanly</h2></div></div>${dailyField("win", "What moved today?", "Name the meaningful progress.")}${dailyField("friction", "What caused friction?", "Situation, cue, or missing preparation.")}${dailyField("tomorrow", "Tomorrow's main outcome", "One finish condition for tomorrow.")}<p class="money-note">Recorded spending today: <strong>${currency(spentToday())}</strong></p></article>
       </aside>
     </div>`;
@@ -593,6 +610,19 @@ function dailyCommandCard(plan) {
   if (plan.maintenance) rows.push(`<div class="command-row alert"><i>!</i><span><strong>${escapeHTML(plan.maintenance.item.name)}</strong><small>Life maintenance · ${escapeHTML(maintenanceDueLabel(plan.maintenance))}</small></span><button class="mini-arrow" data-view-target="architecture">›</button></div>`);
   if (plan.bill) rows.push(`<div class="command-row alert"><i>£</i><span><strong>${escapeHTML(plan.bill.bill.name)}</strong><small>${currency(plan.bill.bill.amount)} · ${escapeHTML(billDueLabel(plan.bill))}</small></span><button class="mini-arrow" data-view-target="money">›</button></div>`);
   return `<article class="card card-green command-card"><div class="command-head"><div><p class="eyebrow">Adaptive daily plan</p><h2>${escapeHTML(plan.recovery.label)}</h2><p>${escapeHTML(plan.recovery.note)}</p></div><span>${plan.capacity} min</span></div><div class="command-list">${rows.join("")}</div><div class="command-anchor"><span>Anchored to</span><strong>${escapeHTML(state.week.outcome || "your weekly outcome")}</strong></div></article>`;
+}
+
+function tomorrowSetupCard(daily, openTasks = rankedTasks(daily)) {
+  if (!openTasks.length) return `<article class="card prep-card"><div class="card-head"><div><p class="eyebrow">Tomorrow setup</p><h2>Nothing needs preparing.</h2><p>Add the next meaningful action when it becomes clear.</p></div><button class="button button-secondary button-small" data-add="task">+ Action</button></div></article>`;
+  const task = openTasks.find(item => item.id === daily.tomorrowTaskId) || openTasks[0];
+  const ready = daily.tomorrowReady && daily.tomorrowTaskId === task.id;
+  const steps = [
+    ["01", "Prepare", task.preparation || "Gather the materials, information, clothes, or equipment this action needs."],
+    ["02", "Place", task.placement || "Put everything at the exact location where the action will begin."],
+    ["03", "Launch", task.launchCue || "Choose one specific event that will trigger the first movement."],
+    ["04", "Fallback", task.fallback || "Define a version small enough to do even when the plan changes."]
+  ];
+  return `<article class="card prep-card ${ready ? "ready" : ""}"><div class="card-head"><div><p class="eyebrow">Tomorrow setup</p><h2>${ready ? "Environment ready." : "Make starting automatic."}</h2><p>${ready ? "The decision and preparation are already handled." : "Prepare the action before motivation is needed."}</p></div><span class="prep-status">${ready ? "Ready" : "Tonight"}</span></div><div class="field prep-task-field"><label for="tomorrow-task">Task to prepare</label><select id="tomorrow-task" data-tomorrow-task>${openTasks.map(item => `<option value="${item.id}" ${item.id === task.id ? "selected" : ""}>${escapeHTML(item.name)}</option>`).join("")}</select></div><div class="prep-sequence">${steps.map(([number, label, value]) => `<div class="prep-step"><i>${number}</i><span><small>${label}</small><strong>${escapeHTML(value)}</strong></span></div>`).join("")}</div><div class="prep-actions"><button class="button button-secondary button-small" data-edit-task="${task.id}">Edit setup</button><button class="button ${ready ? "button-secondary" : "button-primary"} button-small" data-tomorrow-ready="${task.id}">${ready ? "Mark not ready" : "Everything is ready"}</button></div></article>`;
 }
 
 function engineStat(name, value, note, view) {
@@ -879,7 +909,7 @@ function connectEditorLabels(fields, type) {
 }
 
 function taskEditor(item) {
-  return `<div class="field"><label>Action</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Weekly role</label><select name="alignment">${[["primary","Main outcome"],["supporting","Supporting"],["maintenance","Maintenance"]].map(([value,label]) => `<option value="${value}" ${item?.alignment === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Deadline</label><input name="dueDate" type="date" value="${item?.dueDate || ""}" /></div></div><div class="inline-fields"><div class="field"><label>Impact</label><select name="impact">${[1,2,3].map(value => `<option value="${value}" ${Number(item?.impact || 2) === value ? "selected" : ""}>${value}</option>`).join("")}</select></div><div class="field"><label>Complexity</label><select name="complexity">${[1,2,3].map(value => `<option value="${value}" ${Number(item?.complexity || 1) === value ? "selected" : ""}>${value}</option>`).join("")}</select></div><div class="field"><label>Energy</label><select name="energy">${["low","medium","high"].map(value => `<option value="${value}" ${(item?.energy || "medium") === value ? "selected" : ""}>${energyLabel(value)}</option>`).join("")}</select></div></div><div class="field"><label>Minutes</label><input name="duration" type="number" min="5" max="300" step="5" value="${item?.duration || 30}" /></div><p class="dialog-note">The scheduler weighs deadline, weekly role, energy fit, impact, complexity, and available time.</p>`;
+  return `<div class="field"><label>Action</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Weekly role</label><select name="alignment">${[["primary","Main outcome"],["supporting","Supporting"],["maintenance","Maintenance"]].map(([value,label]) => `<option value="${value}" ${item?.alignment === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Deadline</label><input name="dueDate" type="date" value="${item?.dueDate || ""}" /></div></div><div class="inline-fields"><div class="field"><label>Impact</label><select name="impact">${[1,2,3].map(value => `<option value="${value}" ${Number(item?.impact || 2) === value ? "selected" : ""}>${value}</option>`).join("")}</select></div><div class="field"><label>Complexity</label><select name="complexity">${[1,2,3].map(value => `<option value="${value}" ${Number(item?.complexity || 1) === value ? "selected" : ""}>${value}</option>`).join("")}</select></div><div class="field"><label>Energy</label><select name="energy">${["low","medium","high"].map(value => `<option value="${value}" ${(item?.energy || "medium") === value ? "selected" : ""}>${energyLabel(value)}</option>`).join("")}</select></div></div><div class="field"><label>Minutes</label><input name="duration" type="number" min="5" max="300" step="5" value="${item?.duration || 30}" /></div><div class="task-setup-editor"><div><p class="eyebrow">Automatic start architecture</p><strong>Prepare → place → launch → fallback</strong></div><div class="field"><label>Prepare beforehand</label><textarea name="preparation" placeholder="Pack the bag, open the file, gather the documents…">${escapeHTML(item?.preparation || "")}</textarea></div><div class="field"><label>Put it here</label><textarea name="placement" placeholder="By the door, on the desk, beside breakfast…">${escapeHTML(item?.placement || "")}</textarea></div><div class="field"><label>Start when</label><textarea name="launchCue" placeholder="After meditation, when work ends, after breakfast…">${escapeHTML(item?.launchCue || "")}</textarea></div><div class="field"><label>If the plan breaks</label><textarea name="fallback" placeholder="The minimum version that still keeps momentum.">${escapeHTML(item?.fallback || "")}</textarea></div></div><p class="dialog-note">The scheduler chooses the task. This setup removes the decisions and friction that normally delay starting.</p>`;
 }
 
 function inboxEditor(item) {
@@ -994,7 +1024,13 @@ async function saveEditor() {
     item = { id: crypto.randomUUID() };
     collection.push(item);
   }
-  if (editor.type === "task") Object.assign(item, { name: data.name.trim(), impact: Number(data.impact), complexity: Number(data.complexity), energy: data.energy, duration: Number(data.duration), dueDate: data.dueDate || "", alignment: data.alignment, createdAt: item.createdAt || new Date().toISOString(), done: item.done || false });
+  if (editor.type === "task") {
+    const nextSetup = { preparation: data.preparation.trim(), placement: data.placement.trim(), launchCue: data.launchCue.trim(), fallback: data.fallback.trim() };
+    const setupChanged = Object.entries(nextSetup).some(([key, value]) => item[key] !== value);
+    Object.assign(item, { name: data.name.trim(), impact: Number(data.impact), complexity: Number(data.complexity), energy: data.energy, duration: Number(data.duration), dueDate: data.dueDate || "", alignment: data.alignment, ...nextSetup, createdAt: item.createdAt || new Date().toISOString(), done: item.done || false });
+    const daily = todayState();
+    if (setupChanged && daily.tomorrowTaskId === item.id) daily.tomorrowReady = false;
+  }
   if (editor.type === "inbox") Object.assign(item, { text: data.text.trim(), type: data.type, createdAt: item.createdAt || new Date().toISOString() });
   if (editor.type === "maintenance") Object.assign(item, { name: data.name.trim(), category: data.category, dueDate: data.dueDate, recurrence: data.recurrence, remindDays: Number(data.remindDays), notes: data.notes.trim(), createdAt: item.createdAt || new Date().toISOString(), completedPeriods: item.completedPeriods || [] });
   if (editor.type === "cue") Object.assign(item, { name: data.name.trim(), cue: data.cue.trim(), response: data.response.trim(), setup: data.setup.trim(), remove: data.remove.trim() });
@@ -1021,6 +1057,10 @@ function deleteEditor() {
   const collection = editorCollection(editor.type);
   const index = collection.findIndex(entry => entry.id === editor.id);
   if (index >= 0) collection.splice(index, 1);
+  if (editor.type === "task" && todayState().tomorrowTaskId === editor.id) {
+    todayState().tomorrowTaskId = "";
+    todayState().tomorrowReady = false;
+  }
   saveState("Item deleted");
   render();
   document.getElementById("editor-dialog").close();
@@ -1097,7 +1137,7 @@ async function checkReminders() {
   const today = dayKey(now);
   const checks = [
     { key: `morning-${today}`, due: minutesSince(reminder.morning, now), window: 120, title: "Choose your honest capacity", body: "Check your energy, select a mode, and protect one meaningful outcome." },
-    { key: `evening-${today}`, due: minutesSince(reminder.evening, now), window: 180, title: "Close the day cleanly", body: "Capture the win, name the friction, and prepare tomorrow's first action." }
+    { key: `evening-${today}`, due: minutesSince(reminder.evening, now), window: 180, title: "Make tomorrow easy", body: "Capture the win, choose tomorrow's task, and prepare its environment before motivation is needed." }
   ];
   if (String(now.getDay()) === String(reminder.weeklyDay)) checks.push({ key: `weekly-${today}`, due: minutesSince(reminder.weeklyTime, now), window: 240, title: "Weekly review", body: "Close the loop, choose recovery, and define what matters next." });
   for (const item of checks) {
@@ -1401,7 +1441,20 @@ document.addEventListener("click", event => {
   if (target.dataset.taskToggle) {
     const task = state.tasks.find(item => item.id === target.dataset.taskToggle);
     task.done = !task.done;
+    const daily = todayState();
+    if (task.done && daily.tomorrowTaskId === task.id) {
+      daily.tomorrowTaskId = "";
+      daily.tomorrowReady = false;
+    }
     saveState(task.done ? "Action complete" : "Action reopened");
+    return render();
+  }
+  if (target.dataset.tomorrowReady) {
+    const daily = todayState();
+    const sameTask = daily.tomorrowTaskId === target.dataset.tomorrowReady;
+    daily.tomorrowTaskId = target.dataset.tomorrowReady;
+    daily.tomorrowReady = sameTask ? !daily.tomorrowReady : true;
+    saveState(daily.tomorrowReady ? "Tomorrow is prepared" : "Preparation reopened");
     return render();
   }
   if (target.dataset.billPaid) {
@@ -1471,6 +1524,13 @@ document.addEventListener("keydown", event => {
 document.addEventListener("change", event => {
   const target = event.target;
   if (target.matches("[data-bill-frequency]")) updateBillEditorFields();
+  if (target.dataset.tomorrowTask !== undefined) {
+    const daily = todayState();
+    daily.tomorrowTaskId = target.value;
+    daily.tomorrowReady = false;
+    saveState("Tomorrow's task selected");
+    return render();
+  }
   if (target.dataset.weekField) state.week[target.dataset.weekField] = target.value.trim();
   if (target.dataset.dailyField) todayState()[target.dataset.dailyField] = target.value.trim();
   if (target.dataset.balance) state.finances.balances[target.dataset.balance] = Number(target.value);

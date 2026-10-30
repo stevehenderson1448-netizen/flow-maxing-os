@@ -5,9 +5,9 @@ A dependency-free, mobile-first personal operating system connecting five engine
 ## Included systems
 
 - Adaptive daily command centre using energy, available time, routines, deadlines, bills, and life-maintenance dates
-- Deadline-aware task scheduling with weekly-outcome alignment
+- Deadline-aware task scheduling with weekly-outcome alignment and nightly Tomorrow Setup
 - Editable Minimum, Standard, and Peak routine modes
-- Cue-response architecture and if-then scripts
+- Cue-response architecture with task preparation, placement, launch, fallback, and if-then scripts
 - Routine and recovery intelligence plus an automatic weekly coach
 - Weekly rollover, eight-week trends, and archived reflections
 - Safe-to-spend engine, smart bill calendar, recurring due dates, cash-cover insight, and reminders
