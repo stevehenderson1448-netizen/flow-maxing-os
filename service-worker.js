@@ -1,4 +1,4 @@
-const CACHE = "50x-life-os-v6";
+const CACHE = "50x-life-os-v7";
 const ASSETS = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest", "./icon.svg", "./icon-180.png"];
 
 self.addEventListener("install", event => {

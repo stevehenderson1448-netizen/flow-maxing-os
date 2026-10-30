@@ -39,12 +39,12 @@ function weekStartKey(date = new Date()) {
 }
 
 const defaultState = () => ({
-  version: 4,
+  version: 5,
   week: { startedAt: weekStartKey(), outcome: "Create consistent movement in the business", secondary: "Protect health, clarity, and recovery while executing", evidence: "Complete one meaningful business deliverable and identify the next milestone.", why: "Build proof that focused mornings compound into real momentum." },
   tasks: [
-    { id: crypto.randomUUID(), name: "Define this week's business needle-mover", impact: 3, complexity: 2, energy: "high", duration: 30, done: false },
-    { id: crypto.randomUUID(), name: "Complete one focused business work block", impact: 3, complexity: 3, energy: "high", duration: 90, done: false },
-    { id: crypto.randomUUID(), name: "Capture decisions and the next visible action", impact: 2, complexity: 1, energy: "low", duration: 15, done: false }
+    { id: crypto.randomUUID(), name: "Define this week's business needle-mover", impact: 3, complexity: 2, energy: "high", duration: 30, dueDate: "", alignment: "primary", createdAt: new Date().toISOString(), done: false },
+    { id: crypto.randomUUID(), name: "Complete one focused business work block", impact: 3, complexity: 3, energy: "high", duration: 90, dueDate: "", alignment: "primary", createdAt: new Date().toISOString(), done: false },
+    { id: crypto.randomUUID(), name: "Capture decisions and the next visible action", impact: 2, complexity: 1, energy: "low", duration: 15, dueDate: "", alignment: "supporting", createdAt: new Date().toISOString(), done: false }
   ],
   inbox: [],
   history: [],
@@ -58,7 +58,8 @@ const defaultState = () => ({
     { id: crypto.randomUUID(), trigger: "I become distracted", response: "I capture the distraction in a note and return to the current task." },
     { id: crypto.randomUUID(), trigger: "I feel mentally exhausted", response: "I switch to a simpler task or recover instead of forcing complex work." }
   ],
-  finances: { balances: { personal: 0, business: 0, held: 0 }, transactions: [], bills: [{ id: crypto.randomUUID(), name: "Known monthly commitments", amount: 710, frequency: "monthly", dueDay: new Date().getDate(), dueMonth: new Date().getMonth() + 1, dueDate: "", autopay: false, account: "personal", remindDays: 3, createdAt: new Date().toISOString(), paidPeriods: [] }], obligations: [{ id: crypto.randomUUID(), name: "Money to replace", target: 3000, paid: 0 }], investments: [] },
+  finances: { balances: { personal: 0, business: 0, held: 0 }, settings: { reserveTarget: 500 }, transactions: [], bills: [{ id: crypto.randomUUID(), name: "Known monthly commitments", amount: 710, frequency: "monthly", dueDay: new Date().getDate(), dueMonth: new Date().getMonth() + 1, dueDate: "", kind: "essential", autopay: false, account: "personal", remindDays: 3, createdAt: new Date().toISOString(), paidPeriods: [], previousAmount: 0, amountChangedAt: "", lastReviewed: "" }], obligations: [{ id: crypto.randomUUID(), name: "Money to replace", target: 3000, paid: 0, monthlyPayment: 0 }], investments: [] },
+  maintenance: [],
   daily: {},
   reflection: { win: "", friction: "", lesson: "", next: "", recovery: "maintain", ratings: [3, 3, 3, 3, 3] },
   life: { relationships: "", enjoyment: "", health: "", growth: "" },
@@ -83,6 +84,22 @@ function normalizeModes(inputModes) {
   return modes;
 }
 
+function normalizeTasks(inputTasks, fallback) {
+  const source = Array.isArray(inputTasks) ? inputTasks : fallback;
+  return source.map(item => ({
+    id: item.id || crypto.randomUUID(),
+    name: String(item.name || "Untitled action"),
+    impact: Math.min(3, Math.max(1, Number(item.impact) || 2)),
+    complexity: Math.min(3, Math.max(1, Number(item.complexity) || 1)),
+    energy: ["low", "medium", "high"].includes(item.energy) ? item.energy : "medium",
+    duration: Math.max(5, Number(item.duration) || 30),
+    dueDate: String(item.dueDate || ""),
+    alignment: ["primary", "supporting", "maintenance"].includes(item.alignment) ? item.alignment : "supporting",
+    createdAt: item.createdAt || new Date().toISOString(),
+    done: Boolean(item.done)
+  }));
+}
+
 function normalizeBills(finances, fallback) {
   const source = Array.isArray(finances?.bills)
     ? finances.bills
@@ -98,11 +115,30 @@ function normalizeBills(finances, fallback) {
     dueDay: Math.min(31, Math.max(1, Number(item.dueDay) || today.getDate())),
     dueMonth: Math.min(12, Math.max(1, Number(item.dueMonth) || today.getMonth() + 1)),
     dueDate: String(item.dueDate || ""),
+    kind: ["essential", "subscription", "flexible"].includes(item.kind) ? item.kind : "essential",
     autopay: Boolean(item.autopay),
     account: ["personal", "business"].includes(item.account) ? item.account : "personal",
     remindDays: Math.min(30, Math.max(0, Number(item.remindDays ?? 3))),
     createdAt: item.createdAt || new Date().toISOString(),
-    paidPeriods: Array.isArray(item.paidPeriods) ? [...new Set(item.paidPeriods.map(String))] : []
+    paidPeriods: Array.isArray(item.paidPeriods) ? [...new Set(item.paidPeriods.map(String))] : [],
+    previousAmount: Math.max(0, Number(item.previousAmount) || 0),
+    amountChangedAt: String(item.amountChangedAt || ""),
+    lastReviewed: String(item.lastReviewed || "")
+  }));
+}
+
+function normalizeMaintenance(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map(item => ({
+    id: item.id || crypto.randomUUID(),
+    name: String(item.name || "Life maintenance item"),
+    category: ["appointment", "birthday", "renewal", "car", "document", "health", "home", "other"].includes(item.category) ? item.category : "other",
+    dueDate: String(item.dueDate || dayKey()),
+    recurrence: ["oneoff", "monthly", "annual"].includes(item.recurrence) ? item.recurrence : "oneoff",
+    remindDays: Math.min(60, Math.max(0, Number(item.remindDays ?? 7))),
+    notes: String(item.notes || ""),
+    createdAt: item.createdAt || new Date().toISOString(),
+    completedPeriods: Array.isArray(item.completedPeriods) ? [...new Set(item.completedPeriods.map(String))] : []
   }));
 }
 
@@ -125,9 +161,9 @@ function normalizeState(input) {
   return {
     ...base,
     ...input,
-    version: 4,
+    version: 5,
     week: { ...base.week, ...(input.week || {}), startedAt: input.week?.startedAt || weekStartKey() },
-    tasks: Array.isArray(input.tasks) ? input.tasks : base.tasks,
+    tasks: normalizeTasks(input.tasks, base.tasks),
     inbox: Array.isArray(input.inbox) ? input.inbox : [],
     history: Array.isArray(input.history) ? input.history : [],
     modes: normalizeModes(input.modes),
@@ -137,12 +173,14 @@ function normalizeState(input) {
       ...base.finances,
       ...(input.finances || {}),
       balances: { ...base.finances.balances, ...(input.finances?.balances || {}) },
+      settings: { ...base.finances.settings, ...(input.finances?.settings || {}) },
       transactions: Array.isArray(input.finances?.transactions) ? input.finances.transactions : [],
       bills: normalizeBills(input.finances, base.finances.bills),
       commitments: undefined,
-      obligations: Array.isArray(input.finances?.obligations) ? input.finances.obligations : base.finances.obligations,
+      obligations: (Array.isArray(input.finances?.obligations) ? input.finances.obligations : base.finances.obligations).map(item => ({ ...item, id: item.id || crypto.randomUUID(), monthlyPayment: Math.max(0, Number(item.monthlyPayment) || 0) })),
       investments: Array.isArray(input.finances?.investments) ? input.finances.investments : []
     },
+    maintenance: normalizeMaintenance(input.maintenance),
     daily,
     reflection: { ...base.reflection, ...(input.reflection || {}), ratings: Array.isArray(input.reflection?.ratings) ? input.reflection.ratings : base.reflection.ratings },
     life: { ...base.life, ...(input.life || {}) },
@@ -212,7 +250,7 @@ function addDays(date, amount) {
 
 function todayState() {
   const key = dayKey();
-  state.daily[key] = { energy: 0, clarity: 0, mode: "standard", routine: [], win: "", friction: "", tomorrow: "", ...(state.daily[key] || {}) };
+  state.daily[key] = { energy: 0, clarity: 0, availableMinutes: 120, mode: "standard", routine: [], win: "", friction: "", tomorrow: "", ...(state.daily[key] || {}) };
   return state.daily[key];
 }
 
@@ -261,6 +299,69 @@ function taskScore(task, energy) {
   const capacity = energy >= 5 ? 3 : energy >= 3 ? 2 : 1;
   const taskEnergy = { low: 1, medium: 2, high: 3 }[task.energy] || 2;
   return Number(task.impact) * 4 + (4 - Math.abs(capacity - taskEnergy)) * 2 - Number(task.complexity);
+}
+
+function taskDueDays(task, reference = new Date()) {
+  return task.dueDate ? daysFromToday(dateFromKey(task.dueDate), reference) : null;
+}
+
+function smartTaskScore(task, daily = todayState()) {
+  const due = taskDueDays(task);
+  const urgency = due === null ? 0 : due < 0 ? 22 : due === 0 ? 18 : due <= 3 ? 12 : due <= 7 ? 7 : 0;
+  const alignment = ({ primary: 8, supporting: 4, maintenance: 1 })[task.alignment] || 0;
+  const timeFit = Number(task.duration) <= Number(daily.availableMinutes || 120) ? 4 : -6;
+  return taskScore(task, daily.energy || 3) + urgency + alignment + timeFit;
+}
+
+function rankedTasks(daily = todayState()) {
+  return state.tasks.filter(task => !task.done).sort((a, b) => smartTaskScore(b, daily) - smartTaskScore(a, daily));
+}
+
+function taskReason(task, daily = todayState()) {
+  const due = taskDueDays(task);
+  if (due !== null && due < 0) return `${Math.abs(due)} day${Math.abs(due) === 1 ? "" : "s"} overdue`;
+  if (due === 0) return "Due today";
+  if (due !== null && due <= 3) return `Due in ${due} days`;
+  if (task.alignment === "primary") return "Moves the main outcome";
+  if (Number(task.duration) <= Number(daily.availableMinutes || 120)) return "Fits today's time and energy";
+  return "High-value next action";
+}
+
+function recentDailyRecords(length = 7) {
+  const earliest = startOfDay(addDays(new Date(), -(length - 1)));
+  return Object.entries(state.daily).filter(([key]) => dateFromKey(key) >= earliest).sort(([a], [b]) => a.localeCompare(b));
+}
+
+function recoverySignal(daily = todayState()) {
+  const records = recentDailyRecords(7).map(([, item]) => item).filter(item => Number(item.energy) > 0);
+  const averageEnergy = average(records.map(item => item.energy));
+  const averageClarity = average(records.map(item => item.clarity));
+  const lowDays = records.filter(item => Number(item.energy) <= 2).length;
+  const currentEnergy = Number(daily.energy);
+  if ((currentEnergy > 0 && currentEnergy <= 2) || lowDays >= 3 || (records.length >= 3 && averageEnergy < 2.8)) {
+    return { key: "restore", mode: "minimum", label: "Protect recovery", note: `${lowDays || 1} low-energy signal${lowDays === 1 ? "" : "s"} this week. Keep foundations and one essential action.`, averageEnergy, averageClarity, lowDays };
+  }
+  if (currentEnergy >= 5 && (records.length < 2 || averageEnergy >= 3.8) && lowDays === 0) {
+    return { key: "expand", mode: "peak", label: "Use the capacity", note: "Energy is strong without a visible recovery warning. Add stretch only after the main outcome.", averageEnergy, averageClarity, lowDays };
+  }
+  return { key: "maintain", mode: "standard", label: "Stay sustainable", note: records.length ? `Seven-day energy is ${averageEnergy.toFixed(1)}/5. Use a steady load and preserve tomorrow.` : "Check in for a few days and the recovery signal will become more precise.", averageEnergy, averageClarity, lowDays };
+}
+
+function routineSignal() {
+  const records = recentDailyRecords(14);
+  const signals = [];
+  Object.entries(state.modes).forEach(([modeKey, mode]) => {
+    mode.routine.forEach((step, index) => {
+      const opportunities = records.map(([, day]) => day).filter(day => day.mode === modeKey && Array.isArray(day.routine));
+      if (opportunities.length < 2) return;
+      const completed = opportunities.filter(day => Boolean(day.routine[index])).length;
+      signals.push({ modeKey, modeLabel: mode.label, step: step[0], cue: step[1], duration: Number(step[2]), attempts: opportunities.length, completed, rate: Math.round((completed / opportunities.length) * 100) });
+    });
+  });
+  if (!signals.length) return { ready: false, message: "Complete routine check-ins on at least two days and this system will identify the weak link." };
+  const weakest = signals.sort((a, b) => a.rate - b.rate || b.attempts - a.attempts)[0];
+  const action = weakest.duration > 20 ? `Try a ${Math.max(2, Math.round(weakest.duration / 2))}-minute minimum version.` : `Strengthen the cue: “${weakest.cue}”`;
+  return { ready: true, ...weakest, message: weakest.rate >= 80 ? "Your routine architecture is holding. Avoid adding complexity yet." : `${action} Change the design before demanding more discipline.` };
 }
 
 function startOfDay(date = new Date()) {
@@ -326,6 +427,34 @@ function monthlyBillEquivalent(bill) {
   return 0;
 }
 
+function maintenanceCycle(item, reference = new Date(), offset = 0) {
+  const original = dateFromKey(item.dueDate || dayKey(reference));
+  if (item.recurrence === "oneoff") return { period: item.dueDate, due: original };
+  if (item.recurrence === "annual") {
+    const baseYear = Math.max(reference.getFullYear(), original.getFullYear()) + offset;
+    return { period: String(baseYear), due: clampedDate(baseYear, original.getMonth(), original.getDate()) };
+  }
+  const target = new Date(reference.getFullYear(), reference.getMonth() + offset, 1);
+  if (original > reference && offset === 0) target.setFullYear(original.getFullYear(), original.getMonth(), 1);
+  return { period: monthKey(target), due: clampedDate(target.getFullYear(), target.getMonth(), original.getDate()) };
+}
+
+function maintenanceScheduleEntry(item, reference = new Date()) {
+  const current = maintenanceCycle(item, reference);
+  const actionDone = item.completedPeriods.includes(current.period);
+  if (item.recurrence === "oneoff") {
+    const days = daysFromToday(current.due, reference);
+    return { item, ...current, actionPeriod: current.period, actionDone, days, status: actionDone ? "done" : days < 0 ? "overdue" : days === 0 ? "today" : days <= item.remindDays ? "soon" : "upcoming" };
+  }
+  const display = actionDone ? maintenanceCycle(item, reference, 1) : current;
+  const days = daysFromToday(display.due, reference);
+  return { item, ...display, actionPeriod: current.period, actionDone, days, status: actionDone ? "done" : days < 0 ? "overdue" : days === 0 ? "today" : days <= item.remindDays ? "soon" : "upcoming" };
+}
+
+function maintenanceSchedule(reference = new Date()) {
+  return state.maintenance.map(item => maintenanceScheduleEntry(item, reference)).sort((a, b) => Number(a.actionDone) - Number(b.actionDone) || a.due - b.due);
+}
+
 function moneyTotals() {
   const totals = { ...state.finances.balances };
   state.finances.transactions.forEach(item => {
@@ -338,9 +467,48 @@ function moneyTotals() {
   const dueSoon = billSchedule.filter(item => !item.actionPaid && item.days >= 0 && item.days <= 7).reduce((sum, item) => sum + Number(item.bill.amount || 0), 0);
   const dueThirty = billSchedule.filter(item => !item.actionPaid && item.days >= 0 && item.days <= 30).reduce((sum, item) => sum + Number(item.bill.amount || 0), 0);
   const obligations = state.finances.obligations.reduce((sum, item) => sum + Math.max(0, Number(item.target || 0) - Number(item.paid || 0)), 0);
+  const obligationPlan = state.finances.obligations.reduce((sum, item) => sum + Number(item.monthlyPayment || 0), 0);
   const investments = state.finances.investments.reduce((sum, item) => sum + Number(item.current || 0), 0);
   const available = Number(totals.personal || 0) + Number(totals.business || 0);
-  return { ...totals, available, monthlyBills, overdueBills, dueSoon, dueThirty, billSchedule, coverMonths: monthlyBills ? available / monthlyBills : null, obligations, investments };
+  const reserveTarget = Math.max(0, Number(state.finances.settings?.reserveTarget) || 0);
+  const protectedCash = dueThirty + overdueBills + obligationPlan + reserveTarget;
+  const safeToSpend = Math.max(0, available - protectedCash);
+  const subscriptions = state.finances.bills.filter(item => item.kind === "subscription");
+  const subscriptionAnnual = subscriptions.reduce((sum, item) => sum + (item.frequency === "monthly" ? Number(item.amount) * 12 : item.frequency === "annual" ? Number(item.amount) : 0), 0);
+  return { ...totals, available, safeToSpend, protectedCash, reserveTarget, monthlyBills, overdueBills, dueSoon, dueThirty, billSchedule, coverMonths: monthlyBills ? available / monthlyBills : null, obligations, obligationPlan, investments, subscriptions, subscriptionAnnual };
+}
+
+function buildDailyPlan(daily = todayState()) {
+  const recovery = recoverySignal(daily);
+  const mode = state.modes[daily.mode] || state.modes[recovery.mode];
+  const routineMinutes = mode.routine.reduce((sum, step, index) => sum + (daily.routine[index] ? 0 : Number(step[2] || 0)), 0);
+  const capacity = Math.max(15, Number(daily.availableMinutes) || 120);
+  let remaining = capacity;
+  const tasks = [];
+  rankedTasks(daily).forEach(task => {
+    if (tasks.length >= 3) return;
+    if (Number(task.duration) <= remaining || !tasks.length) {
+      tasks.push(task);
+      remaining = Math.max(0, remaining - Number(task.duration));
+    }
+  });
+  const bill = moneyTotals().billSchedule.find(entry => !entry.actionPaid && entry.days <= 3);
+  const maintenance = maintenanceSchedule().find(entry => !entry.actionDone && entry.days <= 3);
+  return { recovery, mode, routineMinutes, capacity, tasks, bill, maintenance, plannedMinutes: capacity - remaining };
+}
+
+function weeklyCoach() {
+  const metrics = weekMetrics();
+  const recovery = recoverySignal();
+  const routine = routineSignal();
+  const recent = recentDailyRecords(7).map(([, day]) => day);
+  const friction = [...recent].reverse().find(day => day.friction)?.friction || state.reflection.friction;
+  const title = metrics.daysChecked < 2 ? "Build the signal" : metrics.energy && metrics.energy < 3 ? "Reduce load, preserve momentum" : metrics.routine >= 75 ? "The foundations are supporting execution" : "Simplify the system before adding effort";
+  const insights = [];
+  insights.push(metrics.tasksDone ? `${metrics.tasksDone} action${metrics.tasksDone === 1 ? "" : "s"} completed; protect the work that directly moved the weekly outcome.` : "No completed action is recorded yet; choose one finish line small enough to close.");
+  insights.push(friction ? `Repeated friction to design around: ${friction}` : "Record friction in the evening check-in so the system can distinguish effort problems from design problems.");
+  insights.push(routine.ready ? `${routine.step} is at ${routine.rate}% across ${routine.attempts} attempts. ${routine.message}` : routine.message);
+  return { title, summary: recovery.note, insights };
 }
 
 function spentToday() {
@@ -386,23 +554,34 @@ function renderToday() {
   const daily = todayState();
   const mode = state.modes[daily.mode] || state.modes.standard;
   const totals = moneyTotals();
+  const plan = buildDailyPlan(daily);
   const routineDone = daily.routine.filter(Boolean).length;
-  const openTasks = state.tasks.filter(task => !task.done).sort((a, b) => taskScore(b, daily.energy || 3) - taskScore(a, daily.energy || 3));
+  const openTasks = rankedTasks(daily);
   const primary = openTasks[0];
+  const lifeDue = maintenanceSchedule().filter(item => !item.actionDone && item.days <= 7).length;
   document.getElementById("view-today").innerHTML = `
     <div class="page-head"><p class="eyebrow">${escapeHTML(formatDate())} · Command centre</p><h1 id="today-heading">${greeting()}</h1><p>Protect the foundations, move one meaningful outcome, and keep the rest of life visible.</p></div>
-    <div class="engine-grid">${engineStat("Money", currency(totals.available), "Available now", "money")}${engineStat("Routine", `${routineDone}/${mode.routine.length}`, `${mode.label} mode`, "today")}${engineStat("Mental", daily.clarity ? `${daily.clarity}/5` : "—", "Clarity", "today")}${engineStat("Execution", primary ? "1 next" : "Clear", primary?.name || "No open actions", "week")}${engineStat("Inbox", state.inbox.length ? `${state.inbox.length} held` : "Clear", "Ideas without distraction", "week")}</div>
+    <div class="engine-grid">${engineStat("Safe to spend", currency(totals.safeToSpend), "After protected money", "money")}${engineStat("Routine", `${routineDone}/${mode.routine.length}`, `${mode.label} mode`, "today")}${engineStat("Recovery", plan.recovery.key === "restore" ? "Protect" : plan.recovery.key === "expand" ? "Expand" : "Steady", plan.recovery.label, "today")}${engineStat("Execution", primary ? "1 next" : "Clear", primary?.name || "No open actions", "week")}${engineStat("Life admin", lifeDue ? `${lifeDue} due` : "Clear", "Next 7 days", "architecture")}</div>
     <div class="grid two-column">
       <div class="stack">
-        <article class="card card-green"><p class="eyebrow">Primary weekly outcome</p><h2 class="outcome-title">${escapeHTML(state.week.outcome || "Define the result that would make this week count.")}</h2><p class="outcome-evidence">${escapeHTML(state.week.evidence || "Name the evidence that will prove it is complete.")}</p>${primary ? `<div class="next-action"><span>Next action</span><strong>${escapeHTML(primary.name)}</strong></div>` : ""}</article>
+        ${dailyCommandCard(plan)}
         <article class="card"><div class="card-head"><div><p class="eyebrow">Daily routine OS</p><h2>${escapeHTML(mode.label)} mode</h2><p>${escapeHTML(mode.note)}</p></div><span class="tag">${routineDone}/${mode.routine.length}</span></div><div class="routine-list">${mode.routine.map((item, index) => routineTemplate(item, index, daily.routine[index])).join("")}</div></article>
         <article class="card"><div class="card-head"><div><p class="eyebrow">Execution OS</p><h2>Best use of this energy</h2></div><button class="text-button" data-add="task">+ Add</button></div><div class="task-list">${openTasks.length ? openTasks.slice(0, 4).map(taskTemplate).join("") : '<div class="empty">No open actions. Choose the next meaningful outcome.</div>'}</div></article>
       </div>
       <aside class="stack">
-        <article class="card card-muted"><div class="card-head"><div><p class="eyebrow">State check-in</p><h2>What capacity is here?</h2></div></div><span class="micro-label">Energy</span><div class="energy-picker">${[1,2,3,4,5].map(value => `<button class="energy-button ${daily.energy === value ? "selected" : ""}" data-energy="${value}"><span>${["○","◔","◑","◕","●"][value-1]}</span><small>${value}</small></button>`).join("")}</div><span class="micro-label clarity-label">Mental clarity</span><div class="energy-picker compact-picker">${[1,2,3,4,5].map(value => `<button class="energy-button ${daily.clarity === value ? "selected" : ""}" data-clarity="${value}"><small>${value}</small></button>`).join("")}</div><div class="mode-row">${Object.entries(state.modes).map(([key, value]) => `<button class="mode-button ${daily.mode === key ? "selected" : ""}" data-mode="${key}">${escapeHTML(value.label)}</button>`).join("")}</div><p class="suggestion">${daily.energy ? `Energy ${daily.energy}/5 suggests <strong>${escapeHTML(state.modes[suggestedMode(daily.energy)].label)}</strong>. Minimum is valid, not failure.` : "Choose your honest state. The system should fit you—not fight you."}</p></article>
+        <article class="card card-muted"><div class="card-head"><div><p class="eyebrow">State check-in</p><h2>What capacity is here?</h2></div></div><span class="micro-label">Energy</span><div class="energy-picker">${[1,2,3,4,5].map(value => `<button class="energy-button ${daily.energy === value ? "selected" : ""}" data-energy="${value}"><span>${["○","◔","◑","◕","●"][value-1]}</span><small>${value}</small></button>`).join("")}</div><span class="micro-label clarity-label">Mental clarity</span><div class="energy-picker compact-picker">${[1,2,3,4,5].map(value => `<button class="energy-button ${daily.clarity === value ? "selected" : ""}" data-clarity="${value}"><small>${value}</small></button>`).join("")}</div><span class="micro-label time-label">Focused time available</span><div class="time-picker">${[[45,"45m"],[90,"1.5h"],[180,"3h"],[300,"5h"]].map(([value,label]) => `<button class="time-button ${Number(daily.availableMinutes) === value ? "selected" : ""}" data-available-minutes="${value}">${label}</button>`).join("")}</div><div class="mode-row">${Object.entries(state.modes).map(([key, value]) => `<button class="mode-button ${daily.mode === key ? "selected" : ""}" data-mode="${key}">${escapeHTML(value.label)}</button>`).join("")}</div><p class="suggestion"><strong>${escapeHTML(plan.recovery.label)}.</strong> ${escapeHTML(plan.recovery.note)}</p></article>
+        <article class="card weekly-anchor-card"><p class="eyebrow">Primary weekly outcome</p><h2>${escapeHTML(state.week.outcome || "Define the result that would make this week count.")}</h2><p>${escapeHTML(state.week.evidence || "Name the evidence that will prove it is complete.")}</p></article>
         <article class="card"><div class="card-head"><div><p class="eyebrow">Evening feedback loop</p><h2>Close the day cleanly</h2></div></div>${dailyField("win", "What moved today?", "Name the meaningful progress.")}${dailyField("friction", "What caused friction?", "Situation, cue, or missing preparation.")}${dailyField("tomorrow", "Tomorrow's main outcome", "One finish condition for tomorrow.")}<p class="money-note">Recorded spending today: <strong>${currency(spentToday())}</strong></p></article>
       </aside>
     </div>`;
+}
+
+function dailyCommandCard(plan) {
+  const rows = [`<div class="command-row foundation"><i>01</i><span><strong>Foundations</strong><small>${plan.routineMinutes ? `${plan.routineMinutes} minutes remain in ${plan.mode.label} mode` : "Routine foundations complete"}</small></span></div>`];
+  plan.tasks.forEach((task, index) => rows.push(`<div class="command-row"><i>${String(index + 2).padStart(2, "0")}</i><span><strong>${escapeHTML(task.name)}</strong><small>${escapeHTML(taskReason(task))} · ${task.duration} min</small></span><button class="mini-check" data-task-toggle="${task.id}" aria-label="Complete ${escapeHTML(task.name)}">✓</button></div>`));
+  if (plan.maintenance) rows.push(`<div class="command-row alert"><i>!</i><span><strong>${escapeHTML(plan.maintenance.item.name)}</strong><small>Life maintenance · ${escapeHTML(maintenanceDueLabel(plan.maintenance))}</small></span><button class="mini-arrow" data-view-target="architecture">›</button></div>`);
+  if (plan.bill) rows.push(`<div class="command-row alert"><i>£</i><span><strong>${escapeHTML(plan.bill.bill.name)}</strong><small>${currency(plan.bill.bill.amount)} · ${escapeHTML(billDueLabel(plan.bill))}</small></span><button class="mini-arrow" data-view-target="money">›</button></div>`);
+  return `<article class="card card-green command-card"><div class="command-head"><div><p class="eyebrow">Adaptive daily plan</p><h2>${escapeHTML(plan.recovery.label)}</h2><p>${escapeHTML(plan.recovery.note)}</p></div><span>${plan.capacity} min</span></div><div class="command-list">${rows.join("")}</div><div class="command-anchor"><span>Anchored to</span><strong>${escapeHTML(state.week.outcome || "your weekly outcome")}</strong></div></article>`;
 }
 
 function engineStat(name, value, note, view) {
@@ -418,7 +597,9 @@ function dailyField(key, label, placeholder) {
 }
 
 function taskTemplate(task) {
-  return `<div class="task-card ${task.done ? "done" : ""}"><button class="check-button ${task.done ? "done" : ""}" data-task-toggle="${task.id}" aria-label="Toggle task"></button><div class="task-copy"><p class="task-name">${escapeHTML(task.name)}</p><div class="task-meta"><span class="tag tag-impact">Impact ${task.impact}</span><span class="tag">Complexity ${task.complexity}</span><span class="tag">${escapeHTML(energyLabel(task.energy))}</span><span class="tag">${task.duration} min</span></div></div><button class="edit-button" data-edit-task="${task.id}" aria-label="Edit task">•••</button></div>`;
+  const due = taskDueDays(task);
+  const dueTag = due === null ? "" : `<span class="tag ${due < 0 ? "tag-danger" : due <= 3 ? "tag-warm" : ""}">${due < 0 ? `${Math.abs(due)}d overdue` : due === 0 ? "Due today" : `Due ${formatCompactDate(task.dueDate)}`}</span>`;
+  return `<div class="task-card ${task.done ? "done" : ""}"><button class="check-button ${task.done ? "done" : ""}" data-task-toggle="${task.id}" aria-label="Toggle task"></button><div class="task-copy"><p class="task-name">${escapeHTML(task.name)}</p><small class="smart-reason">${escapeHTML(taskReason(task))}</small><div class="task-meta"><span class="tag tag-impact">${escapeHTML(task.alignment)}</span><span class="tag">Impact ${task.impact}</span><span class="tag">${escapeHTML(energyLabel(task.energy))}</span><span class="tag">${task.duration} min</span>${dueTag}</div></div><button class="edit-button" data-edit-task="${task.id}" aria-label="Edit task">•••</button></div>`;
 }
 
 function renderMoney() {
@@ -426,14 +607,15 @@ function renderMoney() {
   const transactions = [...state.finances.transactions].sort((a, b) => b.date.localeCompare(a.date));
   document.getElementById("view-money").innerHTML = `
     <div class="page-head"><p class="eyebrow">Financial OS</p><h1 id="money-heading">Know your position.</h1><p>Every pound has a purpose. Expected investment money does not count until it actually arrives.</p></div>
-    <div class="money-summary">${moneyStat("Available cash", currency(totals.available), "Personal + business")}${moneyStat("Monthly bills", currency(totals.monthlyBills), "Annual bills averaged monthly")}${moneyStat("Due next 7 days", currency(totals.dueSoon), totals.dueSoon ? "Keep this amount ready" : "Nothing pressing")}${moneyStat("Overdue", currency(totals.overdueBills), totals.overdueBills ? "Needs a decision" : "All clear")}</div>
+    <div class="money-summary">${moneyStat("Safe to spend", currency(totals.safeToSpend), "After bills, reserve + plans")}${moneyStat("Available cash", currency(totals.available), "Personal + business")}${moneyStat("Protected", currency(totals.protectedCash), "Next 30 days + reserve")}${moneyStat("Overdue", currency(totals.overdueBills), totals.overdueBills ? "Needs a decision" : "All clear")}</div>
     <div class="grid two-column">
       <div class="stack">
         <article class="card bills-card"><div class="card-head"><div><p class="eyebrow">Bill calendar</p><h2>Due dates, without surprises</h2><p>Recurring bills, one-offs, autopay, and what is actually paid.</p></div><button class="button button-secondary button-small" data-add="bill">+ Bill</button></div>${billInsight(totals)}<div class="bills-list">${totals.billSchedule.length ? totals.billSchedule.map(billTemplate).join("") : '<div class="empty">No bills yet. Add the first due date you want the system to watch.</div>'}</div></article>
+        ${subscriptionAuditCard(totals)}
         <article class="card"><div class="card-head"><div><p class="eyebrow">Cash ledger</p><h2>Transactions</h2><p>Record reality, not forecasts.</p></div><button class="button button-secondary button-small" data-add="transaction">+ Transaction</button></div><div class="ledger-list">${transactions.length ? transactions.slice(0, 20).map(transactionTemplate).join("") : '<div class="empty">No transactions recorded yet.</div>'}</div></article>
         <article class="card"><div class="card-head"><div><p class="eyebrow">Starting position</p><h2>Opening balances</h2></div></div><div class="balance-grid">${balanceField("personal", "Personal cash")}${balanceField("business", "Business cash")}${balanceField("held", "Money held for others")}</div><p class="privacy-note">Use opening balances once, then keep the ledger current.</p></article>
       </div>
-      <aside class="stack">${cashCoverCard(totals)}${moneyCollectionCard("obligation", "Liabilities + obligations", "What must be restored or repaid", state.finances.obligations, item => `${escapeHTML(item.name)} · ${currency(Math.max(0, item.target - item.paid))} remaining`)}${moneyCollectionCard("investment", "Investments", "Visible, but unavailable until realised", state.finances.investments, item => `${escapeHTML(item.name)} · ${currency(item.current)} current value`)}</aside>
+      <aside class="stack">${spendingGuardrailCard(totals)}${cashCoverCard(totals)}${moneyCollectionCard("obligation", "Liabilities + obligations", "What must be restored or repaid", state.finances.obligations, item => `${escapeHTML(item.name)} · ${currency(Math.max(0, item.target - item.paid))} left${item.monthlyPayment ? ` · ${currency(item.monthlyPayment)}/mo` : ""}`)}${moneyCollectionCard("investment", "Investments", "Visible, but unavailable until realised", state.finances.investments, item => `${escapeHTML(item.name)} · ${currency(item.current)} current value`)}</aside>
     </div>`;
 }
 
@@ -450,6 +632,24 @@ function cashCoverCard(totals) {
   return `<article class="card cash-cover-card"><div class="card-head"><div><p class="eyebrow">Cash cover</p><h2>${escapeHTML(cover)}</h2><p>How long available cash covers your recurring bill baseline.</p></div></div><div class="cover-metrics"><div><span>Next 30 days</span><strong>${currency(totals.dueThirty)}</strong></div><div><span>Autopay bills</span><strong>${autopay}</strong></div><div><span>Held separately</span><strong>${currency(totals.held)}</strong></div></div></article>`;
 }
 
+function spendingGuardrailCard(totals) {
+  const gap = Math.max(0, totals.protectedCash - totals.available);
+  return `<article class="card guardrail-card ${gap ? "urgent" : ""}"><div class="card-head"><div><p class="eyebrow">Safe-to-spend engine</p><h2>${gap ? `${currency(gap)} protection gap` : `${currency(totals.safeToSpend)} flexible`}</h2><p>${gap ? "Current cash does not fully cover the protected plan." : "This is the money left after the next 30 days, your reserve floor, and planned obligation payments."}</p></div><button class="edit-button" data-add="moneySettings" aria-label="Edit spending guardrails">•••</button></div><div class="guardrail-formula"><span>Cash <b>${currency(totals.available)}</b></span><i>−</i><span>Bills <b>${currency(totals.dueThirty + totals.overdueBills)}</b></span><i>−</i><span>Reserve <b>${currency(totals.reserveTarget)}</b></span><i>−</i><span>Plans <b>${currency(totals.obligationPlan)}</b></span></div></article>`;
+}
+
+function subscriptionAuditCard(totals) {
+  const entries = totals.subscriptions.map(bill => billScheduleEntry(bill));
+  return `<article class="card subscription-card"><div class="card-head"><div><p class="eyebrow">Subscription audit</p><h2>${currency(totals.subscriptionAnnual)} per year</h2><p>Renewals, price movement, and services that need a conscious keep-or-cancel decision.</p></div><button class="button button-secondary button-small" data-add="bill">+ Add</button></div><div class="subscription-summary"><span>${entries.length} active</span><span>${currency(totals.subscriptionAnnual / 12)}/mo equivalent</span></div><div class="subscription-list">${entries.length ? entries.sort((a, b) => a.due - b.due).map(subscriptionTemplate).join("") : '<div class="empty">Mark a bill as “Subscription” to audit it here.</div>'}</div></article>`;
+}
+
+function subscriptionTemplate(entry) {
+  const bill = entry.bill;
+  const reviewAge = bill.lastReviewed ? daysFromToday(new Date(bill.lastReviewed)) * -1 : 999;
+  const priceUp = Number(bill.previousAmount) > 0 && Number(bill.amount) > Number(bill.previousAmount);
+  const flag = priceUp ? `Price rose from ${currency(bill.previousAmount)}` : entry.days <= 30 && !entry.actionPaid ? billDueLabel(entry) : reviewAge > 90 ? "Not reviewed in 90+ days" : "Reviewed and visible";
+  return `<div class="subscription-row ${priceUp || reviewAge > 90 ? "flagged" : ""}"><div><strong>${escapeHTML(bill.name)}</strong><small>${escapeHTML(flag)}</small></div><span>${currency(bill.amount)}</span><button class="tiny-button" data-review-subscription="${bill.id}">Reviewed</button><button class="edit-button" data-edit-bill="${bill.id}" aria-label="Edit subscription">•••</button></div>`;
+}
+
 function billDueLabel(entry) {
   if (entry.actionPaid) return entry.bill.frequency === "oneoff" ? "Paid" : `Paid · next ${formatCompactDate(entry.due)}`;
   if (entry.days < 0) return `${Math.abs(entry.days)} day${Math.abs(entry.days) === 1 ? "" : "s"} overdue`;
@@ -462,7 +662,7 @@ function billDueLabel(entry) {
 function billTemplate(entry) {
   const bill = entry.bill;
   const frequency = ({ monthly: "Monthly", annual: "Annual", oneoff: "One-off" })[bill.frequency];
-  return `<div class="bill-row ${entry.status}"><button class="bill-paid-button ${entry.actionPaid ? "done" : ""}" data-bill-paid="${bill.id}" data-bill-period="${entry.actionPeriod || entry.period}" aria-label="${entry.actionPaid ? "Mark unpaid" : "Mark paid"}"></button><div class="bill-copy"><strong>${escapeHTML(bill.name)}</strong><small class="bill-due">${escapeHTML(billDueLabel(entry))}</small><div class="bill-meta"><span>${frequency}</span><span>${escapeHTML(bill.account)}</span>${bill.autopay ? "<span>Autopay</span>" : ""}</div></div><div class="bill-value"><strong>${currency(bill.amount)}</strong><small>${formatCompactDate(entry.due)}</small></div><button class="edit-button" data-edit-bill="${bill.id}" aria-label="Edit bill">•••</button></div>`;
+  return `<div class="bill-row ${entry.status}"><button class="bill-paid-button ${entry.actionPaid ? "done" : ""}" data-bill-paid="${bill.id}" data-bill-period="${entry.actionPeriod || entry.period}" aria-label="${entry.actionPaid ? "Mark unpaid" : "Mark paid"}"></button><div class="bill-copy"><strong>${escapeHTML(bill.name)}</strong><small class="bill-due">${escapeHTML(billDueLabel(entry))}</small><div class="bill-meta"><span>${frequency}</span><span>${escapeHTML(bill.kind)}</span><span>${escapeHTML(bill.account)}</span>${bill.autopay ? "<span>Autopay</span>" : ""}</div></div><div class="bill-value"><strong>${currency(bill.amount)}</strong><small>${formatCompactDate(entry.due)}</small></div><button class="edit-button" data-edit-bill="${bill.id}" aria-label="Edit bill">•••</button></div>`;
 }
 
 function moneyStat(label, value, note) {
@@ -483,7 +683,7 @@ function moneyCollectionCard(type, title, note, items, formatter) {
 }
 
 function renderWeek() {
-  const open = state.tasks.filter(task => !task.done).sort((a, b) => taskScore(b, todayState().energy || 3) - taskScore(a, todayState().energy || 3));
+  const open = rankedTasks();
   const done = state.tasks.filter(task => task.done);
   document.getElementById("view-week").innerHTML = `
     <div class="page-head"><p class="eyebrow">Direction + Execution OS</p><h1 id="week-heading">Define the win.</h1><p>Choose no more than two meaningful outcomes. Everything else is maintenance, exploration, or deliberately deferred.</p></div>
@@ -507,8 +707,33 @@ function inboxTemplate(item) {
 
 function renderArchitecture() {
   document.getElementById("view-architecture").innerHTML = `
-    <div class="page-head"><p class="eyebrow">Routine + Mental OS</p><h1 id="architecture-heading">Make starting obvious.</h1><p>Install positive cues, remove competing cues, and pre-decide what happens when your state changes.</p></div>
-    <div class="grid two-column"><div class="stack"><article class="card"><div class="card-head"><div><p class="eyebrow">Editable daily architecture</p><h2>Your three operating modes</h2><p>Shape the system around real capacity.</p></div></div><div class="mode-editor-list">${Object.entries(state.modes).map(([key, mode]) => modeCard(key, mode)).join("")}</div></article><article class="card"><div class="card-head"><div><p class="eyebrow">Cue-driven architecture</p><h2>Trigger → action → environment</h2></div><button class="button button-secondary button-small" data-add="cue">+ Cue</button></div><div class="architecture-flow">${state.cues.map((cue, index) => cueTemplate(cue, index)).join("")}</div></article></div><aside class="stack"><article class="card"><div class="card-head"><div><p class="eyebrow">Prepared responses</p><h2>If–then scripts</h2></div><button class="button button-secondary button-small" data-add="script">+ Script</button></div><div class="script-list">${state.scripts.map(script => `<div class="script-card" data-edit-script="${script.id}" role="button" tabindex="0"><p><strong>If</strong> ${escapeHTML(script.trigger)}, <strong>then</strong> ${escapeHTML(script.response)}</p></div>`).join("")}</div></article><article class="card card-muted"><p class="quote">A missed action is system data.</p><p class="quote-note">Ask which cue was missing, which competing cue was present, and which single environmental change would help next time.</p></article></aside></div>`;
+    <div class="page-head"><p class="eyebrow">Routine + Life Maintenance OS</p><h1 id="architecture-heading">Make starting obvious.</h1><p>Keep important life dates visible, strengthen cues, and pre-decide what happens when your state changes.</p></div>
+    <div class="grid two-column"><div class="stack">${maintenanceCard()}<article class="card"><div class="card-head"><div><p class="eyebrow">Editable daily architecture</p><h2>Your three operating modes</h2><p>Shape the system around real capacity.</p></div></div><div class="mode-editor-list">${Object.entries(state.modes).map(([key, mode]) => modeCard(key, mode)).join("")}</div></article><article class="card"><div class="card-head"><div><p class="eyebrow">Cue-driven architecture</p><h2>Trigger → action → environment</h2></div><button class="button button-secondary button-small" data-add="cue">+ Cue</button></div><div class="architecture-flow">${state.cues.map((cue, index) => cueTemplate(cue, index)).join("")}</div></article></div><aside class="stack">${routineIntelligenceCard()}<article class="card"><div class="card-head"><div><p class="eyebrow">Prepared responses</p><h2>If–then scripts</h2></div><button class="button button-secondary button-small" data-add="script">+ Script</button></div><div class="script-list">${state.scripts.map(script => `<div class="script-card" data-edit-script="${script.id}" role="button" tabindex="0"><p><strong>If</strong> ${escapeHTML(script.trigger)}, <strong>then</strong> ${escapeHTML(script.response)}</p></div>`).join("")}</div></article><article class="card card-muted"><p class="quote">A missed action is system data.</p><p class="quote-note">Ask which cue was missing, which competing cue was present, and which single environmental change would help next time.</p></article></aside></div>`;
+}
+
+function maintenanceCard() {
+  const schedule = maintenanceSchedule();
+  return `<article class="card maintenance-card"><div class="card-head"><div><p class="eyebrow">Life maintenance calendar</p><h2>Important things stay visible</h2><p>Appointments, birthdays, renewals, car, documents, health, and home.</p></div><button class="button button-secondary button-small" data-add="maintenance">+ Date</button></div><div class="maintenance-list">${schedule.length ? schedule.map(maintenanceTemplate).join("") : '<div class="empty">Nothing scheduled yet. Add the first responsibility you do not want to hold in your head.</div>'}</div></article>`;
+}
+
+function maintenanceDueLabel(entry) {
+  if (entry.actionDone) return entry.item.recurrence === "oneoff" ? "Completed" : `Done · next ${formatCompactDate(entry.due)}`;
+  if (entry.days < 0) return `${Math.abs(entry.days)} day${Math.abs(entry.days) === 1 ? "" : "s"} overdue`;
+  if (entry.days === 0) return "Due today";
+  if (entry.days === 1) return "Due tomorrow";
+  if (entry.days <= 7) return `Due in ${entry.days} days`;
+  return `Due ${formatCompactDate(entry.due)}`;
+}
+
+function maintenanceTemplate(entry) {
+  const item = entry.item;
+  return `<div class="maintenance-row ${entry.status}"><button class="maintenance-check ${entry.actionDone ? "done" : ""}" data-maintenance-done="${item.id}" data-maintenance-period="${entry.actionPeriod}" aria-label="${entry.actionDone ? "Reopen" : "Complete"} ${escapeHTML(item.name)}"></button><div><strong>${escapeHTML(item.name)}</strong><small>${escapeHTML(maintenanceDueLabel(entry))}</small><span>${escapeHTML(item.category)} · ${escapeHTML(item.recurrence)}</span></div><time>${formatCompactDate(entry.due)}</time><button class="edit-button" data-edit-maintenance="${item.id}" aria-label="Edit ${escapeHTML(item.name)}">•••</button></div>`;
+}
+
+function routineIntelligenceCard() {
+  const signal = routineSignal();
+  if (!signal.ready) return `<article class="card intelligence-card"><p class="eyebrow">Routine intelligence</p><h2>Building the signal</h2><p>${escapeHTML(signal.message)}</p></article>`;
+  return `<article class="card intelligence-card ${signal.rate < 60 ? "urgent" : ""}"><div class="signal-ring" style="--signal:${signal.rate * 3.6}deg"><strong>${signal.rate}%</strong><span>${signal.attempts} tries</span></div><div><p class="eyebrow">Routine intelligence</p><h2>${escapeHTML(signal.step)}</h2><p>${escapeHTML(signal.modeLabel)} mode · ${signal.completed}/${signal.attempts} completed</p><small>${escapeHTML(signal.message)}</small><button class="text-button" data-edit-routine="${signal.modeKey}">Adjust this mode →</button></div></article>`;
 }
 
 function modeCard(key, mode) {
@@ -523,11 +748,17 @@ function cueTemplate(cue, index) {
 function renderReview() {
   const averageRating = average(state.reflection.ratings).toFixed(1);
   const metrics = weekMetrics();
+  const coach = weeklyCoach();
   document.getElementById("view-review").innerHTML = `
     <div class="page-head"><p class="eyebrow">Life OS + feedback loop</p><h1 id="review-heading">Learn, then adjust.</h1><p>Review the quality of the system—not your worth. Look for patterns across weeks and months.</p></div>
     <div class="review-metrics">${reviewMetric("Life score", `${averageRating}/5`, "Current reflection")}${reviewMetric("Energy", metrics.energy ? `${metrics.energy.toFixed(1)}/5` : "—", `${metrics.daysChecked} days checked`)}${reviewMetric("Routine", `${metrics.routine}%`, "Foundations kept")}${reviewMetric("Execution", String(metrics.tasksDone), "Actions completed")}</div>
+    ${weeklyCoachCard(coach)}
     <div class="grid two-column"><div class="stack"><article class="card"><div class="card-head"><div><p class="eyebrow">Weekly life assessment</p><h2>Five connected engines</h2></div><strong class="average-score">${averageRating}<small>/5</small></strong></div><div class="rating-list">${DIMENSIONS.map((item, index) => ratingTemplate(item, index)).join("")}</div></article><article class="card"><div class="card-head"><div><p class="eyebrow">Weekly reflection</p><h2>Close the loop</h2></div></div><div class="reflection-prompts">${reflectionField("win", "What moved forward?", "Name the real win.")}${reflectionField("friction", "Where did friction appear?", "Notice the system, not a character flaw.")}${reflectionField("lesson", "What cue or design will change?", "One environmental or behavioural adjustment.")}${reflectionField("next", "What may matter next week?", "Capture it without overcommitting.")}</div></article><article class="card week-close-card"><div><p class="eyebrow">Weekly rollover</p><h2>Archive the learning. Keep the momentum.</h2><p>Completed work moves into history. Open actions carry forward and the next week starts clean.</p></div><button class="button button-primary" data-close-week>Close this week</button></article></div><aside class="stack"><article class="card card-muted"><div class="card-head"><div><p class="eyebrow">Life stays visible</p><h2>Protect what work is for</h2></div></div>${lifeField("relationships", "Relationships", "Who needs intentional time?")}${lifeField("enjoyment", "Enjoyment", "Padel, music, socialising, creativity, freedom.")}${lifeField("health", "Health", "Sleep, food, movement, recovery.")}${lifeField("growth", "Growth", "What knowledge will you apply?")}</article><article class="card"><div class="card-head"><div><p class="eyebrow">Monthly strategic review</p><h2>${new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" }).format(new Date())}</h2></div></div>${monthlyField("financial", "Financial position", "What changed in cash, commitments, investments, or liabilities?")}${monthlyField("growth", "Personal development", "What changed in capability or character?")}${monthlyField("business", "Business progress", "What value, systems, or revenue moved?")}${monthlyField("lifestyle", "Lifestyle quality", "Is life actually becoming calmer, freer, and fuller?")}${monthlyField("adjustment", "One strategic adjustment", "What single change matters next month?")}</article><article class="card card-muted"><div class="card-head"><div><p class="eyebrow">Recovery decision</p><h2>What does next week need?</h2></div></div><div class="recovery-grid">${[["restore","Restore","Lower load"],["maintain","Maintain","Stay steady"],["expand","Expand","Add stretch"]].map(([key,label,note]) => `<button class="recovery-option ${state.reflection.recovery === key ? "selected" : ""}" data-recovery="${key}"><strong>${label}</strong><small>${note}</small></button>`).join("")}</div></article></aside></div>
     <article class="card history-card"><div class="card-head"><div><p class="eyebrow">System memory</p><h2>Previous weeks</h2><p>Patterns become visible when the system remembers.</p></div><span class="tag">${state.history.length} archived</span></div>${historyView()}</article>`;
+}
+
+function weeklyCoachCard(coach) {
+  return `<article class="card coach-card"><div class="coach-lead"><p class="eyebrow">Weekly coach</p><h2>${escapeHTML(coach.title)}</h2><p>${escapeHTML(coach.summary)}</p></div><div class="coach-insights">${coach.insights.map((insight, index) => `<div><i>${String(index + 1).padStart(2, "0")}</i><p>${escapeHTML(insight)}</p></div>`).join("")}</div></article>`;
 }
 
 function reviewMetric(label, value, note) {
@@ -582,6 +813,7 @@ function goToView(view) {
 function editorCollection(type) {
   if (type === "task") return state.tasks;
   if (type === "inbox") return state.inbox;
+  if (type === "maintenance") return state.maintenance;
   if (type === "cue") return state.cues;
   if (type === "script") return state.scripts;
   if (type === "transaction") return state.finances.transactions;
@@ -594,22 +826,24 @@ function editorCollection(type) {
 function openEditor(type, id = null) {
   const dialog = document.getElementById("editor-dialog");
   const fields = document.getElementById("dialog-fields");
-  const collectionTypes = ["task", "inbox", "cue", "script", "transaction", "bill", "obligation", "investment"];
+  const collectionTypes = ["task", "inbox", "maintenance", "cue", "script", "transaction", "bill", "obligation", "investment"];
   const item = collectionTypes.includes(type) && id ? editorCollection(type).find(entry => entry.id === id) : null;
   editor = type === "handoffImport" ? { type, payload: id } : { type, id };
-  const titles = { task: "Action", inbox: "Quick capture", cue: "Cue architecture", script: "If–then script", transaction: "Transaction", bill: "Bill + due date", obligation: "Obligation", investment: "Investment", routine: `${state.modes[id]?.label || "Routine"} mode`, reminders: "Gentle reminders", security: "App lock", handoff: "Secure phone handoff", handoffImport: "Import secure handoff" };
+  const titles = { task: "Smart action", inbox: "Quick capture", maintenance: "Life maintenance date", cue: "Cue architecture", script: "If–then script", transaction: "Transaction", bill: "Bill + due date", obligation: "Obligation", investment: "Investment", moneySettings: "Spending guardrails", routine: `${state.modes[id]?.label || "Routine"} mode`, reminders: "Gentle reminders", security: "App lock", handoff: "Secure phone handoff", handoffImport: "Import secure handoff" };
   document.getElementById("dialog-eyebrow").textContent = ({ routine: "Personalise your system", reminders: "Stay gently connected", security: "Local privacy", handoff: "Encrypted device transfer", handoffImport: "Encrypted device transfer" })[type] || (id ? "Update your system" : "Add to your system");
   document.getElementById("dialog-title").textContent = titles[type] || "Item";
   document.getElementById("delete-item").classList.toggle("hidden", !(id && collectionTypes.includes(type)));
   document.getElementById("save-item").textContent = ({ handoff: "Create secure link", handoffImport: "Import", security: "Save lock", reminders: "Save reminders", routine: "Save routine" })[type] || "Save";
   if (type === "task") fields.innerHTML = taskEditor(item);
   if (type === "inbox") fields.innerHTML = inboxEditor(item);
+  if (type === "maintenance") fields.innerHTML = maintenanceEditor(item);
   if (type === "cue") fields.innerHTML = cueEditor(item);
   if (type === "script") fields.innerHTML = scriptEditor(item);
   if (type === "transaction") fields.innerHTML = transactionEditor(item);
   if (type === "bill") fields.innerHTML = billEditor(item);
-  if (type === "obligation") fields.innerHTML = `<div class="field"><label>Name</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Total owed (£)</label><input name="target" type="number" min="0" step="0.01" required value="${item?.target || ""}" /></div><div class="field"><label>Already restored (£)</label><input name="paid" type="number" min="0" step="0.01" value="${item?.paid || 0}" /></div></div>`;
+  if (type === "obligation") fields.innerHTML = `<div class="field"><label>Name</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Total owed (£)</label><input name="target" type="number" min="0" step="0.01" required value="${item?.target || ""}" /></div><div class="field"><label>Already restored (£)</label><input name="paid" type="number" min="0" step="0.01" value="${item?.paid || 0}" /></div><div class="field"><label>Planned this month (£)</label><input name="monthlyPayment" type="number" min="0" step="0.01" value="${item?.monthlyPayment || 0}" /></div></div>`;
   if (type === "investment") fields.innerHTML = `<div class="field"><label>Name</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Contributed (£)</label><input name="contributed" type="number" min="0" step="0.01" value="${item?.contributed || 0}" /></div><div class="field"><label>Current value (£)</label><input name="current" type="number" min="0" step="0.01" value="${item?.current || 0}" /></div></div>`;
+  if (type === "moneySettings") fields.innerHTML = moneySettingsEditor();
   if (type === "routine") fields.innerHTML = routineEditor(id);
   if (type === "reminders") fields.innerHTML = remindersEditor();
   if (type === "security") fields.innerHTML = securityEditor();
@@ -621,11 +855,15 @@ function openEditor(type, id = null) {
 }
 
 function taskEditor(item) {
-  return `<div class="field"><label>Action</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Impact</label><select name="impact">${[1,2,3].map(value => `<option value="${value}" ${item?.impact === value ? "selected" : ""}>${value}</option>`).join("")}</select></div><div class="field"><label>Complexity</label><select name="complexity">${[1,2,3].map(value => `<option value="${value}" ${item?.complexity === value ? "selected" : ""}>${value}</option>`).join("")}</select></div><div class="field"><label>Energy</label><select name="energy">${["low","medium","high"].map(value => `<option value="${value}" ${item?.energy === value ? "selected" : ""}>${energyLabel(value)}</option>`).join("")}</select></div></div><div class="field"><label>Minutes</label><input name="duration" type="number" min="5" max="300" step="5" value="${item?.duration || 30}" /></div>`;
+  return `<div class="field"><label>Action</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Weekly role</label><select name="alignment">${[["primary","Main outcome"],["supporting","Supporting"],["maintenance","Maintenance"]].map(([value,label]) => `<option value="${value}" ${item?.alignment === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Deadline</label><input name="dueDate" type="date" value="${item?.dueDate || ""}" /></div></div><div class="inline-fields"><div class="field"><label>Impact</label><select name="impact">${[1,2,3].map(value => `<option value="${value}" ${Number(item?.impact || 2) === value ? "selected" : ""}>${value}</option>`).join("")}</select></div><div class="field"><label>Complexity</label><select name="complexity">${[1,2,3].map(value => `<option value="${value}" ${Number(item?.complexity || 1) === value ? "selected" : ""}>${value}</option>`).join("")}</select></div><div class="field"><label>Energy</label><select name="energy">${["low","medium","high"].map(value => `<option value="${value}" ${(item?.energy || "medium") === value ? "selected" : ""}>${energyLabel(value)}</option>`).join("")}</select></div></div><div class="field"><label>Minutes</label><input name="duration" type="number" min="5" max="300" step="5" value="${item?.duration || 30}" /></div><p class="dialog-note">The scheduler weighs deadline, weekly role, energy fit, impact, complexity, and available time.</p>`;
 }
 
 function inboxEditor(item) {
   return `<div class="field"><label>What do you want to hold?</label><textarea name="text" required placeholder="Idea, concern, reminder, or something to revisit.">${escapeHTML(item?.text || "")}</textarea></div><div class="field"><label>Type</label><select name="type">${["idea","task","concern","later"].map(value => `<option value="${value}" ${item?.type === value ? "selected" : ""}>${value[0].toUpperCase() + value.slice(1)}</option>`).join("")}</select></div><p class="dialog-note">Capturing this does not make it a commitment. Review it during weekly planning.</p>`;
+}
+
+function maintenanceEditor(item) {
+  return `<div class="field"><label>What needs remembering?</label><input name="name" required value="${escapeHTML(item?.name || "")}" placeholder="Dentist, birthday, MOT, passport…" /></div><div class="inline-fields"><div class="field"><label>Category</label><select name="category">${[["appointment","Appointment"],["birthday","Birthday"],["renewal","Renewal"],["car","Car"],["document","Document"],["health","Health"],["home","Home"],["other","Other"]].map(([value,label]) => `<option value="${value}" ${item?.category === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Date</label><input name="dueDate" type="date" required value="${item?.dueDate || dayKey()}" /></div><div class="field"><label>Repeats</label><select name="recurrence">${[["oneoff","One-off"],["annual","Every year"],["monthly","Every month"]].map(([value,label]) => `<option value="${value}" ${item?.recurrence === value ? "selected" : ""}>${label}</option>`).join("")}</select></div></div><div class="field"><label>Remind me before</label><select name="remindDays">${[[0,"On the day"],[1,"1 day"],[3,"3 days"],[7,"7 days"],[14,"14 days"],[30,"30 days"],[60,"60 days"]].map(([value,label]) => `<option value="${value}" ${Number(item?.remindDays ?? 7) === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Useful details</label><textarea name="notes" placeholder="Location, document needed, person to contact…">${escapeHTML(item?.notes || "")}</textarea></div>`;
 }
 
 function cueEditor(item) {
@@ -643,7 +881,11 @@ function transactionEditor(item) {
 function billEditor(item) {
   const frequency = item?.frequency || "monthly";
   const monthNames = Array.from({ length: 12 }, (_, index) => new Intl.DateTimeFormat("en-GB", { month: "long" }).format(new Date(2024, index, 1)));
-  return `<div class="field"><label>Bill name</label><input name="name" required value="${escapeHTML(item?.name || "")}" placeholder="Rent, phone, insurance…" /></div><div class="inline-fields bill-core-fields"><div class="field"><label>Amount (£)</label><input name="amount" type="number" min="0.01" step="0.01" required value="${item?.amount ?? ""}" /></div><div class="field"><label>Repeats</label><select name="frequency" data-bill-frequency>${[["monthly","Monthly"],["annual","Yearly"],["oneoff","One-off"]].map(([value,label]) => `<option value="${value}" ${frequency === value ? "selected" : ""}>${label}</option>`).join("")}</select></div></div><div class="bill-date-group" data-bill-date="monthly"><div class="field"><label>Due day each month</label><input name="dueDayMonthly" type="number" inputmode="numeric" min="1" max="31" value="${item?.dueDay || new Date().getDate()}" /></div></div><div class="bill-date-group" data-bill-date="annual"><div class="inline-fields"><div class="field"><label>Due month</label><select name="dueMonth">${monthNames.map((name,index) => `<option value="${index + 1}" ${Number(item?.dueMonth || new Date().getMonth() + 1) === index + 1 ? "selected" : ""}>${name}</option>`).join("")}</select></div><div class="field"><label>Due day</label><input name="dueDayAnnual" type="number" inputmode="numeric" min="1" max="31" value="${item?.dueDay || new Date().getDate()}" /></div></div></div><div class="bill-date-group" data-bill-date="oneoff"><div class="field"><label>Due date</label><input name="dueDate" type="date" value="${item?.dueDate || dayKey()}" /></div></div><div class="inline-fields"><div class="field"><label>Paid from</label><select name="account"><option value="personal" ${item?.account !== "business" ? "selected" : ""}>Personal</option><option value="business" ${item?.account === "business" ? "selected" : ""}>Business</option></select></div><div class="field"><label>Remind me before</label><select name="remindDays">${[[0,"On the day"],[1,"1 day"],[3,"3 days"],[7,"7 days"],[14,"14 days"]].map(([value,label]) => `<option value="${value}" ${Number(item?.remindDays ?? 3) === value ? "selected" : ""}>${label}</option>`).join("")}</select></div></div><label class="toggle-row"><span><strong>Paid automatically</strong><small>Label this as autopay in the calendar</small></span><input name="autopay" type="checkbox" ${item?.autopay ? "checked" : ""} /><i></i></label><p class="dialog-note">Mark each cycle paid from the bill calendar. The next due date then moves forward automatically.</p>`;
+  return `<div class="field"><label>Bill name</label><input name="name" required value="${escapeHTML(item?.name || "")}" placeholder="Rent, phone, insurance…" /></div><div class="inline-fields bill-core-fields"><div class="field"><label>Amount (£)</label><input name="amount" type="number" min="0.01" step="0.01" required value="${item?.amount ?? ""}" /></div><div class="field"><label>Repeats</label><select name="frequency" data-bill-frequency>${[["monthly","Monthly"],["annual","Yearly"],["oneoff","One-off"]].map(([value,label]) => `<option value="${value}" ${frequency === value ? "selected" : ""}>${label}</option>`).join("")}</select></div></div><div class="bill-date-group" data-bill-date="monthly"><div class="field"><label>Due day each month</label><input name="dueDayMonthly" type="number" inputmode="numeric" min="1" max="31" value="${item?.dueDay || new Date().getDate()}" /></div></div><div class="bill-date-group" data-bill-date="annual"><div class="inline-fields"><div class="field"><label>Due month</label><select name="dueMonth">${monthNames.map((name,index) => `<option value="${index + 1}" ${Number(item?.dueMonth || new Date().getMonth() + 1) === index + 1 ? "selected" : ""}>${name}</option>`).join("")}</select></div><div class="field"><label>Due day</label><input name="dueDayAnnual" type="number" inputmode="numeric" min="1" max="31" value="${item?.dueDay || new Date().getDate()}" /></div></div></div><div class="bill-date-group" data-bill-date="oneoff"><div class="field"><label>Due date</label><input name="dueDate" type="date" value="${item?.dueDate || dayKey()}" /></div></div><div class="inline-fields"><div class="field"><label>Type</label><select name="billKind">${[["essential","Essential"],["subscription","Subscription"],["flexible","Flexible"]].map(([value,label]) => `<option value="${value}" ${(item?.kind || "essential") === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Paid from</label><select name="account"><option value="personal" ${item?.account !== "business" ? "selected" : ""}>Personal</option><option value="business" ${item?.account === "business" ? "selected" : ""}>Business</option></select></div><div class="field"><label>Remind me before</label><select name="remindDays">${[[0,"On the day"],[1,"1 day"],[3,"3 days"],[7,"7 days"],[14,"14 days"]].map(([value,label]) => `<option value="${value}" ${Number(item?.remindDays ?? 3) === value ? "selected" : ""}>${label}</option>`).join("")}</select></div></div><label class="toggle-row"><span><strong>Paid automatically</strong><small>Label this as autopay in the calendar</small></span><input name="autopay" type="checkbox" ${item?.autopay ? "checked" : ""} /><i></i></label><p class="dialog-note">Subscription price changes are remembered automatically. Mark each cycle paid to advance its date.</p>`;
+}
+
+function moneySettingsEditor() {
+  return `<div class="field"><label>Cash reserve floor (£)</label><input name="reserveTarget" type="number" min="0" step="10" required value="${Number(state.finances.settings.reserveTarget) || 0}" /></div><p class="dialog-note">Safe to spend = available cash − unpaid bills in the next 30 days − overdue bills − this reserve − planned obligation payments.</p>`;
 }
 
 function updateBillEditorFields() {
@@ -696,6 +938,12 @@ async function saveEditor() {
   }
   if (editor.type === "reminders") return saveReminders(form, data);
   if (editor.type === "security") return saveLockSettings(form, data);
+  if (editor.type === "moneySettings") {
+    state.finances.settings.reserveTarget = Math.max(0, Number(data.reserveTarget) || 0);
+    saveState("Spending guardrails updated");
+    render();
+    return true;
+  }
   if (editor.type === "handoff") {
     if (data.password !== data.confirmPassword) return showToast("Passwords do not match"), false;
     await createSecureHandoff(data.password);
@@ -722,8 +970,9 @@ async function saveEditor() {
     item = { id: crypto.randomUUID() };
     collection.push(item);
   }
-  if (editor.type === "task") Object.assign(item, { name: data.name.trim(), impact: Number(data.impact), complexity: Number(data.complexity), energy: data.energy, duration: Number(data.duration), done: item.done || false });
+  if (editor.type === "task") Object.assign(item, { name: data.name.trim(), impact: Number(data.impact), complexity: Number(data.complexity), energy: data.energy, duration: Number(data.duration), dueDate: data.dueDate || "", alignment: data.alignment, createdAt: item.createdAt || new Date().toISOString(), done: item.done || false });
   if (editor.type === "inbox") Object.assign(item, { text: data.text.trim(), type: data.type, createdAt: item.createdAt || new Date().toISOString() });
+  if (editor.type === "maintenance") Object.assign(item, { name: data.name.trim(), category: data.category, dueDate: data.dueDate, recurrence: data.recurrence, remindDays: Number(data.remindDays), notes: data.notes.trim(), createdAt: item.createdAt || new Date().toISOString(), completedPeriods: item.completedPeriods || [] });
   if (editor.type === "cue") Object.assign(item, { name: data.name.trim(), cue: data.cue.trim(), response: data.response.trim(), setup: data.setup.trim(), remove: data.remove.trim() });
   if (editor.type === "script") Object.assign(item, { trigger: data.trigger.trim(), response: data.response.trim() });
   if (editor.type === "transaction") Object.assign(item, { type: data.type, account: data.account, date: data.date, amount: Number(data.amount), category: data.category, note: data.note.trim() });
@@ -731,9 +980,12 @@ async function saveEditor() {
     if (data.frequency === "oneoff" && !data.dueDate) return showToast("Choose the one-off due date"), false;
     const frequencyChanged = item.frequency && item.frequency !== data.frequency;
     const dueDay = data.frequency === "annual" ? Number(data.dueDayAnnual) : Number(data.dueDayMonthly);
-    Object.assign(item, { name: data.name.trim(), amount: Number(data.amount), frequency: data.frequency, dueDay, dueMonth: Number(data.dueMonth || 1), dueDate: data.dueDate || "", account: data.account, remindDays: Number(data.remindDays), autopay: Boolean(data.autopay), createdAt: item.createdAt || new Date().toISOString(), paidPeriods: frequencyChanged ? [] : (item.paidPeriods || []) });
+    const nextAmount = Number(data.amount);
+    const priceChanged = Number(item.amount) > 0 && Number(item.amount) !== nextAmount;
+    const becomingSubscription = item.kind !== "subscription" && data.billKind === "subscription";
+    Object.assign(item, { name: data.name.trim(), amount: nextAmount, frequency: data.frequency, dueDay, dueMonth: Number(data.dueMonth || 1), dueDate: data.dueDate || "", kind: data.billKind, account: data.account, remindDays: Number(data.remindDays), autopay: Boolean(data.autopay), createdAt: item.createdAt || new Date().toISOString(), paidPeriods: frequencyChanged ? [] : (item.paidPeriods || []), previousAmount: priceChanged ? Number(item.amount) : Number(item.previousAmount || 0), amountChangedAt: priceChanged ? new Date().toISOString() : (item.amountChangedAt || ""), lastReviewed: becomingSubscription ? new Date().toISOString() : (item.lastReviewed || "") });
   }
-  if (editor.type === "obligation") Object.assign(item, { name: data.name.trim(), target: Number(data.target), paid: Number(data.paid) });
+  if (editor.type === "obligation") Object.assign(item, { name: data.name.trim(), target: Number(data.target), paid: Number(data.paid), monthlyPayment: Number(data.monthlyPayment) });
   if (editor.type === "investment") Object.assign(item, { name: data.name.trim(), contributed: Number(data.contributed), current: Number(data.current) });
   saveState(editor.type === "inbox" ? "Captured without changing direction" : "System updated");
   render();
@@ -762,7 +1014,7 @@ function promoteInboxItem(id) {
   const index = state.inbox.findIndex(item => item.id === id);
   if (index < 0) return;
   const item = state.inbox[index];
-  state.tasks.push({ id: crypto.randomUUID(), name: item.text, impact: 2, complexity: 1, energy: "medium", duration: 30, done: false });
+  state.tasks.push({ id: crypto.randomUUID(), name: item.text, impact: 2, complexity: 1, energy: "medium", duration: 30, dueDate: "", alignment: "supporting", createdAt: new Date().toISOString(), done: false });
   state.inbox.splice(index, 1);
   saveState("Capture moved into actions");
   render();
@@ -838,6 +1090,25 @@ async function checkReminders() {
     const timing = entry.days < 0 ? `${Math.abs(entry.days)} day${Math.abs(entry.days) === 1 ? "" : "s"} overdue` : entry.days === 0 ? "due today" : `due in ${entry.days} day${entry.days === 1 ? "" : "s"}`;
     reminder.lastFired[key] = new Date().toISOString();
     await showReminder(key, `Bill ${timing}: ${entry.bill.name}`, `${currency(entry.bill.amount)} from ${entry.bill.account}${entry.bill.autopay ? " · autopay" : ""}.`);
+    saveState();
+  }
+  for (const task of state.tasks.filter(item => !item.done && item.dueDate)) {
+    const days = taskDueDays(task, now);
+    if (days > 1) continue;
+    const key = `task-${task.id}-${today}`;
+    if (reminder.lastFired[key]) continue;
+    const timing = days < 0 ? `${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} overdue` : days === 0 ? "due today" : "due tomorrow";
+    reminder.lastFired[key] = new Date().toISOString();
+    await showReminder(key, `Action ${timing}`, `${task.name} · ${task.duration} min · ${energyLabel(task.energy)}.`);
+    saveState();
+  }
+  for (const entry of maintenanceSchedule(now)) {
+    if (entry.actionDone || entry.days > entry.item.remindDays) continue;
+    const key = `maintenance-${entry.item.id}-${entry.period}-${today}`;
+    if (reminder.lastFired[key]) continue;
+    const timing = entry.days < 0 ? `${Math.abs(entry.days)} day${Math.abs(entry.days) === 1 ? "" : "s"} overdue` : entry.days === 0 ? "today" : `in ${entry.days} day${entry.days === 1 ? "" : "s"}`;
+    reminder.lastFired[key] = new Date().toISOString();
+    await showReminder(key, `${entry.item.name} · ${timing}`, entry.item.notes || `${entry.item.category} life-maintenance reminder.`);
     saveState();
   }
 }
@@ -1074,7 +1345,7 @@ document.addEventListener("click", event => {
   if (target.dataset.energy) {
     const daily = todayState();
     daily.energy = Number(target.dataset.energy);
-    daily.mode = suggestedMode(daily.energy);
+    daily.mode = recoverySignal(daily).mode;
     daily.routine = [];
     saveState();
     return render();
@@ -1082,6 +1353,11 @@ document.addEventListener("click", event => {
   if (target.dataset.clarity) {
     todayState().clarity = Number(target.dataset.clarity);
     saveState();
+    return render();
+  }
+  if (target.dataset.availableMinutes) {
+    todayState().availableMinutes = Number(target.dataset.availableMinutes);
+    saveState("Today's capacity updated");
     return render();
   }
   if (target.dataset.mode) {
@@ -1113,6 +1389,23 @@ document.addEventListener("click", event => {
     saveState(paid ? "Bill reopened" : "Bill marked paid");
     return render();
   }
+  if (target.dataset.maintenanceDone) {
+    const item = state.maintenance.find(entry => entry.id === target.dataset.maintenanceDone);
+    if (!item) return;
+    const period = String(target.dataset.maintenancePeriod);
+    const done = item.completedPeriods.includes(period);
+    item.completedPeriods = done ? item.completedPeriods.filter(value => value !== period) : [...item.completedPeriods, period];
+    saveState(done ? "Life item reopened" : "Life item completed");
+    return render();
+  }
+  if (target.dataset.reviewSubscription) {
+    const bill = state.finances.bills.find(item => item.id === target.dataset.reviewSubscription);
+    if (!bill) return;
+    bill.lastReviewed = new Date().toISOString();
+    bill.previousAmount = Number(bill.amount);
+    saveState("Subscription review recorded");
+    return render();
+  }
   if (target.dataset.add) return openEditor(target.dataset.add);
   if (target.dataset.editRoutine) return openEditor("routine", target.dataset.editRoutine);
   if (target.dataset.inboxTask) return promoteInboxItem(target.dataset.inboxTask);
@@ -1134,7 +1427,7 @@ document.addEventListener("click", event => {
     return renumberRoutineSteps();
   }
   if (target.hasAttribute("data-disable-lock")) return disableLock();
-  ["task", "inbox", "cue", "script", "transaction", "bill", "obligation", "investment"].forEach(type => {
+  ["task", "inbox", "maintenance", "cue", "script", "transaction", "bill", "obligation", "investment"].forEach(type => {
     const key = `edit${type[0].toUpperCase()}${type.slice(1)}`;
     if (target.dataset[key]) openEditor(type, target.dataset[key]);
   });

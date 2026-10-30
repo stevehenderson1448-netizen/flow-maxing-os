@@ -4,11 +4,15 @@ A dependency-free, mobile-first personal operating system connecting five engine
 
 ## Included systems
 
-- Weekly outcome planning, energy matching, quick capture, and task ranking
+- Adaptive daily command centre using energy, available time, routines, deadlines, bills, and life-maintenance dates
+- Deadline-aware task scheduling with weekly-outcome alignment
 - Editable Minimum, Standard, and Peak routine modes
 - Cue-response architecture and if-then scripts
+- Routine and recovery intelligence plus an automatic weekly coach
 - Weekly rollover, eight-week trends, and archived reflections
-- Smart bill calendar with recurring due dates, autopay labels, paid tracking, cash-cover insight, and reminders
+- Safe-to-spend engine, smart bill calendar, recurring due dates, cash-cover insight, and reminders
+- Subscription audit with renewals, remembered price changes, and review tracking
+- Life-maintenance calendar for appointments, birthdays, renewals, car, documents, health, and home
 - Financial ledger, obligations, and investments
 - Optional reminders and a local PIN or device-authenticator lock
 - Encrypted one-time device handoffs plus portable backup files
