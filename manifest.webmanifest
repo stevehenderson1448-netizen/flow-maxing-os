@@ -3,7 +3,9 @@
   "short_name": "50X Life",
   "description": "A connected personal operating system for money, routines, clarity, execution, and life.",
   "start_url": "./",
+  "id": "./",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
   "background_color": "#0b090a",
   "theme_color": "#0b090a",
   "icons": [

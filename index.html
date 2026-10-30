@@ -20,6 +20,9 @@
         </button>
         <div class="top-actions">
           <span class="local-status"><i></i>Private</span>
+          <button class="icon-button capture-button" id="quick-capture" aria-label="Quick capture">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
           <button class="icon-button" id="open-settings" aria-label="Open settings">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-1.42 1.42-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V20h-2v-.08A1.7 1.7 0 0 0 12.38 18a1.7 1.7 0 0 0-1.88.34l-.06.06-1.42-1.42.06-.06A1.7 1.7 0 0 0 9.42 15a1.7 1.7 0 0 0-1.56-1.03H7.8v-2h.08a1.7 1.7 0 0 0 1.56-1.03 1.7 1.7 0 0 0-.34-1.88l-.06-.06 1.42-1.42.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 13.43 6.4V6h2v.4a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 1.42 1.42-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.56 1.03H21v2h-.08A1.7 1.7 0 0 0 19.4 15Z"/></svg>
           </button>
@@ -82,13 +85,36 @@
           <button class="icon-button" value="cancel" aria-label="Close">×</button>
         </div>
         <div class="settings-list">
+          <p class="settings-section-label">Personalise</p>
+          <button type="button" class="settings-row" id="edit-routines"><span><strong>Routine modes</strong><small>Customise Minimum, Standard and Peak</small></span><span>›</span></button>
+          <button type="button" class="settings-row" id="reminder-settings"><span><strong>Gentle reminders</strong><small id="reminder-status">Off</small></span><span>›</span></button>
+          <button type="button" class="settings-row" id="security-settings"><span><strong>App lock</strong><small id="security-status">Off</small></span><span>›</span></button>
+          <p class="settings-section-label">Data + devices</p>
+          <button type="button" class="settings-row" id="create-handoff"><span><strong>Secure phone handoff</strong><small>Share an encrypted copy with another device</small></span><span>↗</span></button>
+          <label class="settings-row file-row"><span><strong>Import secure handoff</strong><small>Open an encrypted 50X transfer file</small></span><span>↑</span><input id="import-handoff" type="file" accept=".50x,application/json" /></label>
           <button type="button" class="settings-row" id="export-data"><span><strong>Export backup</strong><small>Save everything as a file</small></span><span>↓</span></button>
           <label class="settings-row file-row"><span><strong>Import backup</strong><small>Restore a previous export</small></span><span>↑</span><input id="import-data" type="file" accept="application/json" /></label>
+          <p class="settings-section-label">Reset</p>
           <button type="button" class="settings-row danger-row" id="reset-data"><span><strong>Reset app</strong><small>Return to the 50X starter system</small></span><span>↺</span></button>
         </div>
-        <p class="privacy-note">Everything stays in this browser unless you export it.</p>
+        <p class="privacy-note">Your data stays private to this browser unless you deliberately transfer it.</p>
       </form>
     </dialog>
+
+    <section id="lock-screen" class="lock-screen hidden" aria-labelledby="lock-heading">
+      <div class="lock-panel">
+        <span class="brand-mark lock-mark">50X</span>
+        <p class="eyebrow">Private system</p>
+        <h1 id="lock-heading">Life OS is locked.</h1>
+        <p>Use your PIN or this device's secure unlock.</p>
+        <form id="unlock-form">
+          <input id="unlock-pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="12" placeholder="Enter PIN" aria-label="PIN" />
+          <button class="button button-primary" type="submit">Unlock</button>
+        </form>
+        <button class="button button-secondary button-wide hidden" id="device-unlock" type="button">Use Face ID / device unlock</button>
+        <p class="lock-error" id="lock-error" role="alert"></p>
+      </div>
+    </section>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="app.js"></script>

@@ -1,4 +1,4 @@
-const CACHE = "50x-life-os-v4";
+const CACHE = "50x-life-os-v5";
 const ASSETS = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest", "./icon.svg", "./icon-180.png"];
 
 self.addEventListener("install", event => {
@@ -26,4 +26,12 @@ self.addEventListener("fetch", event => {
     caches.open(CACHE).then(cache => cache.put(event.request, copy));
     return response;
   })));
+});
+
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  event.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(windows => {
+    const existing = windows.find(client => "focus" in client);
+    return existing ? existing.focus() : clients.openWindow("./");
+  }));
 });

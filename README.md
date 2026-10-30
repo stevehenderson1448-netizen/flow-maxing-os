@@ -2,11 +2,23 @@
 
 A dependency-free, mobile-first personal operating system connecting five engines: finances, daily routines, mental clarity, execution, and life balance.
 
+## Included systems
+
+- Weekly outcome planning, energy matching, quick capture, and task ranking
+- Editable Minimum, Standard, and Peak routine modes
+- Cue-response architecture and if-then scripts
+- Weekly rollover, eight-week trends, and archived reflections
+- Financial ledger, commitments, obligations, and investments
+- Optional reminders and a local PIN or device-authenticator lock
+- Encrypted one-time device handoffs plus portable backup files
+
 ## Live app
 
 https://stevehenderson1448-netizen.github.io/flow-maxing-os/
 
 Open the live app on a phone and add it to the home screen. Once opened online, its core interface also works offline. Existing Flow Maxing data upgrades automatically. Personal entries remain in that browser; use Settings to export regular backups.
+
+The secure handoff creates an encrypted copy for another device. It is intentionally not continuous cloud sync: no private financial or reflection data is stored on an application server.
 
 ## Run locally
 

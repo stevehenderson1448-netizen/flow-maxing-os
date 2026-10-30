@@ -1,6 +1,8 @@
 const STORAGE_KEY = "flow-maxing-os-v1";
+const SECURITY_KEY = "50x-life-os-security-v1";
+const LIVE_URL = "https://stevehenderson1448-netizen.github.io/flow-maxing-os/";
 
-const MODES = {
+const DEFAULT_MODES = {
   minimum: { label: "Minimum", note: "An intentionally smaller day. Preserve the foundations and one essential action.", routine: [["Water + daylight", "Open the curtains and begin from now.", 2], ["Breathe or meditate", "Choose the easiest two-minute version.", 2], ["Eat properly", "Protect basic energy before performance.", 10], ["One essential action", "Complete the smallest useful version.", 25], ["Prepare for sleep", "Reduce tomorrow's recovery debt.", 10]] },
   standard: { label: "Standard", note: "Your sustainable day: foundations, one deep-work block, movement, and a clean shutdown.", routine: [["Water + daylight", "No phone. Let the day begin deliberately.", 5], ["Breathwork", "Five comfortable minutes after water.", 5], ["Meditation", "Start immediately when breathwork ends.", 10], ["Read", "Fifteen minutes after breakfast.", 15], ["Focused work", "One protected, outcome-driven block.", 90], ["Movement", "Walk, gym, or sport after the work block.", 30], ["Evening reflection", "Choose tomorrow's outcome and close the day.", 5]] },
   peak: { label: "Peak", note: "Use naturally high energy for worthwhile work without borrowing from tomorrow.", routine: [["Morning foundations", "Water, daylight, breathwork, meditation, food.", 30], ["Read", "Capture one idea worth applying.", 15], ["Deep work one", "Highest-complexity weekly outcome.", 100], ["Proper break", "Eat, move, and reset attention.", 30], ["Deep work two", "Only if capacity and value are both present.", 75], ["Movement", "Train or walk without rushing recovery.", 40], ["Evening shutdown", "Preserve the next morning.", 10]] }
@@ -16,14 +18,37 @@ const CUE_DEFAULTS = [
   { name: "Evening shutdown", cue: "When I plug in my phone for the night", response: "I write tomorrow's priority and close work", setup: "Keep a notebook beside the charging station", remove: "Turn off unnecessary work alerts" }
 ];
 
+const DIMENSIONS = [
+  ["Sleep and energy", "Was I getting enough rest and waking with usable energy?"],
+  ["Mental clarity", "Did I feel present, focused, and emotionally regulated?"],
+  ["Execution", "Did I make meaningful progress on my main priorities?"],
+  ["Physical wellbeing", "Did I eat properly, move, and recover?"],
+  ["Life balance", "Did I make time for relationships and enjoyment?"]
+];
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function weekStartKey(date = new Date()) {
+  const result = new Date(date);
+  const day = result.getDay() || 7;
+  result.setHours(12, 0, 0, 0);
+  result.setDate(result.getDate() - day + 1);
+  return dayKey(result);
+}
+
 const defaultState = () => ({
-  version: 2,
-  week: { outcome: "Create consistent movement in the business", secondary: "Protect health, clarity, and recovery while executing", evidence: "Complete one meaningful business deliverable and identify the next milestone.", why: "Build proof that focused mornings compound into real momentum." },
+  version: 3,
+  week: { startedAt: weekStartKey(), outcome: "Create consistent movement in the business", secondary: "Protect health, clarity, and recovery while executing", evidence: "Complete one meaningful business deliverable and identify the next milestone.", why: "Build proof that focused mornings compound into real momentum." },
   tasks: [
     { id: crypto.randomUUID(), name: "Define this week's business needle-mover", impact: 3, complexity: 2, energy: "high", duration: 30, done: false },
     { id: crypto.randomUUID(), name: "Complete one focused business work block", impact: 3, complexity: 3, energy: "high", duration: 90, done: false },
     { id: crypto.randomUUID(), name: "Capture decisions and the next visible action", impact: 2, complexity: 1, energy: "low", duration: 15, done: false }
   ],
+  inbox: [],
+  history: [],
+  modes: clone(DEFAULT_MODES),
   cues: CUE_DEFAULTS.map(cue => ({ id: crypto.randomUUID(), ...cue })),
   scripts: [
     { id: crypto.randomUUID(), trigger: "I wake later than planned", response: "I choose Minimum mode, skip guilt, and begin the reduced sequence from now." },
@@ -37,13 +62,26 @@ const defaultState = () => ({
   daily: {},
   reflection: { win: "", friction: "", lesson: "", next: "", recovery: "maintain", ratings: [3, 3, 3, 3, 3] },
   life: { relationships: "", enjoyment: "", health: "", growth: "" },
-  monthly: {}
+  monthly: {},
+  preferences: { reminders: { enabled: false, morning: "08:00", evening: "21:00", weeklyDay: "0", weeklyTime: "18:00", lastFired: {} } },
+  sync: { lastHandoff: null }
 });
 
-let state = loadState();
-let activeView = "today";
-let editor = null;
-let toastTimer;
+function normalizeModes(inputModes) {
+  const modes = clone(DEFAULT_MODES);
+  Object.keys(modes).forEach(key => {
+    const source = inputModes?.[key];
+    if (!source) return;
+    modes[key].label = String(source.label || modes[key].label);
+    modes[key].note = String(source.note || modes[key].note);
+    if (Array.isArray(source.routine) && source.routine.length) {
+      modes[key].routine = source.routine.map(step => Array.isArray(step)
+        ? [String(step[0] || "Routine step"), String(step[1] || "Begin with the smallest version."), Math.max(1, Number(step[2]) || 5)]
+        : [String(step.name || "Routine step"), String(step.cue || "Begin with the smallest version."), Math.max(1, Number(step.duration) || 5)]);
+    }
+  });
+  return modes;
+}
 
 function normalizeState(input) {
   const base = defaultState();
@@ -53,79 +91,247 @@ function normalizeState(input) {
     const match = CUE_DEFAULTS.find(item => item.name.toLowerCase() === String(cue.name).toLowerCase());
     return { id: cue.id || crypto.randomUUID(), ...match, ...cue, setup: cue.setup || match?.setup || "Prepare the environment before the cue arrives", remove: cue.remove || match?.remove || "Remove the easiest competing action" };
   });
-  CUE_DEFAULTS.forEach(cue => { if (!cues.some(item => item.name.toLowerCase() === cue.name.toLowerCase())) cues.push({ id: crypto.randomUUID(), ...cue }); });
-  const daily = input.daily || {};
-  Object.values(daily).forEach(day => { if (day.mode === "recovery") day.mode = "minimum"; if (day.mode === "steady") day.mode = "standard"; });
+  CUE_DEFAULTS.forEach(cue => {
+    if (!cues.some(item => item.name.toLowerCase() === cue.name.toLowerCase())) cues.push({ id: crypto.randomUUID(), ...cue });
+  });
+  const daily = input.daily && typeof input.daily === "object" ? input.daily : {};
+  Object.values(daily).forEach(day => {
+    if (day.mode === "recovery") day.mode = "minimum";
+    if (day.mode === "steady") day.mode = "standard";
+  });
   return {
-    ...base, ...input, version: 2,
-    week: { ...base.week, ...(input.week || {}) },
+    ...base,
+    ...input,
+    version: 3,
+    week: { ...base.week, ...(input.week || {}), startedAt: input.week?.startedAt || weekStartKey() },
     tasks: Array.isArray(input.tasks) ? input.tasks : base.tasks,
+    inbox: Array.isArray(input.inbox) ? input.inbox : [],
+    history: Array.isArray(input.history) ? input.history : [],
+    modes: normalizeModes(input.modes),
     cues,
     scripts: Array.isArray(input.scripts) ? input.scripts : base.scripts,
-    finances: { ...base.finances, ...(input.finances || {}), balances: { ...base.finances.balances, ...(input.finances?.balances || {}) }, transactions: Array.isArray(input.finances?.transactions) ? input.finances.transactions : [], commitments: Array.isArray(input.finances?.commitments) ? input.finances.commitments : base.finances.commitments, obligations: Array.isArray(input.finances?.obligations) ? input.finances.obligations : base.finances.obligations, investments: Array.isArray(input.finances?.investments) ? input.finances.investments : [] },
+    finances: {
+      ...base.finances,
+      ...(input.finances || {}),
+      balances: { ...base.finances.balances, ...(input.finances?.balances || {}) },
+      transactions: Array.isArray(input.finances?.transactions) ? input.finances.transactions : [],
+      commitments: Array.isArray(input.finances?.commitments) ? input.finances.commitments : base.finances.commitments,
+      obligations: Array.isArray(input.finances?.obligations) ? input.finances.obligations : base.finances.obligations,
+      investments: Array.isArray(input.finances?.investments) ? input.finances.investments : []
+    },
     daily,
-    reflection: { ...base.reflection, ...(input.reflection || {}), ratings: input.reflection?.ratings || base.reflection.ratings },
-    life: { ...base.life, ...(input.life || {}) }, monthly: input.monthly || {}
+    reflection: { ...base.reflection, ...(input.reflection || {}), ratings: Array.isArray(input.reflection?.ratings) ? input.reflection.ratings : base.reflection.ratings },
+    life: { ...base.life, ...(input.life || {}) },
+    monthly: input.monthly && typeof input.monthly === "object" ? input.monthly : {},
+    preferences: { reminders: { ...base.preferences.reminders, ...(input.preferences?.reminders || {}), lastFired: input.preferences?.reminders?.lastFired || {} } },
+    sync: { ...base.sync, ...(input.sync || {}) }
   };
 }
 
-function loadState() { try { return normalizeState(JSON.parse(localStorage.getItem(STORAGE_KEY))); } catch { return defaultState(); } }
-function saveState(message) { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); if (message) showToast(message); }
-function dayKey(date = new Date()) { return date.toLocaleDateString("en-CA"); }
-function monthKey(date = new Date()) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`; }
-function todayState() { const key = dayKey(); state.daily[key] = { energy: 0, clarity: 0, mode: "standard", routine: [], win: "", friction: "", tomorrow: "", ...(state.daily[key] || {}) }; return state.daily[key]; }
-function monthlyState() { const key = monthKey(); state.monthly[key] = { financial: "", growth: "", business: "", lifestyle: "", adjustment: "", ...(state.monthly[key] || {}) }; return state.monthly[key]; }
-function suggestedMode(energy) { return energy <= 2 ? "minimum" : energy <= 4 ? "standard" : "peak"; }
-function formatDate() { return new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long" }).format(new Date()); }
-function greeting() { const hour = new Date().getHours(); return hour < 12 ? "Good morning." : hour < 18 ? "Good afternoon." : "Good evening."; }
-function escapeHTML(value = "") { return String(value).replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char])); }
-function currency(value) { return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 2 }).format(Number(value) || 0); }
-function energyLabel(value) { return ({ low: "Low energy", medium: "Medium energy", high: "High energy" })[value]; }
-function taskScore(task, energy) { const capacity = energy >= 5 ? 3 : energy >= 3 ? 2 : 1; const taskEnergy = { low: 1, medium: 2, high: 3 }[task.energy]; return task.impact * 4 + (4 - Math.abs(capacity - taskEnergy)) * 2 - task.complexity; }
+function loadState() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    const normalized = normalizeState(stored);
+    if (stored?.version !== normalized.version) localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+    return normalized;
+  } catch {
+    return defaultState();
+  }
+}
+
+function loadSecurity() {
+  try {
+    return { pinHash: "", salt: "", lockMinutes: 5, credentialId: "", credentialUserId: "", ...JSON.parse(localStorage.getItem(SECURITY_KEY)) };
+  } catch {
+    return { pinHash: "", salt: "", lockMinutes: 5, credentialId: "", credentialUserId: "" };
+  }
+}
+
+let state = loadState();
+let security = loadSecurity();
+let activeView = "today";
+let editor = null;
+let toastTimer;
+let lockTimer;
+let appUnlocked = !security.pinHash;
+let hiddenAt = 0;
+let reminderTimer;
+let pendingHandoff = readHandoffFromHash();
+
+function saveState(message) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (message) showToast(message);
+}
+
+function saveSecurity() {
+  localStorage.setItem(SECURITY_KEY, JSON.stringify(security));
+  refreshSettings();
+}
+
+function dayKey(date = new Date()) {
+  return date.toLocaleDateString("en-CA");
+}
+
+function monthKey(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function dateFromKey(key) {
+  return new Date(`${key}T12:00:00`);
+}
+
+function addDays(date, amount) {
+  const result = new Date(date);
+  result.setDate(result.getDate() + amount);
+  return result;
+}
+
+function todayState() {
+  const key = dayKey();
+  state.daily[key] = { energy: 0, clarity: 0, mode: "standard", routine: [], win: "", friction: "", tomorrow: "", ...(state.daily[key] || {}) };
+  return state.daily[key];
+}
+
+function monthlyState() {
+  const key = monthKey();
+  state.monthly[key] = { financial: "", growth: "", business: "", lifestyle: "", adjustment: "", ...(state.monthly[key] || {}) };
+  return state.monthly[key];
+}
+
+function suggestedMode(energy) {
+  return energy <= 2 ? "minimum" : energy <= 4 ? "standard" : "peak";
+}
+
+function formatDate() {
+  return new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
+}
+
+function formatCompactDate(value) {
+  const date = value instanceof Date ? value : dateFromKey(value);
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(date);
+}
+
+function greeting() {
+  const hour = new Date().getHours();
+  return hour < 12 ? "Good morning." : hour < 18 ? "Good afternoon." : "Good evening.";
+}
+
+function escapeHTML(value = "") {
+  return String(value).replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
+}
+
+function currency(value) {
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 2 }).format(Number(value) || 0);
+}
+
+function average(values) {
+  const clean = values.map(Number).filter(value => Number.isFinite(value) && value > 0);
+  return clean.length ? clean.reduce((sum, value) => sum + value, 0) / clean.length : 0;
+}
+
+function energyLabel(value) {
+  return ({ low: "Low energy", medium: "Medium energy", high: "High energy" })[value] || "Flexible energy";
+}
+
+function taskScore(task, energy) {
+  const capacity = energy >= 5 ? 3 : energy >= 3 ? 2 : 1;
+  const taskEnergy = { low: 1, medium: 2, high: 3 }[task.energy] || 2;
+  return Number(task.impact) * 4 + (4 - Math.abs(capacity - taskEnergy)) * 2 - Number(task.complexity);
+}
 
 function moneyTotals() {
   const totals = { ...state.finances.balances };
-  state.finances.transactions.forEach(item => { const sign = item.type === "income" ? 1 : -1; totals[item.account] = (Number(totals[item.account]) || 0) + sign * Number(item.amount || 0); });
+  state.finances.transactions.forEach(item => {
+    const sign = item.type === "income" ? 1 : -1;
+    totals[item.account] = (Number(totals[item.account]) || 0) + sign * Number(item.amount || 0);
+  });
   const commitments = state.finances.commitments.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const obligations = state.finances.obligations.reduce((sum, item) => sum + Math.max(0, Number(item.target || 0) - Number(item.paid || 0)), 0);
   const investments = state.finances.investments.reduce((sum, item) => sum + Number(item.current || 0), 0);
-  return { ...totals, available: totals.personal + totals.business, commitments, obligations, investments };
+  return { ...totals, available: Number(totals.personal || 0) + Number(totals.business || 0), commitments, obligations, investments };
 }
-function spentToday() { return state.finances.transactions.filter(item => item.date === dayKey() && item.type === "expense").reduce((sum, item) => sum + Number(item.amount || 0), 0); }
+
+function spentToday() {
+  return state.finances.transactions.filter(item => item.date === dayKey() && item.type === "expense").reduce((sum, item) => sum + Number(item.amount || 0), 0);
+}
+
+function weekMetrics(startKey = state.week.startedAt, tasks = state.tasks, ratings = state.reflection.ratings) {
+  const start = dateFromKey(startKey || weekStartKey());
+  const end = addDays(start, 6);
+  const days = Object.entries(state.daily).filter(([key]) => {
+    const date = dateFromKey(key);
+    return date >= start && date <= end;
+  }).map(([, value]) => value);
+  let routineDone = 0;
+  let routinePossible = 0;
+  days.forEach(day => {
+    const mode = state.modes[day.mode] || state.modes.standard;
+    routineDone += Array.isArray(day.routine) ? day.routine.filter(Boolean).length : 0;
+    routinePossible += mode.routine.length;
+  });
+  return {
+    score: average(ratings),
+    energy: average(days.map(day => day.energy)),
+    clarity: average(days.map(day => day.clarity)),
+    routine: routinePossible ? Math.round((routineDone / routinePossible) * 100) : 0,
+    tasksDone: tasks.filter(task => task.done).length,
+    daysChecked: days.filter(day => day.energy || day.clarity || day.routine?.some(Boolean)).length
+  };
+}
 
 function render() {
-  renderToday(); renderMoney(); renderWeek(); renderArchitecture(); renderReview();
+  renderToday();
+  renderMoney();
+  renderWeek();
+  renderArchitecture();
+  renderReview();
   document.querySelectorAll(".view").forEach(view => view.classList.toggle("active", view.id === `view-${activeView}`));
   document.querySelectorAll(".nav-item").forEach(item => item.classList.toggle("active", item.dataset.viewTarget === activeView));
+  refreshSettings();
 }
 
 function renderToday() {
-  const daily = todayState(); const mode = MODES[daily.mode] || MODES.standard; const totals = moneyTotals();
+  const daily = todayState();
+  const mode = state.modes[daily.mode] || state.modes.standard;
+  const totals = moneyTotals();
   const routineDone = daily.routine.filter(Boolean).length;
   const openTasks = state.tasks.filter(task => !task.done).sort((a, b) => taskScore(b, daily.energy || 3) - taskScore(a, daily.energy || 3));
   const primary = openTasks[0];
   document.getElementById("view-today").innerHTML = `
     <div class="page-head"><p class="eyebrow">${escapeHTML(formatDate())} · Command centre</p><h1 id="today-heading">${greeting()}</h1><p>Protect the foundations, move one meaningful outcome, and keep the rest of life visible.</p></div>
-    <div class="engine-grid">${engineStat("Money", currency(totals.available), "Available now", "money")}${engineStat("Routine", `${routineDone}/${mode.routine.length}`, `${mode.label} mode`, "today")}${engineStat("Mental", daily.clarity ? `${daily.clarity}/5` : "—", "Clarity", "today")}${engineStat("Execution", primary ? "1 next" : "Clear", primary?.name || "No open actions", "week")}${engineStat("Life", state.life.relationships || state.life.enjoyment ? "Planned" : "Open", "Relationships + enjoyment", "review")}</div>
+    <div class="engine-grid">${engineStat("Money", currency(totals.available), "Available now", "money")}${engineStat("Routine", `${routineDone}/${mode.routine.length}`, `${mode.label} mode`, "today")}${engineStat("Mental", daily.clarity ? `${daily.clarity}/5` : "—", "Clarity", "today")}${engineStat("Execution", primary ? "1 next" : "Clear", primary?.name || "No open actions", "week")}${engineStat("Inbox", state.inbox.length ? `${state.inbox.length} held` : "Clear", "Ideas without distraction", "week")}</div>
     <div class="grid two-column">
       <div class="stack">
-        <article class="card card-green"><p class="eyebrow">Primary weekly outcome</p><h2 class="outcome-title">${escapeHTML(state.week.outcome)}</h2><p class="outcome-evidence">${escapeHTML(state.week.evidence)}</p>${primary ? `<div class="next-action"><span>Next action</span><strong>${escapeHTML(primary.name)}</strong></div>` : ""}</article>
-        <article class="card"><div class="card-head"><div><p class="eyebrow">Daily routine OS</p><h2>${mode.label} mode</h2><p>${mode.note}</p></div><span class="tag">${routineDone}/${mode.routine.length}</span></div><div class="routine-list">${mode.routine.map((item, index) => `<div class="routine-item"><button class="check-button ${daily.routine[index] ? "done" : ""}" data-routine-index="${index}" aria-label="Toggle ${escapeHTML(item[0])}"></button><div class="routine-copy"><strong>${escapeHTML(item[0])}</strong><small>${escapeHTML(item[1])}</small></div><span class="duration">${item[2]} min</span></div>`).join("")}</div></article>
+        <article class="card card-green"><p class="eyebrow">Primary weekly outcome</p><h2 class="outcome-title">${escapeHTML(state.week.outcome || "Define the result that would make this week count.")}</h2><p class="outcome-evidence">${escapeHTML(state.week.evidence || "Name the evidence that will prove it is complete.")}</p>${primary ? `<div class="next-action"><span>Next action</span><strong>${escapeHTML(primary.name)}</strong></div>` : ""}</article>
+        <article class="card"><div class="card-head"><div><p class="eyebrow">Daily routine OS</p><h2>${escapeHTML(mode.label)} mode</h2><p>${escapeHTML(mode.note)}</p></div><span class="tag">${routineDone}/${mode.routine.length}</span></div><div class="routine-list">${mode.routine.map((item, index) => routineTemplate(item, index, daily.routine[index])).join("")}</div></article>
         <article class="card"><div class="card-head"><div><p class="eyebrow">Execution OS</p><h2>Best use of this energy</h2></div><button class="text-button" data-add="task">+ Add</button></div><div class="task-list">${openTasks.length ? openTasks.slice(0, 4).map(taskTemplate).join("") : '<div class="empty">No open actions. Choose the next meaningful outcome.</div>'}</div></article>
       </div>
       <aside class="stack">
-        <article class="card card-muted"><div class="card-head"><div><p class="eyebrow">State check-in</p><h2>What capacity is here?</h2></div></div><span class="micro-label">Energy</span><div class="energy-picker">${[1,2,3,4,5].map(value => `<button class="energy-button ${daily.energy === value ? "selected" : ""}" data-energy="${value}"><span>${["○","◔","◑","◕","●"][value-1]}</span><small>${value}</small></button>`).join("")}</div><span class="micro-label clarity-label">Mental clarity</span><div class="energy-picker compact-picker">${[1,2,3,4,5].map(value => `<button class="energy-button ${daily.clarity === value ? "selected" : ""}" data-clarity="${value}"><small>${value}</small></button>`).join("")}</div><div class="mode-row">${Object.entries(MODES).map(([key, value]) => `<button class="mode-button ${daily.mode === key ? "selected" : ""}" data-mode="${key}">${value.label}</button>`).join("")}</div><p class="suggestion">${daily.energy ? `Energy ${daily.energy}/5 suggests <strong>${MODES[suggestedMode(daily.energy)].label}</strong>. Minimum is valid, not failure.` : "Choose your honest state. The system should fit you—not fight you."}</p></article>
+        <article class="card card-muted"><div class="card-head"><div><p class="eyebrow">State check-in</p><h2>What capacity is here?</h2></div></div><span class="micro-label">Energy</span><div class="energy-picker">${[1,2,3,4,5].map(value => `<button class="energy-button ${daily.energy === value ? "selected" : ""}" data-energy="${value}"><span>${["○","◔","◑","◕","●"][value-1]}</span><small>${value}</small></button>`).join("")}</div><span class="micro-label clarity-label">Mental clarity</span><div class="energy-picker compact-picker">${[1,2,3,4,5].map(value => `<button class="energy-button ${daily.clarity === value ? "selected" : ""}" data-clarity="${value}"><small>${value}</small></button>`).join("")}</div><div class="mode-row">${Object.entries(state.modes).map(([key, value]) => `<button class="mode-button ${daily.mode === key ? "selected" : ""}" data-mode="${key}">${escapeHTML(value.label)}</button>`).join("")}</div><p class="suggestion">${daily.energy ? `Energy ${daily.energy}/5 suggests <strong>${escapeHTML(state.modes[suggestedMode(daily.energy)].label)}</strong>. Minimum is valid, not failure.` : "Choose your honest state. The system should fit you—not fight you."}</p></article>
         <article class="card"><div class="card-head"><div><p class="eyebrow">Evening feedback loop</p><h2>Close the day cleanly</h2></div></div>${dailyField("win", "What moved today?", "Name the meaningful progress.")}${dailyField("friction", "What caused friction?", "Situation, cue, or missing preparation.")}${dailyField("tomorrow", "Tomorrow's main outcome", "One finish condition for tomorrow.")}<p class="money-note">Recorded spending today: <strong>${currency(spentToday())}</strong></p></article>
       </aside>
     </div>`;
 }
 
-function engineStat(name, value, note, view) { return `<button class="engine-stat" data-view-target="${view}"><span>${name}</span><strong>${escapeHTML(value)}</strong><small>${escapeHTML(note)}</small></button>`; }
-function dailyField(key, label, placeholder) { return `<div class="field"><label for="daily-${key}">${label}</label><textarea id="daily-${key}" data-daily-field="${key}" placeholder="${placeholder}">${escapeHTML(todayState()[key])}</textarea></div>`; }
-function taskTemplate(task) { return `<div class="task-card ${task.done ? "done" : ""}"><button class="check-button ${task.done ? "done" : ""}" data-task-toggle="${task.id}" aria-label="Toggle task"></button><div class="task-copy"><p class="task-name">${escapeHTML(task.name)}</p><div class="task-meta"><span class="tag tag-impact">Impact ${task.impact}</span><span class="tag">Complexity ${task.complexity}</span><span class="tag">${escapeHTML(energyLabel(task.energy))}</span><span class="tag">${task.duration} min</span></div></div><button class="edit-button" data-edit-task="${task.id}" aria-label="Edit task">•••</button></div>`; }
+function engineStat(name, value, note, view) {
+  return `<button class="engine-stat" data-view-target="${view}"><span>${name}</span><strong>${escapeHTML(value)}</strong><small>${escapeHTML(note)}</small></button>`;
+}
+
+function routineTemplate(item, index, done) {
+  return `<div class="routine-item"><button class="check-button ${done ? "done" : ""}" data-routine-index="${index}" aria-label="Toggle ${escapeHTML(item[0])}"></button><div class="routine-copy"><strong>${escapeHTML(item[0])}</strong><small>${escapeHTML(item[1])}</small></div><span class="duration">${Number(item[2])} min</span></div>`;
+}
+
+function dailyField(key, label, placeholder) {
+  return `<div class="field"><label for="daily-${key}">${label}</label><textarea id="daily-${key}" data-daily-field="${key}" placeholder="${placeholder}">${escapeHTML(todayState()[key])}</textarea></div>`;
+}
+
+function taskTemplate(task) {
+  return `<div class="task-card ${task.done ? "done" : ""}"><button class="check-button ${task.done ? "done" : ""}" data-task-toggle="${task.id}" aria-label="Toggle task"></button><div class="task-copy"><p class="task-name">${escapeHTML(task.name)}</p><div class="task-meta"><span class="tag tag-impact">Impact ${task.impact}</span><span class="tag">Complexity ${task.complexity}</span><span class="tag">${escapeHTML(energyLabel(task.energy))}</span><span class="tag">${task.duration} min</span></div></div><button class="edit-button" data-edit-task="${task.id}" aria-label="Edit task">•••</button></div>`;
+}
 
 function renderMoney() {
-  const totals = moneyTotals(); const transactions = [...state.finances.transactions].sort((a,b) => b.date.localeCompare(a.date));
+  const totals = moneyTotals();
+  const transactions = [...state.finances.transactions].sort((a, b) => b.date.localeCompare(a.date));
   document.getElementById("view-money").innerHTML = `
     <div class="page-head"><p class="eyebrow">Financial OS</p><h1 id="money-heading">Know your position.</h1><p>Every pound has a purpose. Expected investment money does not count until it actually arrives.</p></div>
     <div class="money-summary">${moneyStat("Available cash", currency(totals.available), "Personal + business")}${moneyStat("Held for others", currency(totals.held), "Always separate")}${moneyStat("Monthly commitments", currency(totals.commitments), `${currency(totals.commitments * 3)} over 3 months`)}${moneyStat("Obligations remaining", currency(totals.obligations), "Tracked explicitly")}</div>
@@ -137,79 +343,650 @@ function renderMoney() {
       <aside class="stack">${moneyCollectionCard("commitment", "Monthly commitments", "Recurring obligations", state.finances.commitments, item => `${escapeHTML(item.name)} · ${currency(item.amount)}`)}${moneyCollectionCard("obligation", "Liabilities + obligations", "What must be restored or repaid", state.finances.obligations, item => `${escapeHTML(item.name)} · ${currency(Math.max(0, item.target - item.paid))} remaining`)}${moneyCollectionCard("investment", "Investments", "Visible, but unavailable until realised", state.finances.investments, item => `${escapeHTML(item.name)} · ${currency(item.current)} current value`)}</aside>
     </div>`;
 }
-function moneyStat(label, value, note) { return `<article class="money-stat"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`; }
-function balanceField(key, label) { return `<div class="field"><label for="balance-${key}">${label}</label><input id="balance-${key}" data-balance="${key}" type="number" step="0.01" value="${Number(state.finances.balances[key]) || 0}" /></div>`; }
-function transactionTemplate(item) { const sign = item.type === "income" ? "+" : "−"; return `<div class="ledger-row"><div><strong>${escapeHTML(item.note || item.category)}</strong><small>${escapeHTML(item.date)} · ${escapeHTML(item.account)} · ${escapeHTML(item.category)}</small></div><div class="ledger-amount ${item.type}">${sign}${currency(item.amount)}<button class="edit-button" data-edit-transaction="${item.id}" aria-label="Edit transaction">•••</button></div></div>`; }
-function moneyCollectionCard(type, title, note, items, formatter) { return `<article class="card"><div class="card-head"><div><p class="eyebrow">${title}</p><h2>${note}</h2></div><button class="text-button" data-add="${type}">+ Add</button></div><div class="simple-list">${items.length ? items.map(item => `<button data-edit-${type}="${item.id}"><span>${formatter(item)}</span><span>›</span></button>`).join("") : '<div class="empty">Nothing recorded.</div>'}</div></article>`; }
+
+function moneyStat(label, value, note) {
+  return `<article class="money-stat"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`;
+}
+
+function balanceField(key, label) {
+  return `<div class="field"><label for="balance-${key}">${label}</label><input id="balance-${key}" data-balance="${key}" type="number" step="0.01" value="${Number(state.finances.balances[key]) || 0}" /></div>`;
+}
+
+function transactionTemplate(item) {
+  const sign = item.type === "income" ? "+" : "−";
+  return `<div class="ledger-row"><div><strong>${escapeHTML(item.note || item.category)}</strong><small>${escapeHTML(item.date)} · ${escapeHTML(item.account)} · ${escapeHTML(item.category)}</small></div><div class="ledger-amount ${item.type}">${sign}${currency(item.amount)}<button class="edit-button" data-edit-transaction="${item.id}" aria-label="Edit transaction">•••</button></div></div>`;
+}
+
+function moneyCollectionCard(type, title, note, items, formatter) {
+  return `<article class="card"><div class="card-head"><div><p class="eyebrow">${title}</p><h2>${note}</h2></div><button class="button button-secondary button-small" data-add="${type}">+ Add</button></div><div class="simple-list">${items.length ? items.map(item => `<button data-edit-${type}="${item.id}"><span>${formatter(item)}</span><span>•••</span></button>`).join("") : '<div class="empty">Nothing recorded.</div>'}</div></article>`;
+}
 
 function renderWeek() {
-  const open = state.tasks.filter(task => !task.done).sort((a,b) => b.impact - a.impact || b.complexity - a.complexity); const done = state.tasks.filter(task => task.done);
-  document.getElementById("view-week").innerHTML = `<div class="page-head"><p class="eyebrow">Execution OS</p><h1 id="week-heading">Define the win.</h1><p>No more than two major outcomes. Everything else is maintenance, exploration, or deliberately deferred.</p></div><div class="grid two-column"><div class="stack"><article class="week-outcome"><div class="field"><label for="week-outcome">Primary weekly outcome</label><input class="outcome-input" id="week-outcome" data-week-field="outcome" value="${escapeHTML(state.week.outcome)}" placeholder="One measurable result" /></div><div class="field"><label for="week-secondary">Secondary outcome</label><input id="week-secondary" data-week-field="secondary" value="${escapeHTML(state.week.secondary)}" placeholder="One additional meaningful result" /></div><div class="field"><label for="week-evidence">Evidence it happened</label><textarea id="week-evidence" data-week-field="evidence">${escapeHTML(state.week.evidence)}</textarea></div><div class="field"><label for="week-why">Why this matters now</label><textarea id="week-why" data-week-field="why">${escapeHTML(state.week.why)}</textarea></div></article><article class="card"><div class="card-head"><div><p class="eyebrow">Flow-matched work</p><h2>Open actions</h2><p>Complexity chooses the energy window. Impact chooses the priority.</p></div><button class="button button-secondary button-small" data-add="task">+ Action</button></div><div class="task-list">${open.length ? open.map(taskTemplate).join("") : '<div class="empty">The week is clear.</div>'}</div></article></div><aside class="stack"><article class="card card-muted"><div class="card-head"><div><p class="eyebrow">Daily hierarchy</p><h2>Know when work is finished</h2></div></div><div class="priority-rule"><strong>1</strong><span><b>Main outcome</b>One meaningful deliverable.</span></div><div class="priority-rule"><strong>2</strong><span><b>Supporting tasks</b>Up to two useful actions.</span></div><div class="priority-rule"><strong>3</strong><span><b>Maintenance</b>Only essential responsibilities.</span></div></article><article class="card"><div class="card-head"><div><p class="eyebrow">Completed</p><h2>${done.length} actions moved</h2></div></div><div class="task-list">${done.length ? done.map(taskTemplate).join("") : '<div class="empty">Completed actions collect here.</div>'}</div></article></aside></div>`;
+  const open = state.tasks.filter(task => !task.done).sort((a, b) => taskScore(b, todayState().energy || 3) - taskScore(a, todayState().energy || 3));
+  const done = state.tasks.filter(task => task.done);
+  document.getElementById("view-week").innerHTML = `
+    <div class="page-head"><p class="eyebrow">Direction + Execution OS</p><h1 id="week-heading">Define the win.</h1><p>Choose no more than two meaningful outcomes. Everything else is maintenance, exploration, or deliberately deferred.</p></div>
+    <article class="week-outcome"><div class="field"><label for="week-outcome">Primary weekly outcome</label><input class="outcome-input" id="week-outcome" data-week-field="outcome" value="${escapeHTML(state.week.outcome)}" placeholder="One measurable result" /></div><div class="field"><label for="week-evidence">Evidence of completion</label><textarea id="week-evidence" data-week-field="evidence" placeholder="What proves this is finished?">${escapeHTML(state.week.evidence)}</textarea></div><div class="inline-fields"><div class="field"><label for="week-secondary">Secondary outcome</label><input id="week-secondary" data-week-field="secondary" value="${escapeHTML(state.week.secondary)}" /></div><div class="field"><label for="week-why">Why now?</label><input id="week-why" data-week-field="why" value="${escapeHTML(state.week.why)}" /></div></div></article>
+    <div class="grid two-column focus-grid">
+      <div class="stack">
+        <article class="card"><div class="card-head"><div><p class="eyebrow">Flow-matched actions</p><h2>Open work, ranked for your state</h2></div><button class="button button-secondary button-small" data-add="task">+ Action</button></div><div class="task-list">${open.length ? open.map(taskTemplate).join("") : '<div class="empty">No open actions. Add the first visible step.</div>'}</div></article>
+        <article class="card"><div class="card-head"><div><p class="eyebrow">Completed</p><h2>${done.length} actions moved</h2></div></div><div class="task-list">${done.length ? done.map(taskTemplate).join("") : '<div class="empty">Completed actions collect here until the weekly close.</div>'}</div></article>
+      </div>
+      <aside class="stack">${inboxCard()}<article class="card card-muted"><div class="card-head"><div><p class="eyebrow">Decision hierarchy</p><h2>Protect what matters</h2></div></div><div class="priority-rule"><strong>1</strong><span><b>Main outcome</b>One meaningful deliverable.</span></div><div class="priority-rule"><strong>2</strong><span><b>Supporting work</b>Up to two useful actions.</span></div><div class="priority-rule"><strong>3</strong><span><b>Maintenance</b>Only essential responsibilities.</span></div></article></aside>
+    </div>`;
+}
+
+function inboxCard() {
+  return `<article class="card inbox-card"><div class="card-head"><div><p class="eyebrow">Quick capture</p><h2>Inbox</h2><p>Hold ideas without changing direction.</p></div><button class="button button-secondary button-small" data-add="inbox">+ Capture</button></div><div class="inbox-list">${state.inbox.length ? state.inbox.map(inboxTemplate).join("") : '<div class="empty">Clear. Nothing is competing for attention.</div>'}</div></article>`;
+}
+
+function inboxTemplate(item) {
+  return `<div class="inbox-item"><button class="inbox-copy" data-edit-inbox="${item.id}"><span class="tag">${escapeHTML(item.type || "idea")}</span><strong>${escapeHTML(item.text)}</strong><small>${formatCompactDate(new Date(item.createdAt || Date.now()))}</small></button><button class="inbox-promote" data-inbox-task="${item.id}" aria-label="Turn into action">→</button></div>`;
 }
 
 function renderArchitecture() {
-  document.getElementById("view-architecture").innerHTML = `<div class="page-head"><p class="eyebrow">Routine + Mental OS</p><h1 id="architecture-heading">Make starting obvious.</h1><p>Install positive cues, remove competing cues, and pre-decide what happens when your state changes.</p></div><div class="grid two-column"><article class="card"><div class="card-head"><div><p class="eyebrow">Cue-driven architecture</p><h2>Trigger → action → environment</h2></div><button class="button button-secondary button-small" data-add="cue">+ Cue</button></div><div class="architecture-flow">${state.cues.map((cue,index) => `<div class="cue-card"><span class="cue-number">${index+1}</span><div class="cue-content"><h3>${escapeHTML(cue.name)}</h3><div class="cue-line"><strong>When</strong><span>${escapeHTML(cue.cue)}</span></div><div class="cue-line"><strong>Then</strong><span>${escapeHTML(cue.response)}</span></div><div class="cue-line positive"><strong>Install</strong><span>${escapeHTML(cue.setup)}</span></div><div class="cue-line negative"><strong>Remove</strong><span>${escapeHTML(cue.remove)}</span></div></div><div class="cue-actions"><button class="edit-button" data-edit-cue="${cue.id}">•••</button></div></div>`).join("")}</div></article><aside class="stack"><article class="card"><div class="card-head"><div><p class="eyebrow">Prepared responses</p><h2>If–then scripts</h2></div><button class="button button-secondary button-small" data-add="script">+ Script</button></div><div class="script-list">${state.scripts.map(script => `<div class="script-card" data-edit-script="${script.id}" role="button" tabindex="0"><p><strong>If</strong> ${escapeHTML(script.trigger)}, <strong>then</strong> ${escapeHTML(script.response)}</p></div>`).join("")}</div></article><article class="card card-muted"><p class="quote">A missed action is system data.</p><p class="quote-note">Ask which cue was missing, which competing cue was present, and which single environmental change would help next time.</p></article></aside></div>`;
+  document.getElementById("view-architecture").innerHTML = `
+    <div class="page-head"><p class="eyebrow">Routine + Mental OS</p><h1 id="architecture-heading">Make starting obvious.</h1><p>Install positive cues, remove competing cues, and pre-decide what happens when your state changes.</p></div>
+    <div class="grid two-column"><div class="stack"><article class="card"><div class="card-head"><div><p class="eyebrow">Editable daily architecture</p><h2>Your three operating modes</h2><p>Shape the system around real capacity.</p></div></div><div class="mode-editor-list">${Object.entries(state.modes).map(([key, mode]) => modeCard(key, mode)).join("")}</div></article><article class="card"><div class="card-head"><div><p class="eyebrow">Cue-driven architecture</p><h2>Trigger → action → environment</h2></div><button class="button button-secondary button-small" data-add="cue">+ Cue</button></div><div class="architecture-flow">${state.cues.map((cue, index) => cueTemplate(cue, index)).join("")}</div></article></div><aside class="stack"><article class="card"><div class="card-head"><div><p class="eyebrow">Prepared responses</p><h2>If–then scripts</h2></div><button class="button button-secondary button-small" data-add="script">+ Script</button></div><div class="script-list">${state.scripts.map(script => `<div class="script-card" data-edit-script="${script.id}" role="button" tabindex="0"><p><strong>If</strong> ${escapeHTML(script.trigger)}, <strong>then</strong> ${escapeHTML(script.response)}</p></div>`).join("")}</div></article><article class="card card-muted"><p class="quote">A missed action is system data.</p><p class="quote-note">Ask which cue was missing, which competing cue was present, and which single environmental change would help next time.</p></article></aside></div>`;
+}
+
+function modeCard(key, mode) {
+  const total = mode.routine.reduce((sum, step) => sum + Number(step[2] || 0), 0);
+  return `<button class="mode-editor-card" data-edit-routine="${key}"><span><small>${escapeHTML(mode.label)} mode</small><strong>${mode.routine.length} steps · ${total} min</strong><em>${escapeHTML(mode.note)}</em></span><b>›</b></button>`;
+}
+
+function cueTemplate(cue, index) {
+  return `<div class="cue-card"><span class="cue-number">${index + 1}</span><div class="cue-content"><h3>${escapeHTML(cue.name)}</h3><div class="cue-line"><strong>When</strong><span>${escapeHTML(cue.cue)}</span></div><div class="cue-line"><strong>Then</strong><span>${escapeHTML(cue.response)}</span></div><div class="cue-line positive"><strong>Install</strong><span>${escapeHTML(cue.setup)}</span></div><div class="cue-line negative"><strong>Remove</strong><span>${escapeHTML(cue.remove)}</span></div></div><div class="cue-actions"><button class="edit-button" data-edit-cue="${cue.id}">•••</button></div></div>`;
 }
 
 function renderReview() {
-  const dimensions = [["Sleep and energy", "Was I getting enough rest and waking with usable energy?"], ["Mental clarity", "Did I feel present, focused, and emotionally regulated?"], ["Execution", "Did I make meaningful progress on my main priorities?"], ["Physical wellbeing", "Did I eat properly, move, and recover?"], ["Life balance", "Did I make time for relationships and enjoyment?"]];
-  const average = (state.reflection.ratings.reduce((a,b) => a + Number(b), 0) / 5).toFixed(1); const month = monthlyState();
-  document.getElementById("view-review").innerHTML = `<div class="page-head"><p class="eyebrow">Life OS + feedback loop</p><h1 id="review-heading">Learn, then adjust.</h1><p>Review the quality of the system—not your worth. Look for patterns across weeks and months.</p></div><div class="grid two-column"><div class="stack"><article class="card"><div class="card-head"><div><p class="eyebrow">Weekly life assessment</p><h2>Five connected engines</h2></div><strong class="average-score">${average}<small>/5</small></strong></div><div class="rating-list">${dimensions.map((item,index) => ratingTemplate(item,index)).join("")}</div></article><article class="card"><div class="card-head"><div><p class="eyebrow">Weekly reflection</p><h2>Close the loop</h2></div></div><div class="reflection-prompts">${reflectionField("win", "What moved forward?", "Name the real win.")}${reflectionField("friction", "Where did friction appear?", "Notice the system, not a character flaw.")}${reflectionField("lesson", "What cue or design will change?", "One environmental or behavioural adjustment.")}${reflectionField("next", "What may matter next week?", "Capture it without overcommitting.")}</div></article></div><aside class="stack"><article class="card card-muted"><div class="card-head"><div><p class="eyebrow">Life stays visible</p><h2>Protect what work is for</h2></div></div>${lifeField("relationships", "Relationships", "Who needs intentional time?")}${lifeField("enjoyment", "Enjoyment", "Padel, music, socialising, creativity, freedom.")}${lifeField("health", "Health", "Sleep, food, movement, recovery.")}${lifeField("growth", "Growth", "What knowledge will you apply?")}</article><article class="card"><div class="card-head"><div><p class="eyebrow">Monthly strategic review</p><h2>${new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" }).format(new Date())}</h2></div></div>${monthlyField("financial", "Financial position", "What changed in cash, commitments, investments, or liabilities?")}${monthlyField("growth", "Personal development", "What changed in capability or character?")}${monthlyField("business", "Business progress", "What value, systems, or revenue moved?")}${monthlyField("lifestyle", "Lifestyle quality", "Is life actually becoming calmer, freer, and fuller?")}${monthlyField("adjustment", "One strategic adjustment", "What single change matters next month?")}</article><article class="card card-muted"><div class="card-head"><div><p class="eyebrow">Recovery decision</p><h2>What does next week need?</h2></div></div><div class="recovery-grid">${[["restore","Restore","Lower load"],["maintain","Maintain","Stay steady"],["expand","Expand","Add stretch"]].map(([key,label,note]) => `<button class="recovery-option ${state.reflection.recovery === key ? "selected" : ""}" data-recovery="${key}"><strong>${label}</strong><small>${note}</small></button>`).join("")}</div></article></aside></div>`;
+  const averageRating = average(state.reflection.ratings).toFixed(1);
+  const metrics = weekMetrics();
+  document.getElementById("view-review").innerHTML = `
+    <div class="page-head"><p class="eyebrow">Life OS + feedback loop</p><h1 id="review-heading">Learn, then adjust.</h1><p>Review the quality of the system—not your worth. Look for patterns across weeks and months.</p></div>
+    <div class="review-metrics">${reviewMetric("Life score", `${averageRating}/5`, "Current reflection")}${reviewMetric("Energy", metrics.energy ? `${metrics.energy.toFixed(1)}/5` : "—", `${metrics.daysChecked} days checked`)}${reviewMetric("Routine", `${metrics.routine}%`, "Foundations kept")}${reviewMetric("Execution", String(metrics.tasksDone), "Actions completed")}</div>
+    <div class="grid two-column"><div class="stack"><article class="card"><div class="card-head"><div><p class="eyebrow">Weekly life assessment</p><h2>Five connected engines</h2></div><strong class="average-score">${averageRating}<small>/5</small></strong></div><div class="rating-list">${DIMENSIONS.map((item, index) => ratingTemplate(item, index)).join("")}</div></article><article class="card"><div class="card-head"><div><p class="eyebrow">Weekly reflection</p><h2>Close the loop</h2></div></div><div class="reflection-prompts">${reflectionField("win", "What moved forward?", "Name the real win.")}${reflectionField("friction", "Where did friction appear?", "Notice the system, not a character flaw.")}${reflectionField("lesson", "What cue or design will change?", "One environmental or behavioural adjustment.")}${reflectionField("next", "What may matter next week?", "Capture it without overcommitting.")}</div></article><article class="card week-close-card"><div><p class="eyebrow">Weekly rollover</p><h2>Archive the learning. Keep the momentum.</h2><p>Completed work moves into history. Open actions carry forward and the next week starts clean.</p></div><button class="button button-primary" data-close-week>Close this week</button></article></div><aside class="stack"><article class="card card-muted"><div class="card-head"><div><p class="eyebrow">Life stays visible</p><h2>Protect what work is for</h2></div></div>${lifeField("relationships", "Relationships", "Who needs intentional time?")}${lifeField("enjoyment", "Enjoyment", "Padel, music, socialising, creativity, freedom.")}${lifeField("health", "Health", "Sleep, food, movement, recovery.")}${lifeField("growth", "Growth", "What knowledge will you apply?")}</article><article class="card"><div class="card-head"><div><p class="eyebrow">Monthly strategic review</p><h2>${new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" }).format(new Date())}</h2></div></div>${monthlyField("financial", "Financial position", "What changed in cash, commitments, investments, or liabilities?")}${monthlyField("growth", "Personal development", "What changed in capability or character?")}${monthlyField("business", "Business progress", "What value, systems, or revenue moved?")}${monthlyField("lifestyle", "Lifestyle quality", "Is life actually becoming calmer, freer, and fuller?")}${monthlyField("adjustment", "One strategic adjustment", "What single change matters next month?")}</article><article class="card card-muted"><div class="card-head"><div><p class="eyebrow">Recovery decision</p><h2>What does next week need?</h2></div></div><div class="recovery-grid">${[["restore","Restore","Lower load"],["maintain","Maintain","Stay steady"],["expand","Expand","Add stretch"]].map(([key,label,note]) => `<button class="recovery-option ${state.reflection.recovery === key ? "selected" : ""}" data-recovery="${key}"><strong>${label}</strong><small>${note}</small></button>`).join("")}</div></article></aside></div>
+    <article class="card history-card"><div class="card-head"><div><p class="eyebrow">System memory</p><h2>Previous weeks</h2><p>Patterns become visible when the system remembers.</p></div><span class="tag">${state.history.length} archived</span></div>${historyView()}</article>`;
 }
-function ratingTemplate(item, index) { return `<div class="rating-row"><div><strong>${item[0]}</strong><small>${item[1]}</small></div><div class="rating-control"><span>${state.reflection.ratings[index]}/5</span><input type="range" min="1" max="5" step="1" value="${state.reflection.ratings[index]}" data-rating="${index}" aria-label="${escapeHTML(item[0])}" /></div></div>`; }
-function reflectionField(key, label, placeholder) { return `<div class="field"><label for="reflection-${key}">${label}</label><textarea id="reflection-${key}" data-reflection="${key}" placeholder="${placeholder}">${escapeHTML(state.reflection[key])}</textarea></div>`; }
-function lifeField(key, label, placeholder) { return `<div class="field"><label for="life-${key}">${label}</label><textarea id="life-${key}" data-life-field="${key}" placeholder="${placeholder}">${escapeHTML(state.life[key])}</textarea></div>`; }
-function monthlyField(key, label, placeholder) { return `<div class="field"><label for="monthly-${key}">${label}</label><textarea id="monthly-${key}" data-monthly-field="${key}" placeholder="${placeholder}">${escapeHTML(monthlyState()[key])}</textarea></div>`; }
 
-function goToView(view) { activeView = view; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
-function editorCollection(type) { if (type === "task") return state.tasks; if (type === "cue") return state.cues; if (type === "script") return state.scripts; if (type === "transaction") return state.finances.transactions; if (type === "commitment") return state.finances.commitments; if (type === "obligation") return state.finances.obligations; if (type === "investment") return state.finances.investments; return []; }
+function reviewMetric(label, value, note) {
+  return `<div class="review-metric"><span>${label}</span><strong>${value}</strong><small>${note}</small></div>`;
+}
+
+function historyView() {
+  if (!state.history.length) return '<div class="history-empty"><strong>Your first trend starts when you close this week.</strong><span>Nothing is lost before then; current data remains live.</span></div>';
+  const recent = state.history.slice(0, 8);
+  return `<div class="history-trends">${recent.slice().reverse().map(item => `<div class="trend-column"><div class="trend-bar"><i style="height:${Math.max(8, Math.min(100, Number(item.metrics?.score || 0) * 20))}%"></i></div><span>${formatCompactDate(item.end)}</span></div>`).join("")}</div><div class="history-list">${recent.map(historyTemplate).join("")}</div>`;
+}
+
+function historyTemplate(item) {
+  return `<details class="history-item"><summary><span><small>${formatCompactDate(item.start)}–${formatCompactDate(item.end)}</small><strong>${escapeHTML(item.week?.outcome || "Week without a named outcome")}</strong></span><b>${Number(item.metrics?.score || 0).toFixed(1)}/5</b></summary><div class="history-detail"><div><span>Energy</span><strong>${item.metrics?.energy ? Number(item.metrics.energy).toFixed(1) : "—"}</strong></div><div><span>Routine</span><strong>${Number(item.metrics?.routine || 0)}%</strong></div><div><span>Completed</span><strong>${Number(item.metrics?.tasksDone || 0)}</strong></div><p><b>Win</b>${escapeHTML(item.reflection?.win || "No win recorded.")}</p><p><b>Lesson</b>${escapeHTML(item.reflection?.lesson || "No lesson recorded.")}</p></div></details>`;
+}
+
+function ratingTemplate(item, index) {
+  return `<div class="rating-row"><div><strong>${item[0]}</strong><small>${item[1]}</small></div><div class="rating-control"><span>${state.reflection.ratings[index]}/5</span><input type="range" min="1" max="5" step="1" value="${state.reflection.ratings[index]}" data-rating="${index}" aria-label="${escapeHTML(item[0])}" /></div></div>`;
+}
+
+function reflectionField(key, label, placeholder) {
+  return `<div class="field"><label for="reflection-${key}">${label}</label><textarea id="reflection-${key}" data-reflection="${key}" placeholder="${placeholder}">${escapeHTML(state.reflection[key])}</textarea></div>`;
+}
+
+function lifeField(key, label, placeholder) {
+  return `<div class="field"><label for="life-${key}">${label}</label><textarea id="life-${key}" data-life-field="${key}" placeholder="${placeholder}">${escapeHTML(state.life[key])}</textarea></div>`;
+}
+
+function monthlyField(key, label, placeholder) {
+  return `<div class="field"><label for="monthly-${key}">${label}</label><textarea id="monthly-${key}" data-monthly-field="${key}" placeholder="${placeholder}">${escapeHTML(monthlyState()[key])}</textarea></div>`;
+}
+
+function closeWeek() {
+  if (!confirm("Close this week? Completed actions will be archived, open actions will carry forward, and the weekly plan will reset.")) return;
+  const start = state.week.startedAt || weekStartKey();
+  const end = dayKey(addDays(dateFromKey(start), 6));
+  state.history.unshift({ id: crypto.randomUUID(), start, end, closedAt: new Date().toISOString(), week: clone(state.week), tasks: clone(state.tasks), reflection: clone(state.reflection), metrics: weekMetrics(start) });
+  state.history = state.history.slice(0, 52);
+  state.tasks = state.tasks.filter(task => !task.done).map(task => ({ ...task, done: false }));
+  state.week = { startedAt: dayKey(), outcome: state.reflection.next || "", secondary: "", evidence: "", why: "" };
+  state.reflection = { win: "", friction: "", lesson: "", next: "", recovery: "maintain", ratings: [3, 3, 3, 3, 3] };
+  saveState("Week archived. Next week is ready.");
+  render();
+}
+
+function goToView(view) {
+  activeView = view;
+  render();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function editorCollection(type) {
+  if (type === "task") return state.tasks;
+  if (type === "inbox") return state.inbox;
+  if (type === "cue") return state.cues;
+  if (type === "script") return state.scripts;
+  if (type === "transaction") return state.finances.transactions;
+  if (type === "commitment") return state.finances.commitments;
+  if (type === "obligation") return state.finances.obligations;
+  if (type === "investment") return state.finances.investments;
+  return [];
+}
 
 function openEditor(type, id = null) {
-  const dialog = document.getElementById("editor-dialog"); const fields = document.getElementById("dialog-fields"); const item = id ? editorCollection(type).find(entry => entry.id === id) : null;
-  editor = { type, id };
-  document.getElementById("dialog-eyebrow").textContent = id ? "Update your system" : "Add to your system";
-  document.getElementById("dialog-title").textContent = ({ task: "Action", cue: "Cue architecture", script: "If–then script", transaction: "Transaction", commitment: "Monthly commitment", obligation: "Obligation", investment: "Investment" })[type];
-  document.getElementById("delete-item").classList.toggle("hidden", !id);
+  const dialog = document.getElementById("editor-dialog");
+  const fields = document.getElementById("dialog-fields");
+  const collectionTypes = ["task", "inbox", "cue", "script", "transaction", "commitment", "obligation", "investment"];
+  const item = collectionTypes.includes(type) && id ? editorCollection(type).find(entry => entry.id === id) : null;
+  editor = type === "handoffImport" ? { type, payload: id } : { type, id };
+  const titles = { task: "Action", inbox: "Quick capture", cue: "Cue architecture", script: "If–then script", transaction: "Transaction", commitment: "Monthly commitment", obligation: "Obligation", investment: "Investment", routine: `${state.modes[id]?.label || "Routine"} mode`, reminders: "Gentle reminders", security: "App lock", handoff: "Secure phone handoff", handoffImport: "Import secure handoff" };
+  document.getElementById("dialog-eyebrow").textContent = ({ routine: "Personalise your system", reminders: "Stay gently connected", security: "Local privacy", handoff: "Encrypted device transfer", handoffImport: "Encrypted device transfer" })[type] || (id ? "Update your system" : "Add to your system");
+  document.getElementById("dialog-title").textContent = titles[type] || "Item";
+  document.getElementById("delete-item").classList.toggle("hidden", !(id && collectionTypes.includes(type)));
+  document.getElementById("save-item").textContent = ({ handoff: "Create secure link", handoffImport: "Import", security: "Save lock", reminders: "Save reminders", routine: "Save routine" })[type] || "Save";
   if (type === "task") fields.innerHTML = taskEditor(item);
+  if (type === "inbox") fields.innerHTML = inboxEditor(item);
   if (type === "cue") fields.innerHTML = cueEditor(item);
   if (type === "script") fields.innerHTML = scriptEditor(item);
   if (type === "transaction") fields.innerHTML = transactionEditor(item);
   if (type === "commitment") fields.innerHTML = `<div class="field"><label>Name</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="field"><label>Monthly amount (£)</label><input name="amount" type="number" min="0" step="0.01" required value="${item?.amount || ""}" /></div>`;
   if (type === "obligation") fields.innerHTML = `<div class="field"><label>Name</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Total owed (£)</label><input name="target" type="number" min="0" step="0.01" required value="${item?.target || ""}" /></div><div class="field"><label>Already restored (£)</label><input name="paid" type="number" min="0" step="0.01" value="${item?.paid || 0}" /></div></div>`;
   if (type === "investment") fields.innerHTML = `<div class="field"><label>Name</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Contributed (£)</label><input name="contributed" type="number" min="0" step="0.01" value="${item?.contributed || 0}" /></div><div class="field"><label>Current value (£)</label><input name="current" type="number" min="0" step="0.01" value="${item?.current || 0}" /></div></div>`;
-  dialog.showModal(); setTimeout(() => fields.querySelector("input, textarea")?.focus(), 50);
+  if (type === "routine") fields.innerHTML = routineEditor(id);
+  if (type === "reminders") fields.innerHTML = remindersEditor();
+  if (type === "security") fields.innerHTML = securityEditor();
+  if (type === "handoff") fields.innerHTML = handoffEditor();
+  if (type === "handoffImport") fields.innerHTML = handoffImportEditor();
+  dialog.showModal();
+  setTimeout(() => fields.querySelector("input:not([type=checkbox]), textarea")?.focus(), 60);
 }
-function taskEditor(item) { return `<div class="field"><label>Action</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Impact</label><select name="impact">${[1,2,3].map(v => `<option value="${v}" ${item?.impact === v ? "selected" : ""}>${v}</option>`).join("")}</select></div><div class="field"><label>Complexity</label><select name="complexity">${[1,2,3].map(v => `<option value="${v}" ${item?.complexity === v ? "selected" : ""}>${v}</option>`).join("")}</select></div><div class="field"><label>Energy</label><select name="energy">${["low","medium","high"].map(v => `<option value="${v}" ${item?.energy === v ? "selected" : ""}>${energyLabel(v)}</option>`).join("")}</select></div></div><div class="field"><label>Minutes</label><input name="duration" type="number" min="5" max="300" step="5" value="${item?.duration || 30}" /></div>`; }
-function cueEditor(item) { return `<div class="field"><label>Behaviour</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="field"><label>When this happens</label><textarea name="cue" required>${escapeHTML(item?.cue || "")}</textarea></div><div class="field"><label>I immediately</label><textarea name="response" required>${escapeHTML(item?.response || "")}</textarea></div><div class="field"><label>Install this positive cue</label><textarea name="setup" required>${escapeHTML(item?.setup || "")}</textarea></div><div class="field"><label>Remove this competing cue</label><textarea name="remove" required>${escapeHTML(item?.remove || "")}</textarea></div>`; }
-function scriptEditor(item) { return `<div class="field"><label>If</label><textarea name="trigger" required>${escapeHTML(item?.trigger || "")}</textarea></div><div class="field"><label>Then</label><textarea name="response" required>${escapeHTML(item?.response || "")}</textarea></div>`; }
-function transactionEditor(item) { return `<div class="inline-fields"><div class="field"><label>Type</label><select name="type"><option value="expense" ${item?.type === "expense" ? "selected" : ""}>Expense</option><option value="income" ${item?.type === "income" ? "selected" : ""}>Income</option></select></div><div class="field"><label>Account</label><select name="account">${[["personal","Personal"],["business","Business"],["held","Held for others"]].map(([v,l]) => `<option value="${v}" ${item?.account === v ? "selected" : ""}>${l}</option>`).join("")}</select></div><div class="field"><label>Date</label><input name="date" type="date" required value="${item?.date || dayKey()}" /></div></div><div class="field"><label>Amount (£)</label><input name="amount" type="number" min="0.01" step="0.01" required value="${item?.amount || ""}" /></div><div class="field"><label>Category</label><select name="category">${["Living expenses","Personal reserve","Savings","Business capital","Family support","Money held for others","Income","Other"].map(v => `<option ${item?.category === v ? "selected" : ""}>${v}</option>`).join("")}</select></div><div class="field"><label>Note</label><input name="note" value="${escapeHTML(item?.note || "")}" placeholder="What was this for?" /></div>`; }
 
-function saveEditor() {
-  const form = document.getElementById("editor-form"); if (!form.reportValidity()) return false; const data = Object.fromEntries(new FormData(form)); const collection = editorCollection(editor.type); let item = editor.id ? collection.find(entry => entry.id === editor.id) : null;
-  if (!item) { item = { id: crypto.randomUUID() }; collection.push(item); }
+function taskEditor(item) {
+  return `<div class="field"><label>Action</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Impact</label><select name="impact">${[1,2,3].map(value => `<option value="${value}" ${item?.impact === value ? "selected" : ""}>${value}</option>`).join("")}</select></div><div class="field"><label>Complexity</label><select name="complexity">${[1,2,3].map(value => `<option value="${value}" ${item?.complexity === value ? "selected" : ""}>${value}</option>`).join("")}</select></div><div class="field"><label>Energy</label><select name="energy">${["low","medium","high"].map(value => `<option value="${value}" ${item?.energy === value ? "selected" : ""}>${energyLabel(value)}</option>`).join("")}</select></div></div><div class="field"><label>Minutes</label><input name="duration" type="number" min="5" max="300" step="5" value="${item?.duration || 30}" /></div>`;
+}
+
+function inboxEditor(item) {
+  return `<div class="field"><label>What do you want to hold?</label><textarea name="text" required placeholder="Idea, concern, reminder, or something to revisit.">${escapeHTML(item?.text || "")}</textarea></div><div class="field"><label>Type</label><select name="type">${["idea","task","concern","later"].map(value => `<option value="${value}" ${item?.type === value ? "selected" : ""}>${value[0].toUpperCase() + value.slice(1)}</option>`).join("")}</select></div><p class="dialog-note">Capturing this does not make it a commitment. Review it during weekly planning.</p>`;
+}
+
+function cueEditor(item) {
+  return `<div class="field"><label>Behaviour</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="field"><label>When this happens</label><textarea name="cue" required>${escapeHTML(item?.cue || "")}</textarea></div><div class="field"><label>I immediately</label><textarea name="response" required>${escapeHTML(item?.response || "")}</textarea></div><div class="field"><label>Install this positive cue</label><textarea name="setup" required>${escapeHTML(item?.setup || "")}</textarea></div><div class="field"><label>Remove this competing cue</label><textarea name="remove" required>${escapeHTML(item?.remove || "")}</textarea></div>`;
+}
+
+function scriptEditor(item) {
+  return `<div class="field"><label>If</label><textarea name="trigger" required>${escapeHTML(item?.trigger || "")}</textarea></div><div class="field"><label>Then</label><textarea name="response" required>${escapeHTML(item?.response || "")}</textarea></div>`;
+}
+
+function transactionEditor(item) {
+  return `<div class="inline-fields"><div class="field"><label>Type</label><select name="type"><option value="expense" ${item?.type === "expense" ? "selected" : ""}>Expense</option><option value="income" ${item?.type === "income" ? "selected" : ""}>Income</option></select></div><div class="field"><label>Account</label><select name="account">${[["personal","Personal"],["business","Business"],["held","Held for others"]].map(([value,label]) => `<option value="${value}" ${item?.account === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Date</label><input name="date" type="date" required value="${item?.date || dayKey()}" /></div></div><div class="field"><label>Amount (£)</label><input name="amount" type="number" min="0.01" step="0.01" required value="${item?.amount || ""}" /></div><div class="field"><label>Category</label><select name="category">${["Living expenses","Personal reserve","Savings","Business capital","Family support","Money held for others","Income","Other"].map(value => `<option ${item?.category === value ? "selected" : ""}>${value}</option>`).join("")}</select></div><div class="field"><label>Note</label><input name="note" value="${escapeHTML(item?.note || "")}" placeholder="What was this for?" /></div>`;
+}
+
+function routineEditor(key) {
+  const mode = state.modes[key];
+  return `<div class="field"><label>Mode purpose</label><textarea name="note" required>${escapeHTML(mode.note)}</textarea></div><div class="routine-editor-head"><span>Sequence</span><button class="text-button" type="button" data-add-routine-step>+ Add step</button></div><div class="routine-step-list">${mode.routine.map((step, index) => routineStepEditor(step, index)).join("")}</div><p class="dialog-note">Routine completion for today resets when you change its sequence.</p>`;
+}
+
+function routineStepEditor(step = ["", "", 5], index = 0) {
+  return `<div class="routine-step-editor"><div class="step-order"><span>${index + 1}</span><button type="button" data-move-step="up" aria-label="Move up">↑</button><button type="button" data-move-step="down" aria-label="Move down">↓</button></div><div class="step-fields"><input name="stepName" required value="${escapeHTML(step[0])}" placeholder="Step name" /><input name="stepCue" required value="${escapeHTML(step[1])}" placeholder="Cue or minimum version" /><div class="step-duration"><input name="stepDuration" type="number" min="1" max="300" required value="${Number(step[2]) || 5}" /><span>min</span></div></div><button class="step-remove" type="button" data-remove-routine-step aria-label="Remove step">×</button></div>`;
+}
+
+function remindersEditor() {
+  const reminder = state.preferences.reminders;
+  const supported = "Notification" in window;
+  return `<label class="toggle-row"><span><strong>Enable reminders</strong><small>${supported ? "Morning, evening, and weekly review" : "Notifications are not supported in this browser"}</small></span><input name="enabled" type="checkbox" ${reminder.enabled && supported ? "checked" : ""} ${supported ? "" : "disabled"} /><i></i></label><div class="inline-fields reminder-fields"><div class="field"><label>Morning check-in</label><input name="morning" type="time" value="${reminder.morning}" /></div><div class="field"><label>Evening shutdown</label><input name="evening" type="time" value="${reminder.evening}" /></div></div><div class="inline-fields reminder-fields"><div class="field"><label>Weekly review day</label><select name="weeklyDay">${[[0,"Sunday"],[1,"Monday"],[2,"Tuesday"],[3,"Wednesday"],[4,"Thursday"],[5,"Friday"],[6,"Saturday"]].map(([value,label]) => `<option value="${value}" ${String(reminder.weeklyDay) === String(value) ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Review time</label><input name="weeklyTime" type="time" value="${reminder.weeklyTime}" /></div></div><p class="dialog-note">Reminders appear when the installed app is active or next opened. Mobile operating systems may limit background web notifications.</p>`;
+}
+
+function securityEditor() {
+  const deviceAvailable = Boolean(window.PublicKeyCredential && window.isSecureContext);
+  return `${security.pinHash ? '<div class="field"><label>Current PIN</label><input name="currentPin" type="password" inputmode="numeric" maxlength="12" required autocomplete="current-password" /></div>' : ""}<div class="field"><label>${security.pinHash ? "New PIN (optional)" : "Create PIN"}</label><input name="newPin" type="password" inputmode="numeric" minlength="4" maxlength="12" ${security.pinHash ? "" : "required"} autocomplete="new-password" /></div><div class="field"><label>Confirm new PIN</label><input name="confirmPin" type="password" inputmode="numeric" minlength="4" maxlength="12" ${security.pinHash ? "" : "required"} autocomplete="new-password" /></div><div class="field"><label>Auto-lock after</label><select name="lockMinutes">${[[1,"1 minute"],[5,"5 minutes"],[15,"15 minutes"],[30,"30 minutes"]].map(([value,label]) => `<option value="${value}" ${Number(security.lockMinutes) === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><label class="toggle-row"><span><strong>Face ID / device unlock</strong><small>${deviceAvailable ? "Use this device's secure authenticator" : "Available only in the installed secure app"}</small></span><input name="deviceUnlock" type="checkbox" ${security.credentialId ? "checked" : ""} ${deviceAvailable ? "" : "disabled"} /><i></i></label>${security.pinHash ? '<button class="button button-ghost button-wide danger-button" type="button" data-disable-lock>Turn off app lock</button>' : ""}<p class="dialog-note">The PIN verifier stays only on this device and is never included in backups or handoffs.</p>`;
+}
+
+function handoffEditor() {
+  return `<div class="handoff-intro"><strong>Encrypted before it leaves this device</strong><p>Create a one-time link for your phone. Share the password separately.</p></div><div class="field"><label>Transfer password</label><input name="password" type="password" minlength="6" required autocomplete="new-password" /></div><div class="field"><label>Confirm password</label><input name="confirmPassword" type="password" minlength="6" required autocomplete="new-password" /></div><p class="dialog-note">This safely copies your current data; it does not create a cloud account or continuous background sync.</p>`;
+}
+
+function handoffImportEditor() {
+  return `<div class="handoff-intro"><strong>Encrypted transfer detected</strong><p>Enter the password chosen on the sending device.</p></div><div class="field"><label>Transfer password</label><input name="password" type="password" required autocomplete="current-password" /></div><p class="dialog-note">Importing replaces this device's Life OS data. Its local PIN settings remain unchanged.</p>`;
+}
+
+async function saveEditor() {
+  const form = document.getElementById("editor-form");
+  if (!form.reportValidity()) return false;
+  const formData = new FormData(form);
+  const data = Object.fromEntries(formData);
+  if (editor.type === "routine") {
+    const steps = [...form.querySelectorAll(".routine-step-editor")].map(row => [row.querySelector('[name="stepName"]').value.trim(), row.querySelector('[name="stepCue"]').value.trim(), Math.max(1, Number(row.querySelector('[name="stepDuration"]').value) || 5)]).filter(step => step[0]);
+    if (!steps.length) return showToast("Keep at least one routine step"), false;
+    state.modes[editor.id].note = data.note.trim();
+    state.modes[editor.id].routine = steps;
+    if (todayState().mode === editor.id) todayState().routine = [];
+    saveState("Routine updated");
+    render();
+    return true;
+  }
+  if (editor.type === "reminders") return saveReminders(form, data);
+  if (editor.type === "security") return saveLockSettings(form, data);
+  if (editor.type === "handoff") {
+    if (data.password !== data.confirmPassword) return showToast("Passwords do not match"), false;
+    await createSecureHandoff(data.password);
+    return true;
+  }
+  if (editor.type === "handoffImport") {
+    try {
+      const imported = await decryptHandoff(editor.payload, data.password);
+      if (!confirm("Replace this device's current Life OS data with the secure handoff?")) return false;
+      state = normalizeState(imported);
+      saveState("Secure handoff imported");
+      pendingHandoff = null;
+      if (location.hash.includes("handoff=")) history.replaceState(null, "", `${location.pathname}${location.search}`);
+      render();
+      return true;
+    } catch {
+      showToast("Password incorrect or transfer damaged");
+      return false;
+    }
+  }
+  const collection = editorCollection(editor.type);
+  let item = editor.id ? collection.find(entry => entry.id === editor.id) : null;
+  if (!item) {
+    item = { id: crypto.randomUUID() };
+    collection.push(item);
+  }
   if (editor.type === "task") Object.assign(item, { name: data.name.trim(), impact: Number(data.impact), complexity: Number(data.complexity), energy: data.energy, duration: Number(data.duration), done: item.done || false });
+  if (editor.type === "inbox") Object.assign(item, { text: data.text.trim(), type: data.type, createdAt: item.createdAt || new Date().toISOString() });
   if (editor.type === "cue") Object.assign(item, { name: data.name.trim(), cue: data.cue.trim(), response: data.response.trim(), setup: data.setup.trim(), remove: data.remove.trim() });
   if (editor.type === "script") Object.assign(item, { trigger: data.trigger.trim(), response: data.response.trim() });
   if (editor.type === "transaction") Object.assign(item, { type: data.type, account: data.account, date: data.date, amount: Number(data.amount), category: data.category, note: data.note.trim() });
   if (editor.type === "commitment") Object.assign(item, { name: data.name.trim(), amount: Number(data.amount) });
   if (editor.type === "obligation") Object.assign(item, { name: data.name.trim(), target: Number(data.target), paid: Number(data.paid) });
   if (editor.type === "investment") Object.assign(item, { name: data.name.trim(), contributed: Number(data.contributed), current: Number(data.current) });
-  saveState("System updated"); render(); return true;
+  saveState(editor.type === "inbox" ? "Captured without changing direction" : "System updated");
+  render();
+  return true;
 }
-function deleteEditor() { if (!editor?.id || !confirm("Delete this item?")) return; const collection = editorCollection(editor.type); const index = collection.findIndex(entry => entry.id === editor.id); if (index >= 0) collection.splice(index, 1); saveState("Item deleted"); render(); document.getElementById("editor-dialog").close(); }
-function showToast(message) { const toast = document.getElementById("toast"); toast.textContent = message; toast.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove("show"), 1800); }
+
+function deleteEditor() {
+  if (!editor?.id || !confirm("Delete this item?")) return;
+  const collection = editorCollection(editor.type);
+  const index = collection.findIndex(entry => entry.id === editor.id);
+  if (index >= 0) collection.splice(index, 1);
+  saveState("Item deleted");
+  render();
+  document.getElementById("editor-dialog").close();
+}
+
+function showToast(message) {
+  const toast = document.getElementById("toast");
+  toast.textContent = message;
+  toast.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove("show"), 2200);
+}
+
+function promoteInboxItem(id) {
+  const index = state.inbox.findIndex(item => item.id === id);
+  if (index < 0) return;
+  const item = state.inbox[index];
+  state.tasks.push({ id: crypto.randomUUID(), name: item.text, impact: 2, complexity: 1, energy: "medium", duration: 30, done: false });
+  state.inbox.splice(index, 1);
+  saveState("Capture moved into actions");
+  render();
+}
+
+function renumberRoutineSteps() {
+  document.querySelectorAll(".routine-step-editor").forEach((row, index) => {
+    row.querySelector(".step-order span").textContent = String(index + 1);
+  });
+}
+
+function refreshSettings() {
+  const reminderStatus = document.getElementById("reminder-status");
+  const securityStatus = document.getElementById("security-status");
+  if (reminderStatus) reminderStatus.textContent = state.preferences.reminders.enabled ? `On · ${state.preferences.reminders.morning} + ${state.preferences.reminders.evening}` : "Off";
+  if (securityStatus) securityStatus.textContent = security.pinHash ? (security.credentialId ? "PIN + device unlock" : "PIN enabled") : "Off";
+}
+
+function openSettings() {
+  refreshSettings();
+  document.getElementById("settings-dialog").showModal();
+}
+
+async function saveReminders(form, data) {
+  const enabled = form.elements.enabled.checked;
+  if (enabled) {
+    if (!("Notification" in window)) return showToast("Notifications are not supported here"), false;
+    const permission = Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission;
+    if (permission !== "granted") return showToast("Notification permission was not granted"), false;
+  }
+  state.preferences.reminders = { ...state.preferences.reminders, enabled, morning: data.morning || "08:00", evening: data.evening || "21:00", weeklyDay: data.weeklyDay || "0", weeklyTime: data.weeklyTime || "18:00" };
+  saveState(enabled ? "Gentle reminders enabled" : "Reminders turned off");
+  startReminderChecks();
+  refreshSettings();
+  return true;
+}
+
+function minutesSince(time, now = new Date()) {
+  const [hours, minutes] = String(time).split(":").map(Number);
+  return now.getHours() * 60 + now.getMinutes() - (hours * 60 + minutes);
+}
+
+async function showReminder(tag, title, body) {
+  const registration = await navigator.serviceWorker?.ready.catch(() => null);
+  if (registration?.showNotification) {
+    await registration.showNotification(title, { body, tag, icon: "icon-180.png", badge: "icon-180.png" });
+  } else if (Notification.permission === "granted") {
+    new Notification(title, { body, tag, icon: "icon-180.png" });
+  }
+}
+
+async function checkReminders() {
+  const reminder = state.preferences.reminders;
+  if (!reminder.enabled || !("Notification" in window) || Notification.permission !== "granted") return;
+  const now = new Date();
+  const today = dayKey(now);
+  const checks = [
+    { key: `morning-${today}`, due: minutesSince(reminder.morning, now), window: 120, title: "Choose your honest capacity", body: "Check your energy, select a mode, and protect one meaningful outcome." },
+    { key: `evening-${today}`, due: minutesSince(reminder.evening, now), window: 180, title: "Close the day cleanly", body: "Capture the win, name the friction, and prepare tomorrow's first action." }
+  ];
+  if (String(now.getDay()) === String(reminder.weeklyDay)) checks.push({ key: `weekly-${today}`, due: minutesSince(reminder.weeklyTime, now), window: 240, title: "Weekly review", body: "Close the loop, choose recovery, and define what matters next." });
+  for (const item of checks) {
+    if (item.due >= 0 && item.due <= item.window && !reminder.lastFired[item.key]) {
+      reminder.lastFired[item.key] = new Date().toISOString();
+      await showReminder(item.key, item.title, item.body);
+      saveState();
+    }
+  }
+}
+
+function startReminderChecks() {
+  clearInterval(reminderTimer);
+  checkReminders();
+  reminderTimer = setInterval(checkReminders, 60000);
+}
+
+function bytesToBase64Url(bytes) {
+  let binary = "";
+  bytes.forEach(byte => { binary += String.fromCharCode(byte); });
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function base64UrlToBytes(value) {
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+  const binary = atob(base64);
+  return Uint8Array.from(binary, char => char.charCodeAt(0));
+}
+
+async function pinHash(pin, saltValue) {
+  const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(pin), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: base64UrlToBytes(saltValue), iterations: 180000, hash: "SHA-256" }, material, 256);
+  return bytesToBase64Url(new Uint8Array(bits));
+}
+
+async function verifyPin(pin) {
+  if (!security.pinHash || !security.salt) return false;
+  return (await pinHash(pin, security.salt)) === security.pinHash;
+}
+
+async function setupDeviceCredential() {
+  if (!window.PublicKeyCredential || !window.isSecureContext) throw new Error("Device unlock unavailable");
+  const userId = crypto.getRandomValues(new Uint8Array(16));
+  const credential = await navigator.credentials.create({ publicKey: { challenge: crypto.getRandomValues(new Uint8Array(32)), rp: { name: "50X Life OS" }, user: { id: userId, name: "50x-owner", displayName: "50X Life OS owner" }, pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }], authenticatorSelection: { authenticatorAttachment: "platform", residentKey: "preferred", userVerification: "required" }, timeout: 60000, attestation: "none" } });
+  return { credentialId: bytesToBase64Url(new Uint8Array(credential.rawId)), credentialUserId: bytesToBase64Url(userId) };
+}
+
+async function saveLockSettings(form, data) {
+  if (!crypto.subtle) return showToast("Secure PIN storage is unavailable here"), false;
+  if (security.pinHash && !(await verifyPin(data.currentPin || ""))) return showToast("Current PIN is incorrect"), false;
+  if (data.newPin || !security.pinHash) {
+    if (!/^\d{4,12}$/.test(data.newPin || "")) return showToast("Use a 4–12 digit PIN"), false;
+    if (data.newPin !== data.confirmPin) return showToast("New PINs do not match"), false;
+    const salt = bytesToBase64Url(crypto.getRandomValues(new Uint8Array(16)));
+    security.salt = salt;
+    security.pinHash = await pinHash(data.newPin, salt);
+  }
+  security.lockMinutes = Number(data.lockMinutes) || 5;
+  const wantsDevice = form.elements.deviceUnlock.checked;
+  if (wantsDevice && !security.credentialId) {
+    try {
+      Object.assign(security, await setupDeviceCredential());
+    } catch {
+      showToast("PIN saved; device unlock was not enabled");
+    }
+  }
+  if (!wantsDevice) {
+    security.credentialId = "";
+    security.credentialUserId = "";
+  }
+  saveSecurity();
+  appUnlocked = true;
+  scheduleAutoLock();
+  showToast("App lock updated");
+  return true;
+}
+
+async function disableLock() {
+  const pin = prompt("Enter your current PIN to turn off the app lock:");
+  if (pin === null) return;
+  if (!(await verifyPin(pin))) return showToast("Current PIN is incorrect");
+  security = { pinHash: "", salt: "", lockMinutes: 5, credentialId: "", credentialUserId: "" };
+  localStorage.removeItem(SECURITY_KEY);
+  appUnlocked = true;
+  clearTimeout(lockTimer);
+  document.getElementById("editor-dialog").close();
+  refreshSettings();
+  showToast("App lock turned off");
+}
+
+function showLock() {
+  if (!security.pinHash) return;
+  appUnlocked = false;
+  document.body.classList.add("locked");
+  document.getElementById("lock-screen").classList.remove("hidden");
+  document.getElementById("device-unlock").classList.toggle("hidden", !security.credentialId);
+  document.getElementById("unlock-pin").value = "";
+  document.getElementById("lock-error").textContent = "";
+  setTimeout(() => document.getElementById("unlock-pin").focus(), 80);
+}
+
+function hideLock() {
+  appUnlocked = true;
+  document.body.classList.remove("locked");
+  document.getElementById("lock-screen").classList.add("hidden");
+  scheduleAutoLock();
+  processPendingHandoff();
+}
+
+function scheduleAutoLock() {
+  clearTimeout(lockTimer);
+  if (!security.pinHash || !appUnlocked) return;
+  lockTimer = setTimeout(showLock, Math.max(1, Number(security.lockMinutes) || 5) * 60000);
+}
+
+async function unlockWithDevice() {
+  try {
+    await navigator.credentials.get({ publicKey: { challenge: crypto.getRandomValues(new Uint8Array(32)), allowCredentials: [{ id: base64UrlToBytes(security.credentialId), type: "public-key", transports: ["internal"] }], userVerification: "required", timeout: 60000 } });
+    hideLock();
+  } catch {
+    document.getElementById("lock-error").textContent = "Device unlock was cancelled or unavailable.";
+  }
+}
+
+async function gzipBytes(bytes) {
+  if (!("CompressionStream" in window)) return { bytes, compressed: false };
+  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("gzip"));
+  return { bytes: new Uint8Array(await new Response(stream).arrayBuffer()), compressed: true };
+}
+
+async function gunzipBytes(bytes, compressed) {
+  if (!compressed) return bytes;
+  if (!("DecompressionStream" in window)) throw new Error("Compression unavailable");
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function deriveTransferKey(password, salt) {
+  const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations: 180000, hash: "SHA-256" }, material, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+}
+
+async function encryptHandoff(password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const packed = await gzipBytes(new TextEncoder().encode(JSON.stringify(state)));
+  const key = await deriveTransferKey(password, salt);
+  const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, packed.bytes);
+  const envelope = { kind: "50x-handoff", version: 1, compressed: packed.compressed, salt: bytesToBase64Url(salt), iv: bytesToBase64Url(iv), data: bytesToBase64Url(new Uint8Array(encrypted)) };
+  return { envelope, encoded: bytesToBase64Url(new TextEncoder().encode(JSON.stringify(envelope))) };
+}
+
+async function decryptHandoff(payload, password) {
+  const envelope = typeof payload === "string" ? JSON.parse(new TextDecoder().decode(base64UrlToBytes(payload))) : payload;
+  if (envelope?.kind !== "50x-handoff") throw new Error("Invalid handoff");
+  const key = await deriveTransferKey(password, base64UrlToBytes(envelope.salt));
+  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: base64UrlToBytes(envelope.iv) }, key, base64UrlToBytes(envelope.data));
+  const unpacked = await gunzipBytes(new Uint8Array(decrypted), envelope.compressed);
+  return JSON.parse(new TextDecoder().decode(unpacked));
+}
+
+async function copyText(value) {
+  if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(value);
+  const area = document.createElement("textarea");
+  area.value = value;
+  document.body.appendChild(area);
+  area.select();
+  document.execCommand("copy");
+  area.remove();
+}
+
+function downloadBlob(blob, filename) {
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
+async function createSecureHandoff(password) {
+  if (!crypto.subtle) throw new Error("Encryption unavailable");
+  const { envelope, encoded } = await encryptHandoff(password);
+  const base = location.protocol === "https:" ? `${location.origin}${location.pathname}` : LIVE_URL;
+  const url = `${base}#handoff=${encoded}`;
+  state.sync.lastHandoff = new Date().toISOString();
+  saveState();
+  if (url.length <= 10000) {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "50X Life OS secure handoff", text: "Open this encrypted Life OS handoff on your other device, then enter the transfer password.", url });
+        showToast("Secure handoff shared");
+        return;
+      } catch (error) {
+        if (error.name !== "AbortError") throw error;
+      }
+    }
+    await copyText(url);
+    showToast("Secure handoff link copied");
+    return;
+  }
+  const file = new File([JSON.stringify(envelope)], `50x-secure-handoff-${dayKey()}.50x`, { type: "application/json" });
+  if (navigator.canShare?.({ files: [file] })) {
+    await navigator.share({ title: "50X Life OS secure handoff", files: [file] });
+    showToast("Encrypted handoff shared");
+  } else {
+    downloadBlob(file, file.name);
+    showToast("Encrypted handoff downloaded");
+  }
+}
+
+function readHandoffFromHash() {
+  try {
+    return new URLSearchParams(location.hash.slice(1)).get("handoff");
+  } catch {
+    return null;
+  }
+}
+
+function processPendingHandoff() {
+  if (!pendingHandoff || !appUnlocked || document.getElementById("editor-dialog").open) return;
+  setTimeout(() => openEditor("handoffImport", pendingHandoff), 250);
+}
+
+function exportBackup() {
+  downloadBlob(new Blob([JSON.stringify(state, null, 2)], { type: "application/json" }), `50x-life-os-backup-${dayKey()}.json`);
+  showToast("Backup exported");
+}
+
+async function importBackupFile(file) {
+  const imported = JSON.parse(await file.text());
+  if (!imported.week || !Array.isArray(imported.tasks)) throw new Error("Invalid backup");
+  state = normalizeState(imported);
+  saveState("Backup restored and upgraded");
+  render();
+}
 
 document.addEventListener("click", event => {
-  const target = event.target.closest("button, [data-edit-script]"); if (!target) return;
+  const target = event.target.closest("button, [data-edit-script]");
+  if (!target || document.body.classList.contains("locked")) return;
   if (target.dataset.viewTarget) return goToView(target.dataset.viewTarget);
-  if (target.dataset.energy) { const daily = todayState(); daily.energy = Number(target.dataset.energy); daily.mode = suggestedMode(daily.energy); daily.routine = []; saveState(); render(); }
-  if (target.dataset.clarity) { todayState().clarity = Number(target.dataset.clarity); saveState(); render(); }
-  if (target.dataset.mode) { const daily = todayState(); daily.mode = target.dataset.mode; daily.routine = []; saveState(); render(); }
-  if (target.dataset.routineIndex !== undefined) { const daily = todayState(); const index = Number(target.dataset.routineIndex); daily.routine[index] = !daily.routine[index]; saveState(daily.routine[index] ? "Foundation kept" : "Marked incomplete"); render(); }
-  if (target.dataset.taskToggle) { const task = state.tasks.find(item => item.id === target.dataset.taskToggle); task.done = !task.done; saveState(task.done ? "Action complete" : "Action reopened"); render(); }
-  if (target.dataset.add) openEditor(target.dataset.add);
-  ["task","cue","script","transaction","commitment","obligation","investment"].forEach(type => { const key = `edit${type[0].toUpperCase()}${type.slice(1)}`; if (target.dataset[key]) openEditor(type, target.dataset[key]); });
-  if (target.dataset.recovery) { state.reflection.recovery = target.dataset.recovery; saveState("Recovery intention saved"); render(); }
+  if (target.dataset.energy) {
+    const daily = todayState();
+    daily.energy = Number(target.dataset.energy);
+    daily.mode = suggestedMode(daily.energy);
+    daily.routine = [];
+    saveState();
+    return render();
+  }
+  if (target.dataset.clarity) {
+    todayState().clarity = Number(target.dataset.clarity);
+    saveState();
+    return render();
+  }
+  if (target.dataset.mode) {
+    const daily = todayState();
+    daily.mode = target.dataset.mode;
+    daily.routine = [];
+    saveState();
+    return render();
+  }
+  if (target.dataset.routineIndex !== undefined) {
+    const daily = todayState();
+    const index = Number(target.dataset.routineIndex);
+    daily.routine[index] = !daily.routine[index];
+    saveState(daily.routine[index] ? "Foundation kept" : "Marked incomplete");
+    return render();
+  }
+  if (target.dataset.taskToggle) {
+    const task = state.tasks.find(item => item.id === target.dataset.taskToggle);
+    task.done = !task.done;
+    saveState(task.done ? "Action complete" : "Action reopened");
+    return render();
+  }
+  if (target.dataset.add) return openEditor(target.dataset.add);
+  if (target.dataset.editRoutine) return openEditor("routine", target.dataset.editRoutine);
+  if (target.dataset.inboxTask) return promoteInboxItem(target.dataset.inboxTask);
+  if (target.hasAttribute("data-close-week")) return closeWeek();
+  if (target.hasAttribute("data-add-routine-step")) {
+    document.querySelector(".routine-step-list").insertAdjacentHTML("beforeend", routineStepEditor(["", "", 5], document.querySelectorAll(".routine-step-editor").length));
+    renumberRoutineSteps();
+    return;
+  }
+  if (target.hasAttribute("data-remove-routine-step")) {
+    if (document.querySelectorAll(".routine-step-editor").length <= 1) return showToast("Keep at least one step");
+    target.closest(".routine-step-editor").remove();
+    return renumberRoutineSteps();
+  }
+  if (target.dataset.moveStep) {
+    const row = target.closest(".routine-step-editor");
+    if (target.dataset.moveStep === "up" && row.previousElementSibling) row.parentNode.insertBefore(row, row.previousElementSibling);
+    if (target.dataset.moveStep === "down" && row.nextElementSibling) row.parentNode.insertBefore(row.nextElementSibling, row);
+    return renumberRoutineSteps();
+  }
+  if (target.hasAttribute("data-disable-lock")) return disableLock();
+  ["task", "inbox", "cue", "script", "transaction", "commitment", "obligation", "investment"].forEach(type => {
+    const key = `edit${type[0].toUpperCase()}${type.slice(1)}`;
+    if (target.dataset[key]) openEditor(type, target.dataset[key]);
+  });
+  if (target.dataset.recovery) {
+    state.reflection.recovery = target.dataset.recovery;
+    saveState("Recovery intention saved");
+    render();
+  }
 });
 
 document.addEventListener("change", event => {
@@ -226,14 +1003,87 @@ document.addEventListener("change", event => {
     if (target.dataset.rating !== undefined) render();
   }
 });
-document.addEventListener("input", event => { if (event.target.dataset.rating !== undefined) { state.reflection.ratings[Number(event.target.dataset.rating)] = Number(event.target.value); event.target.closest(".rating-control").querySelector("span").textContent = `${event.target.value}/5`; } });
 
-document.getElementById("editor-form").addEventListener("submit", event => { if (event.submitter?.value === "cancel") return; if (!saveEditor()) event.preventDefault(); });
+document.addEventListener("input", event => {
+  if (event.target.dataset.rating !== undefined) {
+    state.reflection.ratings[Number(event.target.dataset.rating)] = Number(event.target.value);
+    event.target.closest(".rating-control").querySelector("span").textContent = `${event.target.value}/5`;
+  }
+});
+
+document.getElementById("editor-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (event.submitter?.value === "cancel") return document.getElementById("editor-dialog").close();
+  try {
+    const saved = await saveEditor();
+    if (saved) document.getElementById("editor-dialog").close();
+  } catch {
+    showToast("That action could not be completed");
+  }
+});
+
 document.getElementById("delete-item").addEventListener("click", deleteEditor);
-document.getElementById("open-settings").addEventListener("click", () => document.getElementById("settings-dialog").showModal());
-document.getElementById("export-data").addEventListener("click", () => { const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" }); const link = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `50x-life-os-backup-${dayKey()}.json` }); link.click(); URL.revokeObjectURL(link.href); showToast("Backup exported"); });
-document.getElementById("import-data").addEventListener("change", async event => { try { const imported = JSON.parse(await event.target.files[0].text()); if (!imported.week || !Array.isArray(imported.tasks)) throw new Error(); state = normalizeState(imported); saveState("Backup restored and upgraded"); render(); document.getElementById("settings-dialog").close(); } catch { showToast("That backup could not be read"); } event.target.value = ""; });
-document.getElementById("reset-data").addEventListener("click", () => { if (!confirm("Reset 50X Life OS and replace all current data? Export a backup first if you may want it later.")) return; state = defaultState(); saveState("Fresh 50X system created"); render(); document.getElementById("settings-dialog").close(); });
+document.getElementById("quick-capture").addEventListener("click", () => openEditor("inbox"));
+document.getElementById("open-settings").addEventListener("click", openSettings);
+document.getElementById("edit-routines").addEventListener("click", () => { document.getElementById("settings-dialog").close(); goToView("architecture"); });
+document.getElementById("reminder-settings").addEventListener("click", () => { document.getElementById("settings-dialog").close(); openEditor("reminders"); });
+document.getElementById("security-settings").addEventListener("click", () => { document.getElementById("settings-dialog").close(); openEditor("security"); });
+document.getElementById("create-handoff").addEventListener("click", () => { document.getElementById("settings-dialog").close(); openEditor("handoff"); });
+document.getElementById("export-data").addEventListener("click", exportBackup);
+document.getElementById("import-data").addEventListener("change", async event => {
+  try {
+    await importBackupFile(event.target.files[0]);
+    document.getElementById("settings-dialog").close();
+  } catch {
+    showToast("That backup could not be read");
+  }
+  event.target.value = "";
+});
+document.getElementById("import-handoff").addEventListener("change", async event => {
+  try {
+    const envelope = JSON.parse(await event.target.files[0].text());
+    if (envelope.kind !== "50x-handoff") throw new Error();
+    document.getElementById("settings-dialog").close();
+    openEditor("handoffImport", envelope);
+  } catch {
+    showToast("That secure handoff could not be read");
+  }
+  event.target.value = "";
+});
+document.getElementById("reset-data").addEventListener("click", () => {
+  if (!confirm("Reset 50X Life OS and replace all current data? Export a backup first if you may want it later.")) return;
+  state = defaultState();
+  saveState("Fresh 50X system created");
+  render();
+  document.getElementById("settings-dialog").close();
+});
 
-if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("service-worker.js");
-render();
+document.getElementById("unlock-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  const pin = document.getElementById("unlock-pin").value;
+  if (await verifyPin(pin)) return hideLock();
+  document.getElementById("lock-error").textContent = "That PIN is incorrect.";
+  document.getElementById("unlock-pin").select();
+});
+document.getElementById("device-unlock").addEventListener("click", unlockWithDevice);
+
+["pointerdown", "keydown", "touchstart"].forEach(name => document.addEventListener(name, () => {
+  if (appUnlocked) scheduleAutoLock();
+}, { passive: true }));
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) hiddenAt = Date.now();
+  else if (security.pinHash && hiddenAt && Date.now() - hiddenAt >= Math.max(1, Number(security.lockMinutes) || 5) * 60000) showLock();
+});
+
+async function initialise() {
+  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    try { await navigator.serviceWorker.register("service-worker.js"); } catch {}
+  }
+  render();
+  startReminderChecks();
+  if (security.pinHash) showLock();
+  else processPendingHandoff();
+}
+
+initialise();
