@@ -8,7 +8,8 @@ A dependency-free, mobile-first personal operating system connecting five engine
 - Editable Minimum, Standard, and Peak routine modes
 - Cue-response architecture and if-then scripts
 - Weekly rollover, eight-week trends, and archived reflections
-- Financial ledger, commitments, obligations, and investments
+- Smart bill calendar with recurring due dates, autopay labels, paid tracking, cash-cover insight, and reminders
+- Financial ledger, obligations, and investments
 - Optional reminders and a local PIN or device-authenticator lock
 - Encrypted one-time device handoffs plus portable backup files
 

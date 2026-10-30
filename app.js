@@ -39,7 +39,7 @@ function weekStartKey(date = new Date()) {
 }
 
 const defaultState = () => ({
-  version: 3,
+  version: 4,
   week: { startedAt: weekStartKey(), outcome: "Create consistent movement in the business", secondary: "Protect health, clarity, and recovery while executing", evidence: "Complete one meaningful business deliverable and identify the next milestone.", why: "Build proof that focused mornings compound into real momentum." },
   tasks: [
     { id: crypto.randomUUID(), name: "Define this week's business needle-mover", impact: 3, complexity: 2, energy: "high", duration: 30, done: false },
@@ -58,7 +58,7 @@ const defaultState = () => ({
     { id: crypto.randomUUID(), trigger: "I become distracted", response: "I capture the distraction in a note and return to the current task." },
     { id: crypto.randomUUID(), trigger: "I feel mentally exhausted", response: "I switch to a simpler task or recover instead of forcing complex work." }
   ],
-  finances: { balances: { personal: 0, business: 0, held: 0 }, transactions: [], commitments: [{ id: crypto.randomUUID(), name: "Known monthly commitments", amount: 710 }], obligations: [{ id: crypto.randomUUID(), name: "Money to replace", target: 3000, paid: 0 }], investments: [] },
+  finances: { balances: { personal: 0, business: 0, held: 0 }, transactions: [], bills: [{ id: crypto.randomUUID(), name: "Known monthly commitments", amount: 710, frequency: "monthly", dueDay: new Date().getDate(), dueMonth: new Date().getMonth() + 1, dueDate: "", autopay: false, account: "personal", remindDays: 3, createdAt: new Date().toISOString(), paidPeriods: [] }], obligations: [{ id: crypto.randomUUID(), name: "Money to replace", target: 3000, paid: 0 }], investments: [] },
   daily: {},
   reflection: { win: "", friction: "", lesson: "", next: "", recovery: "maintain", ratings: [3, 3, 3, 3, 3] },
   life: { relationships: "", enjoyment: "", health: "", growth: "" },
@@ -83,6 +83,29 @@ function normalizeModes(inputModes) {
   return modes;
 }
 
+function normalizeBills(finances, fallback) {
+  const source = Array.isArray(finances?.bills)
+    ? finances.bills
+    : Array.isArray(finances?.commitments)
+      ? finances.commitments
+      : fallback;
+  const today = new Date();
+  return source.map(item => ({
+    id: item.id || crypto.randomUUID(),
+    name: String(item.name || "Untitled bill"),
+    amount: Math.max(0, Number(item.amount) || 0),
+    frequency: ["monthly", "annual", "oneoff"].includes(item.frequency) ? item.frequency : "monthly",
+    dueDay: Math.min(31, Math.max(1, Number(item.dueDay) || today.getDate())),
+    dueMonth: Math.min(12, Math.max(1, Number(item.dueMonth) || today.getMonth() + 1)),
+    dueDate: String(item.dueDate || ""),
+    autopay: Boolean(item.autopay),
+    account: ["personal", "business"].includes(item.account) ? item.account : "personal",
+    remindDays: Math.min(30, Math.max(0, Number(item.remindDays ?? 3))),
+    createdAt: item.createdAt || new Date().toISOString(),
+    paidPeriods: Array.isArray(item.paidPeriods) ? [...new Set(item.paidPeriods.map(String))] : []
+  }));
+}
+
 function normalizeState(input) {
   const base = defaultState();
   if (!input || typeof input !== "object") return base;
@@ -102,7 +125,7 @@ function normalizeState(input) {
   return {
     ...base,
     ...input,
-    version: 3,
+    version: 4,
     week: { ...base.week, ...(input.week || {}), startedAt: input.week?.startedAt || weekStartKey() },
     tasks: Array.isArray(input.tasks) ? input.tasks : base.tasks,
     inbox: Array.isArray(input.inbox) ? input.inbox : [],
@@ -115,7 +138,8 @@ function normalizeState(input) {
       ...(input.finances || {}),
       balances: { ...base.finances.balances, ...(input.finances?.balances || {}) },
       transactions: Array.isArray(input.finances?.transactions) ? input.finances.transactions : [],
-      commitments: Array.isArray(input.finances?.commitments) ? input.finances.commitments : base.finances.commitments,
+      bills: normalizeBills(input.finances, base.finances.bills),
+      commitments: undefined,
       obligations: Array.isArray(input.finances?.obligations) ? input.finances.obligations : base.finances.obligations,
       investments: Array.isArray(input.finances?.investments) ? input.finances.investments : []
     },
@@ -239,16 +263,84 @@ function taskScore(task, energy) {
   return Number(task.impact) * 4 + (4 - Math.abs(capacity - taskEnergy)) * 2 - Number(task.complexity);
 }
 
+function startOfDay(date = new Date()) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function clampedDate(year, monthIndex, day) {
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+  return new Date(year, monthIndex, Math.min(Math.max(1, Number(day) || 1), lastDay));
+}
+
+function daysFromToday(date, reference = new Date()) {
+  return Math.round((startOfDay(date) - startOfDay(reference)) / 86400000);
+}
+
+function billCycle(bill, reference = new Date()) {
+  if (bill.frequency === "monthly") {
+    return { period: monthKey(reference), due: clampedDate(reference.getFullYear(), reference.getMonth(), bill.dueDay) };
+  }
+  if (bill.frequency === "annual") {
+    return { period: String(reference.getFullYear()), due: clampedDate(reference.getFullYear(), bill.dueMonth - 1, bill.dueDay) };
+  }
+  const due = bill.dueDate ? dateFromKey(bill.dueDate) : startOfDay(reference);
+  return { period: bill.dueDate || dayKey(due), due };
+}
+
+function nextOutstandingBillCycle(bill, reference = new Date()) {
+  if (bill.frequency === "oneoff") {
+    const cycle = billCycle(bill, reference);
+    return bill.paidPeriods.includes(cycle.period) ? null : cycle;
+  }
+  const created = new Date(bill.createdAt || reference);
+  if (bill.frequency === "annual") {
+    for (let year = created.getFullYear(); year <= reference.getFullYear() + 2; year += 1) {
+      const period = String(year);
+      if (!bill.paidPeriods.includes(period)) return { period, due: clampedDate(year, bill.dueMonth - 1, bill.dueDay) };
+    }
+    return null;
+  }
+  const firstMonth = new Date(created.getFullYear(), created.getMonth(), 1);
+  const lastMonth = new Date(reference.getFullYear(), reference.getMonth() + 12, 1);
+  for (let cursor = new Date(firstMonth); cursor <= lastMonth; cursor.setMonth(cursor.getMonth() + 1)) {
+    const period = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`;
+    if (!bill.paidPeriods.includes(period)) return { period, due: clampedDate(cursor.getFullYear(), cursor.getMonth(), bill.dueDay) };
+  }
+  return null;
+}
+
+function billScheduleEntry(bill, reference = new Date()) {
+  const current = billCycle(bill, reference);
+  const currentPaid = bill.paidPeriods.includes(current.period);
+  const outstanding = nextOutstandingBillCycle(bill, reference);
+  if (!outstanding) return { bill, due: current.due, period: current.period, days: daysFromToday(current.due, reference), status: "paid", actionPaid: true };
+  const days = daysFromToday(outstanding.due, reference);
+  const actionPaid = currentPaid && days > 0;
+  const status = actionPaid ? "paid" : days < 0 ? "overdue" : days === 0 ? "today" : days <= Math.max(3, bill.remindDays) ? "soon" : "upcoming";
+  return { bill, ...outstanding, days, status, actionPaid, actionPeriod: actionPaid ? current.period : outstanding.period };
+}
+
+function monthlyBillEquivalent(bill) {
+  if (bill.frequency === "monthly") return Number(bill.amount || 0);
+  if (bill.frequency === "annual") return Number(bill.amount || 0) / 12;
+  return 0;
+}
+
 function moneyTotals() {
   const totals = { ...state.finances.balances };
   state.finances.transactions.forEach(item => {
     const sign = item.type === "income" ? 1 : -1;
     totals[item.account] = (Number(totals[item.account]) || 0) + sign * Number(item.amount || 0);
   });
-  const commitments = state.finances.commitments.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const billSchedule = state.finances.bills.map(bill => billScheduleEntry(bill)).sort((a, b) => a.due - b.due);
+  const monthlyBills = state.finances.bills.reduce((sum, item) => sum + monthlyBillEquivalent(item), 0);
+  const overdueBills = billSchedule.filter(item => !item.actionPaid && item.days < 0).reduce((sum, item) => sum + Number(item.bill.amount || 0), 0);
+  const dueSoon = billSchedule.filter(item => !item.actionPaid && item.days >= 0 && item.days <= 7).reduce((sum, item) => sum + Number(item.bill.amount || 0), 0);
+  const dueThirty = billSchedule.filter(item => !item.actionPaid && item.days >= 0 && item.days <= 30).reduce((sum, item) => sum + Number(item.bill.amount || 0), 0);
   const obligations = state.finances.obligations.reduce((sum, item) => sum + Math.max(0, Number(item.target || 0) - Number(item.paid || 0)), 0);
   const investments = state.finances.investments.reduce((sum, item) => sum + Number(item.current || 0), 0);
-  return { ...totals, available: Number(totals.personal || 0) + Number(totals.business || 0), commitments, obligations, investments };
+  const available = Number(totals.personal || 0) + Number(totals.business || 0);
+  return { ...totals, available, monthlyBills, overdueBills, dueSoon, dueThirty, billSchedule, coverMonths: monthlyBills ? available / monthlyBills : null, obligations, investments };
 }
 
 function spentToday() {
@@ -334,14 +426,43 @@ function renderMoney() {
   const transactions = [...state.finances.transactions].sort((a, b) => b.date.localeCompare(a.date));
   document.getElementById("view-money").innerHTML = `
     <div class="page-head"><p class="eyebrow">Financial OS</p><h1 id="money-heading">Know your position.</h1><p>Every pound has a purpose. Expected investment money does not count until it actually arrives.</p></div>
-    <div class="money-summary">${moneyStat("Available cash", currency(totals.available), "Personal + business")}${moneyStat("Held for others", currency(totals.held), "Always separate")}${moneyStat("Monthly commitments", currency(totals.commitments), `${currency(totals.commitments * 3)} over 3 months`)}${moneyStat("Obligations remaining", currency(totals.obligations), "Tracked explicitly")}</div>
+    <div class="money-summary">${moneyStat("Available cash", currency(totals.available), "Personal + business")}${moneyStat("Monthly bills", currency(totals.monthlyBills), "Annual bills averaged monthly")}${moneyStat("Due next 7 days", currency(totals.dueSoon), totals.dueSoon ? "Keep this amount ready" : "Nothing pressing")}${moneyStat("Overdue", currency(totals.overdueBills), totals.overdueBills ? "Needs a decision" : "All clear")}</div>
     <div class="grid two-column">
       <div class="stack">
+        <article class="card bills-card"><div class="card-head"><div><p class="eyebrow">Bill calendar</p><h2>Due dates, without surprises</h2><p>Recurring bills, one-offs, autopay, and what is actually paid.</p></div><button class="button button-secondary button-small" data-add="bill">+ Bill</button></div>${billInsight(totals)}<div class="bills-list">${totals.billSchedule.length ? totals.billSchedule.map(billTemplate).join("") : '<div class="empty">No bills yet. Add the first due date you want the system to watch.</div>'}</div></article>
         <article class="card"><div class="card-head"><div><p class="eyebrow">Cash ledger</p><h2>Transactions</h2><p>Record reality, not forecasts.</p></div><button class="button button-secondary button-small" data-add="transaction">+ Transaction</button></div><div class="ledger-list">${transactions.length ? transactions.slice(0, 20).map(transactionTemplate).join("") : '<div class="empty">No transactions recorded yet.</div>'}</div></article>
         <article class="card"><div class="card-head"><div><p class="eyebrow">Starting position</p><h2>Opening balances</h2></div></div><div class="balance-grid">${balanceField("personal", "Personal cash")}${balanceField("business", "Business cash")}${balanceField("held", "Money held for others")}</div><p class="privacy-note">Use opening balances once, then keep the ledger current.</p></article>
       </div>
-      <aside class="stack">${moneyCollectionCard("commitment", "Monthly commitments", "Recurring obligations", state.finances.commitments, item => `${escapeHTML(item.name)} · ${currency(item.amount)}`)}${moneyCollectionCard("obligation", "Liabilities + obligations", "What must be restored or repaid", state.finances.obligations, item => `${escapeHTML(item.name)} · ${currency(Math.max(0, item.target - item.paid))} remaining`)}${moneyCollectionCard("investment", "Investments", "Visible, but unavailable until realised", state.finances.investments, item => `${escapeHTML(item.name)} · ${currency(item.current)} current value`)}</aside>
+      <aside class="stack">${cashCoverCard(totals)}${moneyCollectionCard("obligation", "Liabilities + obligations", "What must be restored or repaid", state.finances.obligations, item => `${escapeHTML(item.name)} · ${currency(Math.max(0, item.target - item.paid))} remaining`)}${moneyCollectionCard("investment", "Investments", "Visible, but unavailable until realised", state.finances.investments, item => `${escapeHTML(item.name)} · ${currency(item.current)} current value`)}</aside>
     </div>`;
+}
+
+function billInsight(totals) {
+  if (totals.overdueBills) return `<div class="bill-insight urgent"><span>Needs attention</span><strong>${currency(totals.overdueBills)} is overdue</strong><small>Mark paid bills complete or update their dates so the plan stays honest.</small></div>`;
+  if (totals.dueSoon > totals.available) return `<div class="bill-insight urgent"><span>Cash gap</span><strong>${currency(totals.dueSoon - totals.available)} short for the next 7 days</strong><small>Move money, delay a flexible bill, or protect essential payments first.</small></div>`;
+  if (totals.dueSoon) return `<div class="bill-insight"><span>Next 7 days</span><strong>${currency(totals.dueSoon)} due and ${currency(totals.available)} available</strong><small>Your immediate bills are covered by the cash currently recorded.</small></div>`;
+  return `<div class="bill-insight calm"><span>Clear runway</span><strong>No unpaid bills in the next 7 days</strong><small>The calendar will surface the next due date automatically.</small></div>`;
+}
+
+function cashCoverCard(totals) {
+  const autopay = state.finances.bills.filter(item => item.autopay).length;
+  const cover = totals.coverMonths === null ? "No monthly bills" : totals.coverMonths < 0 ? "Cash is below zero" : `${totals.coverMonths.toFixed(1)} months`;
+  return `<article class="card cash-cover-card"><div class="card-head"><div><p class="eyebrow">Cash cover</p><h2>${escapeHTML(cover)}</h2><p>How long available cash covers your recurring bill baseline.</p></div></div><div class="cover-metrics"><div><span>Next 30 days</span><strong>${currency(totals.dueThirty)}</strong></div><div><span>Autopay bills</span><strong>${autopay}</strong></div><div><span>Held separately</span><strong>${currency(totals.held)}</strong></div></div></article>`;
+}
+
+function billDueLabel(entry) {
+  if (entry.actionPaid) return entry.bill.frequency === "oneoff" ? "Paid" : `Paid · next ${formatCompactDate(entry.due)}`;
+  if (entry.days < 0) return `${Math.abs(entry.days)} day${Math.abs(entry.days) === 1 ? "" : "s"} overdue`;
+  if (entry.days === 0) return "Due today";
+  if (entry.days === 1) return "Due tomorrow";
+  if (entry.days <= 7) return `Due in ${entry.days} days`;
+  return `Due ${formatCompactDate(entry.due)}`;
+}
+
+function billTemplate(entry) {
+  const bill = entry.bill;
+  const frequency = ({ monthly: "Monthly", annual: "Annual", oneoff: "One-off" })[bill.frequency];
+  return `<div class="bill-row ${entry.status}"><button class="bill-paid-button ${entry.actionPaid ? "done" : ""}" data-bill-paid="${bill.id}" data-bill-period="${entry.actionPeriod || entry.period}" aria-label="${entry.actionPaid ? "Mark unpaid" : "Mark paid"}"></button><div class="bill-copy"><strong>${escapeHTML(bill.name)}</strong><small class="bill-due">${escapeHTML(billDueLabel(entry))}</small><div class="bill-meta"><span>${frequency}</span><span>${escapeHTML(bill.account)}</span>${bill.autopay ? "<span>Autopay</span>" : ""}</div></div><div class="bill-value"><strong>${currency(bill.amount)}</strong><small>${formatCompactDate(entry.due)}</small></div><button class="edit-button" data-edit-bill="${bill.id}" aria-label="Edit bill">•••</button></div>`;
 }
 
 function moneyStat(label, value, note) {
@@ -464,7 +585,7 @@ function editorCollection(type) {
   if (type === "cue") return state.cues;
   if (type === "script") return state.scripts;
   if (type === "transaction") return state.finances.transactions;
-  if (type === "commitment") return state.finances.commitments;
+  if (type === "bill") return state.finances.bills;
   if (type === "obligation") return state.finances.obligations;
   if (type === "investment") return state.finances.investments;
   return [];
@@ -473,10 +594,10 @@ function editorCollection(type) {
 function openEditor(type, id = null) {
   const dialog = document.getElementById("editor-dialog");
   const fields = document.getElementById("dialog-fields");
-  const collectionTypes = ["task", "inbox", "cue", "script", "transaction", "commitment", "obligation", "investment"];
+  const collectionTypes = ["task", "inbox", "cue", "script", "transaction", "bill", "obligation", "investment"];
   const item = collectionTypes.includes(type) && id ? editorCollection(type).find(entry => entry.id === id) : null;
   editor = type === "handoffImport" ? { type, payload: id } : { type, id };
-  const titles = { task: "Action", inbox: "Quick capture", cue: "Cue architecture", script: "If–then script", transaction: "Transaction", commitment: "Monthly commitment", obligation: "Obligation", investment: "Investment", routine: `${state.modes[id]?.label || "Routine"} mode`, reminders: "Gentle reminders", security: "App lock", handoff: "Secure phone handoff", handoffImport: "Import secure handoff" };
+  const titles = { task: "Action", inbox: "Quick capture", cue: "Cue architecture", script: "If–then script", transaction: "Transaction", bill: "Bill + due date", obligation: "Obligation", investment: "Investment", routine: `${state.modes[id]?.label || "Routine"} mode`, reminders: "Gentle reminders", security: "App lock", handoff: "Secure phone handoff", handoffImport: "Import secure handoff" };
   document.getElementById("dialog-eyebrow").textContent = ({ routine: "Personalise your system", reminders: "Stay gently connected", security: "Local privacy", handoff: "Encrypted device transfer", handoffImport: "Encrypted device transfer" })[type] || (id ? "Update your system" : "Add to your system");
   document.getElementById("dialog-title").textContent = titles[type] || "Item";
   document.getElementById("delete-item").classList.toggle("hidden", !(id && collectionTypes.includes(type)));
@@ -486,7 +607,7 @@ function openEditor(type, id = null) {
   if (type === "cue") fields.innerHTML = cueEditor(item);
   if (type === "script") fields.innerHTML = scriptEditor(item);
   if (type === "transaction") fields.innerHTML = transactionEditor(item);
-  if (type === "commitment") fields.innerHTML = `<div class="field"><label>Name</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="field"><label>Monthly amount (£)</label><input name="amount" type="number" min="0" step="0.01" required value="${item?.amount || ""}" /></div>`;
+  if (type === "bill") fields.innerHTML = billEditor(item);
   if (type === "obligation") fields.innerHTML = `<div class="field"><label>Name</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Total owed (£)</label><input name="target" type="number" min="0" step="0.01" required value="${item?.target || ""}" /></div><div class="field"><label>Already restored (£)</label><input name="paid" type="number" min="0" step="0.01" value="${item?.paid || 0}" /></div></div>`;
   if (type === "investment") fields.innerHTML = `<div class="field"><label>Name</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Contributed (£)</label><input name="contributed" type="number" min="0" step="0.01" value="${item?.contributed || 0}" /></div><div class="field"><label>Current value (£)</label><input name="current" type="number" min="0" step="0.01" value="${item?.current || 0}" /></div></div>`;
   if (type === "routine") fields.innerHTML = routineEditor(id);
@@ -495,6 +616,7 @@ function openEditor(type, id = null) {
   if (type === "handoff") fields.innerHTML = handoffEditor();
   if (type === "handoffImport") fields.innerHTML = handoffImportEditor();
   dialog.showModal();
+  if (type === "bill") updateBillEditorFields();
   setTimeout(() => fields.querySelector("input:not([type=checkbox]), textarea")?.focus(), 60);
 }
 
@@ -516,6 +638,17 @@ function scriptEditor(item) {
 
 function transactionEditor(item) {
   return `<div class="inline-fields"><div class="field"><label>Type</label><select name="type"><option value="expense" ${item?.type === "expense" ? "selected" : ""}>Expense</option><option value="income" ${item?.type === "income" ? "selected" : ""}>Income</option></select></div><div class="field"><label>Account</label><select name="account">${[["personal","Personal"],["business","Business"],["held","Held for others"]].map(([value,label]) => `<option value="${value}" ${item?.account === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Date</label><input name="date" type="date" required value="${item?.date || dayKey()}" /></div></div><div class="field"><label>Amount (£)</label><input name="amount" type="number" min="0.01" step="0.01" required value="${item?.amount || ""}" /></div><div class="field"><label>Category</label><select name="category">${["Living expenses","Personal reserve","Savings","Business capital","Family support","Money held for others","Income","Other"].map(value => `<option ${item?.category === value ? "selected" : ""}>${value}</option>`).join("")}</select></div><div class="field"><label>Note</label><input name="note" value="${escapeHTML(item?.note || "")}" placeholder="What was this for?" /></div>`;
+}
+
+function billEditor(item) {
+  const frequency = item?.frequency || "monthly";
+  const monthNames = Array.from({ length: 12 }, (_, index) => new Intl.DateTimeFormat("en-GB", { month: "long" }).format(new Date(2024, index, 1)));
+  return `<div class="field"><label>Bill name</label><input name="name" required value="${escapeHTML(item?.name || "")}" placeholder="Rent, phone, insurance…" /></div><div class="inline-fields bill-core-fields"><div class="field"><label>Amount (£)</label><input name="amount" type="number" min="0.01" step="0.01" required value="${item?.amount ?? ""}" /></div><div class="field"><label>Repeats</label><select name="frequency" data-bill-frequency>${[["monthly","Monthly"],["annual","Yearly"],["oneoff","One-off"]].map(([value,label]) => `<option value="${value}" ${frequency === value ? "selected" : ""}>${label}</option>`).join("")}</select></div></div><div class="bill-date-group" data-bill-date="monthly"><div class="field"><label>Due day each month</label><input name="dueDayMonthly" type="number" inputmode="numeric" min="1" max="31" value="${item?.dueDay || new Date().getDate()}" /></div></div><div class="bill-date-group" data-bill-date="annual"><div class="inline-fields"><div class="field"><label>Due month</label><select name="dueMonth">${monthNames.map((name,index) => `<option value="${index + 1}" ${Number(item?.dueMonth || new Date().getMonth() + 1) === index + 1 ? "selected" : ""}>${name}</option>`).join("")}</select></div><div class="field"><label>Due day</label><input name="dueDayAnnual" type="number" inputmode="numeric" min="1" max="31" value="${item?.dueDay || new Date().getDate()}" /></div></div></div><div class="bill-date-group" data-bill-date="oneoff"><div class="field"><label>Due date</label><input name="dueDate" type="date" value="${item?.dueDate || dayKey()}" /></div></div><div class="inline-fields"><div class="field"><label>Paid from</label><select name="account"><option value="personal" ${item?.account !== "business" ? "selected" : ""}>Personal</option><option value="business" ${item?.account === "business" ? "selected" : ""}>Business</option></select></div><div class="field"><label>Remind me before</label><select name="remindDays">${[[0,"On the day"],[1,"1 day"],[3,"3 days"],[7,"7 days"],[14,"14 days"]].map(([value,label]) => `<option value="${value}" ${Number(item?.remindDays ?? 3) === value ? "selected" : ""}>${label}</option>`).join("")}</select></div></div><label class="toggle-row"><span><strong>Paid automatically</strong><small>Label this as autopay in the calendar</small></span><input name="autopay" type="checkbox" ${item?.autopay ? "checked" : ""} /><i></i></label><p class="dialog-note">Mark each cycle paid from the bill calendar. The next due date then moves forward automatically.</p>`;
+}
+
+function updateBillEditorFields() {
+  const frequency = document.querySelector('[data-bill-frequency]')?.value;
+  document.querySelectorAll("[data-bill-date]").forEach(group => group.classList.toggle("hidden", group.dataset.billDate !== frequency));
 }
 
 function routineEditor(key) {
@@ -594,7 +727,12 @@ async function saveEditor() {
   if (editor.type === "cue") Object.assign(item, { name: data.name.trim(), cue: data.cue.trim(), response: data.response.trim(), setup: data.setup.trim(), remove: data.remove.trim() });
   if (editor.type === "script") Object.assign(item, { trigger: data.trigger.trim(), response: data.response.trim() });
   if (editor.type === "transaction") Object.assign(item, { type: data.type, account: data.account, date: data.date, amount: Number(data.amount), category: data.category, note: data.note.trim() });
-  if (editor.type === "commitment") Object.assign(item, { name: data.name.trim(), amount: Number(data.amount) });
+  if (editor.type === "bill") {
+    if (data.frequency === "oneoff" && !data.dueDate) return showToast("Choose the one-off due date"), false;
+    const frequencyChanged = item.frequency && item.frequency !== data.frequency;
+    const dueDay = data.frequency === "annual" ? Number(data.dueDayAnnual) : Number(data.dueDayMonthly);
+    Object.assign(item, { name: data.name.trim(), amount: Number(data.amount), frequency: data.frequency, dueDay, dueMonth: Number(data.dueMonth || 1), dueDate: data.dueDate || "", account: data.account, remindDays: Number(data.remindDays), autopay: Boolean(data.autopay), createdAt: item.createdAt || new Date().toISOString(), paidPeriods: frequencyChanged ? [] : (item.paidPeriods || []) });
+  }
   if (editor.type === "obligation") Object.assign(item, { name: data.name.trim(), target: Number(data.target), paid: Number(data.paid) });
   if (editor.type === "investment") Object.assign(item, { name: data.name.trim(), contributed: Number(data.contributed), current: Number(data.current) });
   saveState(editor.type === "inbox" ? "Captured without changing direction" : "System updated");
@@ -692,6 +830,15 @@ async function checkReminders() {
       await showReminder(item.key, item.title, item.body);
       saveState();
     }
+  }
+  for (const entry of state.finances.bills.map(bill => billScheduleEntry(bill, now))) {
+    if (entry.actionPaid || entry.days > entry.bill.remindDays) continue;
+    const key = `bill-${entry.bill.id}-${entry.period}-${today}`;
+    if (reminder.lastFired[key]) continue;
+    const timing = entry.days < 0 ? `${Math.abs(entry.days)} day${Math.abs(entry.days) === 1 ? "" : "s"} overdue` : entry.days === 0 ? "due today" : `due in ${entry.days} day${entry.days === 1 ? "" : "s"}`;
+    reminder.lastFired[key] = new Date().toISOString();
+    await showReminder(key, `Bill ${timing}: ${entry.bill.name}`, `${currency(entry.bill.amount)} from ${entry.bill.account}${entry.bill.autopay ? " · autopay" : ""}.`);
+    saveState();
   }
 }
 
@@ -957,6 +1104,15 @@ document.addEventListener("click", event => {
     saveState(task.done ? "Action complete" : "Action reopened");
     return render();
   }
+  if (target.dataset.billPaid) {
+    const bill = state.finances.bills.find(item => item.id === target.dataset.billPaid);
+    if (!bill) return;
+    const period = String(target.dataset.billPeriod);
+    const paid = bill.paidPeriods.includes(period);
+    bill.paidPeriods = paid ? bill.paidPeriods.filter(item => item !== period) : [...bill.paidPeriods, period];
+    saveState(paid ? "Bill reopened" : "Bill marked paid");
+    return render();
+  }
   if (target.dataset.add) return openEditor(target.dataset.add);
   if (target.dataset.editRoutine) return openEditor("routine", target.dataset.editRoutine);
   if (target.dataset.inboxTask) return promoteInboxItem(target.dataset.inboxTask);
@@ -978,7 +1134,7 @@ document.addEventListener("click", event => {
     return renumberRoutineSteps();
   }
   if (target.hasAttribute("data-disable-lock")) return disableLock();
-  ["task", "inbox", "cue", "script", "transaction", "commitment", "obligation", "investment"].forEach(type => {
+  ["task", "inbox", "cue", "script", "transaction", "bill", "obligation", "investment"].forEach(type => {
     const key = `edit${type[0].toUpperCase()}${type.slice(1)}`;
     if (target.dataset[key]) openEditor(type, target.dataset[key]);
   });
@@ -991,6 +1147,7 @@ document.addEventListener("click", event => {
 
 document.addEventListener("change", event => {
   const target = event.target;
+  if (target.matches("[data-bill-frequency]")) updateBillEditorFields();
   if (target.dataset.weekField) state.week[target.dataset.weekField] = target.value.trim();
   if (target.dataset.dailyField) todayState()[target.dataset.dailyField] = target.value.trim();
   if (target.dataset.balance) state.finances.balances[target.dataset.balance] = Number(target.value);

@@ -1861,6 +1861,204 @@ textarea::placeholder {
   color: var(--red);
 }
 
+.bill-insight {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 13px;
+  padding: 14px 15px;
+  border: 1px solid rgba(212, 91, 105, .14);
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(103, 35, 47, .24), rgba(255, 255, 255, .018));
+}
+
+.bill-insight.urgent {
+  border-color: rgba(226, 120, 126, .28);
+  background: linear-gradient(145deg, rgba(128, 36, 49, .36), rgba(255, 255, 255, .018));
+}
+
+.bill-insight.calm {
+  border-color: rgba(112, 155, 134, .16);
+  background: linear-gradient(145deg, rgba(49, 91, 71, .18), rgba(255, 255, 255, .018));
+}
+
+.bill-insight span,
+.cover-metrics span {
+  color: #81777c;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.bill-insight strong {
+  font-size: 13px;
+}
+
+.bill-insight small {
+  color: #8a8085;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.bills-list {
+  display: grid;
+}
+
+.bill-row {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto 26px;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.bill-row:last-child {
+  border-bottom: 0;
+}
+
+.bill-paid-button {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #51464b;
+  border-radius: 10px;
+  background: #100e0f;
+  cursor: pointer;
+  transition: border-color .2s ease, background .2s ease, transform .2s ease;
+}
+
+.bill-paid-button:hover {
+  border-color: #a95560;
+  transform: translateY(-1px);
+}
+
+.bill-paid-button.done {
+  display: grid;
+  place-items: center;
+  border-color: #7f3943;
+  background: #7f3943;
+}
+
+.bill-paid-button.done::after {
+  color: white;
+  font-size: 13px;
+  content: "✓";
+}
+
+.bill-copy {
+  min-width: 0;
+}
+
+.bill-copy > strong,
+.bill-copy > small {
+  display: block;
+}
+
+.bill-copy > strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bill-due {
+  margin-top: 3px;
+  color: #91868b;
+  font-size: 10px;
+}
+
+.bill-row.overdue .bill-due,
+.bill-row.today .bill-due {
+  color: #ec7f88;
+  font-weight: 750;
+}
+
+.bill-row.soon .bill-due {
+  color: #d2987e;
+}
+
+.bill-row.paid .bill-copy > strong {
+  color: #9a9095;
+}
+
+.bill-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 7px;
+}
+
+.bill-meta span {
+  padding: 3px 6px;
+  border: 1px solid rgba(255, 255, 255, .055);
+  border-radius: 999px;
+  color: #746a6f;
+  background: rgba(255, 255, 255, .018);
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.bill-value {
+  display: grid;
+  gap: 3px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.bill-value strong {
+  font-size: 12px;
+}
+
+.bill-value small {
+  color: #6f666a;
+  font-size: 8px;
+}
+
+.cover-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--line);
+}
+
+.cover-metrics > div {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 12px 9px;
+  background: #151214;
+}
+
+.cover-metrics strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bill-date-group {
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, .015);
+}
+
+.bill-date-group .field + .field,
+.bill-date-group .inline-fields .field {
+  margin-top: 0;
+}
+
+.bill-core-fields {
+  grid-template-columns: 1.2fr .8fr;
+}
+
 body.locked {
   overflow: hidden;
 }
@@ -1952,6 +2150,25 @@ body.locked {
     grid-template-columns: 27px minmax(0, 1fr) 24px;
     gap: 6px;
     padding: 8px;
+  }
+
+  .bill-row {
+    grid-template-columns: 30px minmax(0, 1fr) 26px;
+    gap: 9px;
+  }
+
+  .bill-value {
+    grid-column: 2;
+    grid-row: 2;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    text-align: left;
+  }
+
+  .bill-row > .edit-button {
+    grid-column: 3;
+    grid-row: 1;
   }
 }
 
