@@ -2,8 +2,9 @@ const STORAGE_KEY = "flow-maxing-os-v1";
 const SECURITY_KEY = "50x-life-os-security-v1";
 const CLOUD_SYNC_KEY = "50x-life-os-cloud-sync-v1";
 const MIGRATION_BACKUP_KEY = "50x-life-os-pre-v8-backup";
+const LATEST_MIGRATION_BACKUP_KEY = "50x-life-os-pre-v10-backup";
 const PRE_RESTORE_BACKUP_KEY = "50x-life-os-before-snapshot-restore";
-const CURRENT_STATE_VERSION = 9;
+const CURRENT_STATE_VERSION = 10;
 const LIVE_URL = "https://stevehenderson1448-netizen.github.io/flow-maxing-os/";
 const SYNC_RELAY = "https://mantledb.sh/v2";
 const SYNC_PATH = "life-os";
@@ -105,7 +106,7 @@ const defaultState = () => ({
       { id: crypto.randomUUID(), name: "Credit card minimum", amount: 20, amountMinor: 2000, frequency: "monthly", dueDay: 1, dueMonth: 1, dueDate: "", kind: "essential", autopay: false, account: "personal", remindDays: 5, createdAt: new Date().toISOString(), paidPeriods: [], previousAmount: 0, amountChangedAt: "", lastReviewed: "" }
     ],
     obligations: [{ id: crypto.randomUUID(), name: "Personal repayment obligation", target: 3000, targetMinor: 300000, paid: 0, paidMinor: 0, monthlyPayment: 0, monthlyPaymentMinor: 0 }],
-    investments: [], budgets: [], incomeForecasts: [], savingsGoals: []
+    investments: [], budgets: [], incomeForecasts: [], savingsGoals: [], plannedPurchases: []
   },
   maintenance: [],
   daily: {},
@@ -339,13 +340,34 @@ function normalizeSavingsGoals(items) {
   return items.map(item => ({ id: item.id || crypto.randomUUID(), name: String(item.name || "Savings goal"), target: Math.max(0, Number(item.target) || fromMinor(item.targetMinor)), targetMinor: Math.max(0, minorValue(item, "targetMinor", "target")), saved: Math.max(0, Number(item.saved) || fromMinor(item.savedMinor)), savedMinor: Math.max(0, minorValue(item, "savedMinor", "saved")), deadline: String(item.deadline || ""), status: ["active", "completed", "paused"].includes(item.status) ? item.status : "active", createdAt: item.createdAt || new Date().toISOString() }));
 }
 
+function normalizePlannedPurchases(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map(item => ({
+    id: item.id || crypto.randomUUID(),
+    name: String(item.name || "Planned purchase"),
+    url: safeExternalURL(item.url) || "",
+    amount: Math.max(0, Number(item.amount) || fromMinor(item.amountMinor)),
+    amountMinor: Math.max(0, minorValue(item, "amountMinor", "amount")),
+    category: ["essential", "useful", "enjoyment", "business", "personal"].includes(item.category) ? item.category : "useful",
+    account: ["personal", "business"].includes(item.account) ? item.account : "personal",
+    priority: ["next", "soon", "later"].includes(item.priority) ? item.priority : "soon",
+    targetDate: String(item.targetDate || ""),
+    status: ["planned", "bought", "archived"].includes(item.status) ? item.status : "planned",
+    reserved: Boolean(item.reserved),
+    notes: String(item.notes || ""),
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || item.createdAt || new Date().toISOString(),
+    boughtAt: String(item.boughtAt || "")
+  }));
+}
+
 function validateState(candidate) {
   if (!candidate || typeof candidate !== "object") return false;
   if (candidate.version !== CURRENT_STATE_VERSION) return false;
   if (!candidate.week || !Array.isArray(candidate.tasks) || !Array.isArray(candidate.inbox)) return false;
   if (!candidate.finances || !Array.isArray(candidate.finances.transactions) || !Array.isArray(candidate.finances.bills)) return false;
   if (!Array.isArray(candidate.goals) || !Array.isArray(candidate.projects) || !Array.isArray(candidate.milestones)) return false;
-  if (!Array.isArray(candidate.finances.budgets) || !Array.isArray(candidate.finances.incomeForecasts) || !Array.isArray(candidate.finances.savingsGoals)) return false;
+  if (!Array.isArray(candidate.finances.budgets) || !Array.isArray(candidate.finances.incomeForecasts) || !Array.isArray(candidate.finances.savingsGoals) || !Array.isArray(candidate.finances.plannedPurchases)) return false;
   if (!candidate.life || !Array.isArray(candidate.life.contacts) || !Array.isArray(candidate.life.experiences) || !Array.isArray(candidate.life.journal)) return false;
   return true;
 }
@@ -407,7 +429,8 @@ function normalizeState(input) {
       investments: (Array.isArray(input.finances?.investments) ? input.finances.investments : []).map(item => ({ ...item, id: item.id || crypto.randomUUID(), contributed: Math.max(0, Number(item.contributed) || fromMinor(item.contributedMinor)), contributedMinor: Math.max(0, minorValue(item, "contributedMinor", "contributed")), current: Math.max(0, Number(item.current) || fromMinor(item.currentMinor)), currentMinor: Math.max(0, minorValue(item, "currentMinor", "current")) })),
       budgets: normalizeBudgets(input.finances?.budgets),
       incomeForecasts: normalizeIncomeForecasts(input.finances?.incomeForecasts),
-      savingsGoals: normalizeSavingsGoals(input.finances?.savingsGoals)
+      savingsGoals: normalizeSavingsGoals(input.finances?.savingsGoals),
+      plannedPurchases: normalizePlannedPurchases(input.finances?.plannedPurchases)
     },
     maintenance: normalizeMaintenance(input.maintenance),
     daily,
@@ -425,8 +448,12 @@ function loadState() {
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
     const normalized = normalizeState(stored);
-    if (stored && Number(stored.version || 0) < CURRENT_STATE_VERSION && !localStorage.getItem(MIGRATION_BACKUP_KEY)) {
-      localStorage.setItem(MIGRATION_BACKUP_KEY, JSON.stringify({ createdAt: new Date().toISOString(), fromVersion: Number(stored.version || 0), data: stored }));
+    const storedVersion = Number(stored?.version || 0);
+    if (stored && storedVersion < CURRENT_STATE_VERSION && !localStorage.getItem(LATEST_MIGRATION_BACKUP_KEY)) {
+      localStorage.setItem(LATEST_MIGRATION_BACKUP_KEY, JSON.stringify({ createdAt: new Date().toISOString(), fromVersion: storedVersion, data: stored }));
+    }
+    if (stored && storedVersion < 8 && !localStorage.getItem(MIGRATION_BACKUP_KEY)) {
+      localStorage.setItem(MIGRATION_BACKUP_KEY, JSON.stringify({ createdAt: new Date().toISOString(), fromVersion: storedVersion, data: stored }));
     }
     if (!validateState(normalized)) throw new Error("State validation failed");
     if (stored?.version !== normalized.version) localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
@@ -854,8 +881,12 @@ function moneyTotals() {
   const obligationPlanMinor = state.finances.obligations.reduce((sum, item) => sum + minorValue(item, "monthlyPaymentMinor", "monthlyPayment"), 0);
   const investmentsMinor = state.finances.investments.reduce((sum, item) => sum + minorValue(item, "currentMinor", "current"), 0);
   const reserveTargetMinor = Math.max(0, Number(state.finances.settings?.reserveTargetMinor) || toMinor(state.finances.settings?.reserveTarget));
-  const personalProtectedMinor = personalBillsMinor + obligationPlanMinor + reserveTargetMinor;
-  const businessProtectedMinor = businessBillsMinor;
+  const plannedPurchases = state.finances.plannedPurchases.filter(item => item.status === "planned" && item.reserved);
+  const personalPurchaseReserveMinor = plannedPurchases.filter(item => item.account !== "business").reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
+  const businessPurchaseReserveMinor = plannedPurchases.filter(item => item.account === "business").reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
+  const plannedPurchaseReserveMinor = personalPurchaseReserveMinor + businessPurchaseReserveMinor;
+  const personalProtectedMinor = personalBillsMinor + obligationPlanMinor + reserveTargetMinor + personalPurchaseReserveMinor;
+  const businessProtectedMinor = businessBillsMinor + businessPurchaseReserveMinor;
   const protectedCashMinor = personalProtectedMinor + businessProtectedMinor;
   const personalSafeMinor = Math.max(0, Number(totalsMinor.personal || 0) - personalProtectedMinor);
   const businessFreeMinor = Math.max(0, Number(totalsMinor.business || 0) - businessProtectedMinor);
@@ -876,6 +907,7 @@ function moneyTotals() {
     ...totals,
     available: fromMinor(availableMinor), safeToSpend: fromMinor(personalSafeMinor), businessFree: fromMinor(businessFreeMinor),
     enjoymentAvailable: fromMinor(enjoymentAvailableMinor), configuredEnjoyment: fromMinor(configuredEnjoymentMinor), protectedCash: fromMinor(protectedCashMinor), personalProtected: fromMinor(personalProtectedMinor), businessProtected: fromMinor(businessProtectedMinor), reserveTarget: fromMinor(reserveTargetMinor),
+    plannedPurchaseReserve: fromMinor(plannedPurchaseReserveMinor), personalPurchaseReserve: fromMinor(personalPurchaseReserveMinor), businessPurchaseReserve: fromMinor(businessPurchaseReserveMinor),
     monthlyBills: fromMinor(monthlyBillsMinor), overdueBills: fromMinor(overdueBillsMinor), dueSoon: fromMinor(dueSoonMinor), dueThirty: fromMinor(dueThirtyMinor),
     obligations: fromMinor(obligationsMinor), obligationPlan: fromMinor(obligationPlanMinor), investments: fromMinor(investmentsMinor), subscriptionAnnual: fromMinor(subscriptionAnnualMinor),
     expectedIncome: fromMinor(expectedIncomeMinor), confirmedIncome: fromMinor(confirmedIncomeMinor), budgeted: fromMinor(budgetedMinor), spentThisMonth: fromMinor(spentThisMonthMinor),
@@ -883,7 +915,7 @@ function moneyTotals() {
     coverMonths: monthlyBillsMinor ? availableMinor / monthlyBillsMinor : null,
     personalCoverMonths: personalMonthlyBillsMinor ? Number(totalsMinor.personal || 0) / personalMonthlyBillsMinor : null,
     businessCoverMonths: businessMonthlyBillsMinor ? Number(totalsMinor.business || 0) / businessMonthlyBillsMinor : null,
-    minor: { ...totalsMinor, available: availableMinor, safeToSpend: personalSafeMinor, businessFree: businessFreeMinor, protectedCash: protectedCashMinor, expectedIncome: expectedIncomeMinor, confirmedIncome: confirmedIncomeMinor }
+    minor: { ...totalsMinor, available: availableMinor, safeToSpend: personalSafeMinor, businessFree: businessFreeMinor, protectedCash: protectedCashMinor, personalProtected: personalProtectedMinor, businessProtected: businessProtectedMinor, plannedPurchaseReserve: plannedPurchaseReserveMinor, expectedIncome: expectedIncomeMinor, confirmedIncome: confirmedIncomeMinor }
   };
 }
 
@@ -1289,6 +1321,7 @@ function renderMoney() {
         <article class="card bills-card"><div class="card-head"><div><p class="eyebrow">Bill calendar</p><h2>Due dates, without surprises</h2><p>Recurring bills, one-offs, autopay, and what is actually paid.</p></div><button class="button button-secondary button-small" data-add="bill">+ Bill</button></div>${billInsight(totals)}<div class="bills-list">${totals.billSchedule.length ? totals.billSchedule.map(billTemplate).join("") : '<div class="empty">No bills yet. Add the first due date you want the system to watch.</div>'}</div></article>
         ${incomeForecastCard(totals)}
         ${cashFlowForecastCard(totals)}
+        ${plannedPurchasesCard(totals)}
         ${budgetCard(totals)}
         ${subscriptionAuditCard(totals)}
         <article class="card"><div class="card-head"><div><p class="eyebrow">Cash ledger</p><h2>Transactions</h2><p>Record reality, not forecasts.</p></div><button class="button button-secondary button-small" data-add="transaction">+ Transaction</button></div><div class="ledger-list">${transactions.length ? transactions.slice(0, 20).map(transactionTemplate).join("") : '<div class="empty">No transactions recorded yet.</div>'}</div></article>
@@ -1348,6 +1381,40 @@ function threeMonthCashFlow(totals = moneyTotals()) {
 function cashFlowForecastCard(totals) {
   const forecast = threeMonthCashFlow(totals);
   return `<article class="card cash-flow-card"><div class="card-head"><div><p class="eyebrow">Three-month cash flow</p><h2>Conservative planning view</h2><p>Only confirmed income enters the projection. Expected income stays visible but excluded.</p></div><span class="tag">Planning estimate</span></div><div class="cash-flow-list">${forecast.map(item => `<div class="cash-flow-row"><span><strong>${item.label}</strong><small>${currency(fromMinor(item.personalBillsMinor + item.businessBillsMinor))} planned out</small></span><span><small>Personal</small><strong class="${item.personalMinor < 0 ? "negative" : ""}">${currency(fromMinor(item.personalMinor))}</strong></span><span><small>Business</small><strong class="${item.businessMinor < 0 ? "negative" : ""}">${currency(fromMinor(item.businessMinor))}</strong></span><span><small>Expected outside cash</small><strong>${currency(fromMinor(item.expectedMinor))}</strong></span></div>`).join("")}</div><p class="dialog-note">This is a forward plan, not a bank balance. Reconcile the ledger and mark bills paid to keep it useful.</p></article>`;
+}
+
+function plannedPurchasesCard(totals) {
+  const priorityOrder = { next: 0, soon: 1, later: 2 };
+  const purchases = state.finances.plannedPurchases.filter(item => item.status === "planned").sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority] || String(a.targetDate || "9999").localeCompare(String(b.targetDate || "9999")) || a.createdAt.localeCompare(b.createdAt));
+  const bought = state.finances.plannedPurchases.filter(item => item.status === "bought").sort((a, b) => String(b.boughtAt || b.updatedAt).localeCompare(String(a.boughtAt || a.updatedAt)));
+  const plannedMinor = purchases.reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
+  return `<article class="card purchases-card"><div class="card-head"><div><p class="eyebrow">Next purchases</p><h2>${purchases.length ? `${purchases.length} planned · ${currency(fromMinor(plannedMinor))}` : "Buy deliberately, not impulsively"}</h2><p>Keep the item, price, and real link together. Protect money only when the purchase belongs in the current plan.</p></div><button class="button button-secondary button-small" data-add="purchase">+ Purchase</button></div>${totals.plannedPurchaseReserve ? `<div class="purchase-reserve"><span>Protected for purchases</span><strong>${currency(totals.plannedPurchaseReserve)}</strong></div>` : ""}<div class="purchase-list">${purchases.length ? purchases.map(item => purchaseTemplate(item, totals)).join("") : '<div class="empty">Add something you are genuinely considering. The system will show whether it fits your protected cash.</div>'}</div>${bought.length ? `<details class="purchase-history"><summary>Purchased recently <span>${bought.length}</span></summary><div class="purchase-list purchased">${bought.slice(0, 6).map(item => purchaseTemplate(item, totals)).join("")}</div></details>` : ""}<p class="dialog-note">Marking an item bought never changes a balance automatically. Record the matching transaction when money actually leaves the account.</p></article>`;
+}
+
+function purchaseTemplate(item, totals) {
+  const amountMinor = minorValue(item, "amountMinor", "amount");
+  const account = item.account === "business" ? "business" : "personal";
+  const protectedMinor = Number(totals.minor[`${account}Protected`] || 0);
+  const availableMinor = Math.max(0, Number(totals.minor[account] || 0) - protectedMinor + (item.status === "planned" && item.reserved ? amountMinor : 0));
+  const shortMinor = Math.max(0, amountMinor - availableMinor);
+  const safeUrl = safeExternalURL(item.url);
+  const dateLabel = item.targetDate ? formatCompactDate(item.targetDate) : "No target date";
+  let statusLabel = "Price needed";
+  let statusClass = "neutral";
+  if (item.status === "bought") {
+    statusLabel = "Bought";
+    statusClass = "bought";
+  } else if (amountMinor && item.reserved && !shortMinor) {
+    statusLabel = "Money protected";
+    statusClass = "protected";
+  } else if (amountMinor && shortMinor) {
+    statusLabel = `${currency(fromMinor(shortMinor))} short`;
+    statusClass = "short";
+  } else if (amountMinor) {
+    statusLabel = "Affordable now";
+    statusClass = "affordable";
+  }
+  return `<div class="purchase-row ${item.status === "bought" ? "is-bought" : ""}"><div class="purchase-copy"><div class="purchase-title"><strong>${escapeHTML(item.name)}</strong><span class="purchase-priority ${escapeHTML(item.priority)}">${escapeHTML(item.priority)}</span></div><small>${escapeHTML(item.category)} · ${escapeHTML(account)} · ${escapeHTML(dateLabel)}</small>${item.notes ? `<p>${escapeHTML(item.notes)}</p>` : ""}<div class="purchase-actions">${safeUrl ? `<a href="${escapeHTML(safeUrl)}" target="_blank" rel="noopener noreferrer">Open link ↗</a>` : '<span class="missing-link">Add link</span>'}<button class="text-button" data-purchase-bought="${item.id}">${item.status === "bought" ? "Reopen" : "Mark bought"}</button></div></div><div class="purchase-value"><strong>${amountMinor ? currency(fromMinor(amountMinor)) : "—"}</strong><span class="purchase-status ${statusClass}">${escapeHTML(statusLabel)}</span></div><button class="edit-button" data-edit-purchase="${item.id}" aria-label="Edit ${escapeHTML(item.name)}">•••</button></div>`;
 }
 
 function budgetCard(totals) {
@@ -1602,16 +1669,17 @@ function editorCollection(type) {
   if (type === "budget") return state.finances.budgets;
   if (type === "income") return state.finances.incomeForecasts;
   if (type === "savings") return state.finances.savingsGoals;
+  if (type === "purchase") return state.finances.plannedPurchases;
   return [];
 }
 
 function openEditor(type, id = null, preset = {}) {
   const dialog = document.getElementById("editor-dialog");
   const fields = document.getElementById("dialog-fields");
-  const collectionTypes = ["task", "inbox", "maintenance", "cue", "script", "transaction", "bill", "obligation", "investment", "contact", "experience", "journal", "goal", "project", "milestone", "blocker", "decision", "budget", "income", "savings"];
+  const collectionTypes = ["task", "inbox", "maintenance", "cue", "script", "transaction", "bill", "obligation", "investment", "contact", "experience", "journal", "goal", "project", "milestone", "blocker", "decision", "budget", "income", "savings", "purchase"];
   const item = collectionTypes.includes(type) && id ? editorCollection(type).find(entry => entry.id === id) : null;
   editor = ["handoffImport", "syncPair"].includes(type) ? { type, payload: id } : { type, id, preset };
-  const titles = { task: "Smart action", inbox: "Quick capture", maintenance: "Life maintenance date", cue: "Cue architecture", script: "If–then script", transaction: "Transaction", bill: "Bill + due date", obligation: "Obligation", investment: "Investment", contact: "Relationship intention", experience: "Experience", journal: "Private reflection", goal: "Goal", project: "Project workspace", milestone: "Milestone", blocker: "Project blocker", decision: "Project decision", budget: "Budget line", income: "Income forecast", savings: "Savings goal", moneySettings: "Spending guardrails", assistantSettings: "Assistant privacy", routine: `${state.modes[id]?.label || "Routine"} mode`, reminders: "Gentle reminders", security: "App lock", sync: "Device sync", syncPair: "Connect this device", handoff: "Secure phone handoff", handoffImport: "Import secure handoff" };
+  const titles = { task: "Smart action", inbox: "Quick capture", maintenance: "Life maintenance date", cue: "Cue architecture", script: "If–then script", transaction: "Transaction", bill: "Bill + due date", obligation: "Obligation", investment: "Investment", contact: "Relationship intention", experience: "Experience", journal: "Private reflection", goal: "Goal", project: "Project workspace", milestone: "Milestone", blocker: "Project blocker", decision: "Project decision", budget: "Budget line", income: "Income forecast", savings: "Savings goal", purchase: "Next purchase", moneySettings: "Spending guardrails", assistantSettings: "Assistant privacy", routine: `${state.modes[id]?.label || "Routine"} mode`, reminders: "Gentle reminders", security: "App lock", sync: "Device sync", syncPair: "Connect this device", handoff: "Secure phone handoff", handoffImport: "Import secure handoff" };
   document.getElementById("dialog-eyebrow").textContent = ({ routine: "Personalise your system", reminders: "Stay gently connected", security: "Local privacy", sync: "Encrypted private relay", syncPair: "Encrypted private relay", handoff: "Encrypted device transfer", handoffImport: "Encrypted device transfer" })[type] || (id ? "Update your system" : "Add to your system");
   document.getElementById("dialog-title").textContent = titles[type] || "Item";
   document.getElementById("delete-item").classList.toggle("hidden", !(id && collectionTypes.includes(type)));
@@ -1635,6 +1703,7 @@ function openEditor(type, id = null, preset = {}) {
   if (type === "budget") fields.innerHTML = budgetEditor(item);
   if (type === "income") fields.innerHTML = incomeEditor(item);
   if (type === "savings") fields.innerHTML = savingsEditor(item);
+  if (type === "purchase") fields.innerHTML = purchaseEditor(item);
   if (type === "moneySettings") fields.innerHTML = moneySettingsEditor();
   if (type === "assistantSettings") fields.innerHTML = assistantSettingsEditor();
   if (type === "routine") fields.innerHTML = routineEditor(id);
@@ -1697,6 +1766,10 @@ function incomeEditor(item) {
 
 function savingsEditor(item) {
   return `<div class="field"><label>Savings goal</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Target (£)</label><input name="target" type="number" min="0" step="0.01" required value="${item?.target ?? ""}" /></div><div class="field"><label>Already protected (£)</label><input name="saved" type="number" min="0" step="0.01" value="${item?.saved ?? 0}" /></div><div class="field"><label>Optional deadline</label><input name="deadline" type="date" value="${item?.deadline || ""}" /></div></div><div class="field"><label>Status</label><select name="status">${["active","completed","paused"].map(value => `<option value="${value}" ${(item?.status || "active") === value ? "selected" : ""}>${value[0].toUpperCase() + value.slice(1)}</option>`).join("")}</select></div>`;
+}
+
+function purchaseEditor(item) {
+  return `<div class="field"><label>What are you planning to buy?</label><input name="name" required value="${escapeHTML(item?.name || "")}" placeholder="Item name" /></div><div class="field"><label>Product link</label><input name="url" type="url" inputmode="url" value="${escapeHTML(item?.url || "")}" placeholder="https://…" /></div><div class="inline-fields"><div class="field"><label>Price (£)</label><input name="amount" type="number" min="0" step="0.01" value="${item?.amount ?? ""}" placeholder="0.00" /></div><div class="field"><label>Pay from</label><select name="account"><option value="personal" ${item?.account !== "business" ? "selected" : ""}>Personal</option><option value="business" ${item?.account === "business" ? "selected" : ""}>Business</option></select></div><div class="field"><label>Target date</label><input name="targetDate" type="date" value="${item?.targetDate || ""}" /></div></div><div class="inline-fields"><div class="field"><label>Purpose</label><select name="category">${[["essential","Essential"],["useful","Useful"],["enjoyment","Enjoyment"],["business","Business"],["personal","Personal"]].map(([value,label]) => `<option value="${value}" ${(item?.category || "useful") === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Priority</label><select name="priority">${[["next","Next"],["soon","Soon"],["later","Later"]].map(([value,label]) => `<option value="${value}" ${(item?.priority || "soon") === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Status</label><select name="status">${[["planned","Planned"],["bought","Bought"],["archived","Archived"]].map(([value,label]) => `<option value="${value}" ${(item?.status || "planned") === value ? "selected" : ""}>${label}</option>`).join("")}</select></div></div><label class="toggle-row"><span><strong>Protect this money</strong><small>Subtract the price from safe-to-spend while this purchase is planned</small></span><input name="reserved" type="checkbox" ${item?.reserved ? "checked" : ""} /><i></i></label><div class="field"><label>Decision notes</label><textarea name="notes" placeholder="Why it matters, size, model, cheaper alternative…">${escapeHTML(item?.notes || "")}</textarea></div><p class="dialog-note">Planning or marking a purchase bought never moves cash automatically. Add a transaction only when money actually leaves the account.</p>`;
 }
 
 function inboxEditor(item) {
@@ -1853,6 +1926,7 @@ async function saveEditor() {
       return false;
     }
   }
+  if (editor.type === "purchase" && data.url.trim() && !safeExternalURL(data.url)) return showToast("Use a valid http or https product link"), false;
   const collection = editorCollection(editor.type);
   let item = editor.id ? collection.find(entry => entry.id === editor.id) : null;
   if (!item) {
@@ -1901,6 +1975,7 @@ async function saveEditor() {
   if (editor.type === "budget") Object.assign(item, { name: data.name.trim(), category: data.category.trim() || "Other", account: data.account, month: data.month || monthKey(), amount: fromMinor(toMinor(data.amount)), amountMinor: toMinor(data.amount), createdAt: item.createdAt || new Date().toISOString() });
   if (editor.type === "income") Object.assign(item, { source: data.source.trim(), amount: fromMinor(toMinor(data.amount)), amountMinor: toMinor(data.amount), expectedDate: data.expectedDate || "", status: data.status, account: data.account, notes: data.notes.trim(), createdAt: item.createdAt || new Date().toISOString(), receivedAt: data.status === "received" ? (item.receivedAt || new Date().toISOString()) : "" });
   if (editor.type === "savings") Object.assign(item, { name: data.name.trim(), target: fromMinor(toMinor(data.target)), targetMinor: toMinor(data.target), saved: fromMinor(toMinor(data.saved)), savedMinor: toMinor(data.saved), deadline: data.deadline || "", status: data.status, createdAt: item.createdAt || new Date().toISOString() });
+  if (editor.type === "purchase") Object.assign(item, { name: data.name.trim(), url: safeExternalURL(data.url) || "", amount: fromMinor(Math.max(0, toMinor(data.amount))), amountMinor: Math.max(0, toMinor(data.amount)), category: data.category, account: data.account, priority: data.priority, targetDate: data.targetDate || "", status: data.status, reserved: form.elements.reserved.checked, notes: data.notes.trim(), createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString(), boughtAt: data.status === "bought" ? (item.boughtAt || new Date().toISOString()) : "" });
   saveState(editor.type === "inbox" ? "Captured without changing direction" : "System updated");
   render();
   return true;
@@ -1950,18 +2025,18 @@ function refreshSettings() {
   const migrationRestore = document.getElementById("restore-migration");
   if (reminderStatus) reminderStatus.textContent = state.preferences.reminders.enabled ? `On · ${state.preferences.reminders.morning} + ${state.preferences.reminders.evening}` : "Off";
   if (securityStatus) securityStatus.textContent = security.pinHash ? (security.credentialId ? "PIN + device unlock" : "PIN enabled") : "Off";
-  if (migrationRestore) migrationRestore.classList.toggle("hidden", !localStorage.getItem(MIGRATION_BACKUP_KEY));
+  if (migrationRestore) migrationRestore.classList.toggle("hidden", !(localStorage.getItem(LATEST_MIGRATION_BACKUP_KEY) || localStorage.getItem(MIGRATION_BACKUP_KEY)));
   refreshSyncUI();
 }
 
 function restoreMigrationSnapshot() {
   try {
-    const snapshot = JSON.parse(localStorage.getItem(MIGRATION_BACKUP_KEY));
+    const snapshot = JSON.parse(localStorage.getItem(LATEST_MIGRATION_BACKUP_KEY) || localStorage.getItem(MIGRATION_BACKUP_KEY));
     if (!snapshot?.data) throw new Error("Snapshot unavailable");
-    if (!confirm("Restore the data snapshot created immediately before the 2.0 upgrade? Your current copy will be kept as a separate recovery snapshot.")) return;
+    if (!confirm("Restore the data snapshot created immediately before the latest upgrade? Your current copy will be kept as a separate recovery snapshot.")) return;
     localStorage.setItem(PRE_RESTORE_BACKUP_KEY, JSON.stringify({ createdAt: new Date().toISOString(), data: state }));
     state = normalizeState(snapshot.data);
-    saveState("Pre-2.0 data restored and safely upgraded");
+    saveState("Upgrade snapshot restored and safely updated");
     render();
     document.getElementById("settings-dialog").close();
   } catch {
@@ -2825,6 +2900,16 @@ document.addEventListener("click", async event => {
     saveState(completed ? "Experience reopened" : "Experience remembered");
     return render();
   }
+  if (target.dataset.purchaseBought) {
+    const purchase = state.finances.plannedPurchases.find(item => item.id === target.dataset.purchaseBought);
+    if (!purchase) return;
+    const bought = purchase.status === "bought";
+    purchase.status = bought ? "planned" : "bought";
+    purchase.boughtAt = bought ? "" : new Date().toISOString();
+    purchase.updatedAt = new Date().toISOString();
+    saveState(bought ? "Purchase reopened" : "Marked bought — record the transaction when cash leaves");
+    return render();
+  }
   if (target.dataset.reviewSubscription) {
     const bill = state.finances.bills.find(item => item.id === target.dataset.reviewSubscription);
     if (!bill) return;
@@ -2856,7 +2941,7 @@ document.addEventListener("click", async event => {
     return renumberRoutineSteps();
   }
   if (target.hasAttribute("data-disable-lock")) return disableLock();
-  ["task", "inbox", "maintenance", "cue", "script", "transaction", "bill", "obligation", "investment", "contact", "experience", "journal", "goal", "project", "milestone", "blocker", "decision", "budget", "income", "savings"].forEach(type => {
+  ["task", "inbox", "maintenance", "cue", "script", "transaction", "bill", "obligation", "investment", "contact", "experience", "journal", "goal", "project", "milestone", "blocker", "decision", "budget", "income", "savings", "purchase"].forEach(type => {
     const key = `edit${type[0].toUpperCase()}${type.slice(1)}`;
     if (target.dataset[key]) openEditor(type, target.dataset[key]);
   });

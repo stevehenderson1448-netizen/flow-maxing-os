@@ -8,7 +8,7 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="icon-180.png" />
-    <link rel="stylesheet" href="styles.css?v=16" />
+    <link rel="stylesheet" href="styles.css?v=17" />
     <title>50X Life OS</title>
   </head>
   <body>
@@ -114,7 +114,7 @@
           <label class="settings-row file-row"><span><strong>Import secure handoff</strong><small>Open an encrypted 50X transfer file</small></span><span>↑</span><input id="import-handoff" type="file" accept=".50x,application/json" /></label>
           <button type="button" class="settings-row" id="export-data"><span><strong>Export backup</strong><small>Save everything as a file</small></span><span>↓</span></button>
           <label class="settings-row file-row"><span><strong>Import backup</strong><small>Restore a previous export</small></span><span>↑</span><input id="import-data" type="file" accept="application/json" /></label>
-          <button type="button" class="settings-row hidden" id="restore-migration"><span><strong>Restore pre-2.0 snapshot</strong><small>Recover the data saved immediately before upgrade</small></span><span>↶</span></button>
+          <button type="button" class="settings-row hidden" id="restore-migration"><span><strong>Restore upgrade snapshot</strong><small>Recover the copy saved immediately before the latest data upgrade</small></span><span>↶</span></button>
           <p class="settings-section-label">Reset</p>
           <button type="button" class="settings-row danger-row" id="reset-data"><span><strong>Reset app</strong><small>Return to the 50X starter system</small></span><span>↺</span></button>
         </div>
@@ -138,6 +138,6 @@
     </section>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="app.js?v=16"></script>
+    <script src="app.js?v=17"></script>
   </body>
 </html>

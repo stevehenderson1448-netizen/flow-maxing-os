@@ -16,13 +16,14 @@ A dependency-free, mobile-first personal command centre organised around six mod
 - Weekly rollover, monthly evidence snapshots, eight-week trends, and archived reflections
 - Exact-pence safe-to-spend engine with personal, business, restricted, expected, invested, and held money kept separate
 - Monthly budgets, savings goals, expected-versus-confirmed income, a conservative three-month cash-flow view, repayment planning, bill calendar, cash-cover insight, and reminders
+- Smart next-purchase planning with product links, account-aware affordability, priorities, target dates, and optional protected money
 - Subscription audit with renewals, remembered price changes, and review tracking
 - Life-maintenance calendar for appointments, birthdays, renewals, car, documents, health, and home
 - Financial ledger, obligations, investments, and auditable forecast states that never silently change cash
 - Private local assistant with fact/assumption separation, explicit data permissions, approval before changes, and reversible change history
 - Optional reminders and a local PIN or device-authenticator lock
 - End-to-end encrypted phone/desktop sync, one-time device handoffs, and portable backup files
-- Backed-up version-9 migration with a pre-2.0 recovery snapshot
+- Backed-up version-10 migration with recoverable upgrade snapshots
 
 The current assistant is deliberately local and rule-based. It does not send records to an external model. A future model provider can be added behind the existing permissions and approval controls without making the core app dependent on AI.
 

@@ -1,5 +1,5 @@
-const CACHE = "50x-life-os-v16";
-const ASSETS = ["./", "./index.html", "./styles.css?v=16", "./app.js?v=16", "./manifest.webmanifest", "./icon.svg", "./icon-180.png"];
+const CACHE = "50x-life-os-v17";
+const ASSETS = ["./", "./index.html", "./styles.css?v=17", "./app.js?v=17", "./manifest.webmanifest", "./icon.svg", "./icon-180.png"];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)));

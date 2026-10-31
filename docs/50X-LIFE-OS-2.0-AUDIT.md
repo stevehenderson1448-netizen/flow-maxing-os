@@ -1,14 +1,14 @@
 # 50X Life OS 2.0 — Audit and Architecture
 
-Status: initial audit verified against commit `791c990` on 31 October 2026; implementation status updated after the version-9 completion pass.
+Status: initial audit verified against commit `791c990` on 31 October 2026; implementation status updated after the version-10 purchase-planning pass.
 
-Implementation note: The current version-9 PWA now includes the sixth Life module, Build/Maintain/Experience daily planning, explicit mode control, removal of the aggregate Life score, exact-pence financial records, budgets, forecasts, savings, goals, project workspaces, milestones, blockers, decisions, monthly evidence, and a permissioned local assistant with approval and reversal history. The pre-migration recovery snapshot and existing storage key remain preserved.
+Implementation note: The current version-10 PWA includes the sixth Life module, Build/Maintain/Experience daily planning, explicit mode control, removal of the aggregate Life score, exact-pence financial records, budgets, forecasts, savings, account-aware purchase planning, goals, project workspaces, milestones, blockers, decisions, monthly evidence, and a permissioned local assistant with approval and reversal history. Upgrade recovery snapshots and the existing storage key remain preserved.
 
 ### Completion status
 
 - **Implemented and verified locally:** Milestones 1–3 at the current buildless PWA layer, plus the approval-based local assistant foundation from Milestone 5.
 - **Mobile verified:** all six modules fit at 320px without horizontal overflow; new editors, dialog close controls, assistant approval/undo, and monthly evidence capture were exercised in-browser.
-- **Migration verified:** a version-8 fixture upgrades to version 9 while preserving the weekly outcome, tasks, inbox, Life text, balances, and exact transaction totals.
+- **Migration verified:** older fixtures upgrade through version 10 while preserving the weekly outcome, tasks, inbox, Life text, balances, exact transaction totals, and purchase records.
 - **Money verified:** £0.10 plus £0.20 is stored and calculated as 30 pence; expected income does not increase available cash.
 - **Not yet implemented:** external model calls, Supabase authentication/PostgreSQL, IndexedDB, record-level cloud sync, React/TypeScript modularisation, and push notifications. The core app does not depend on these platform upgrades.
 
@@ -212,7 +212,7 @@ Every entity receives `id`, `user_id`, `created_at`, `updated_at`, `status` and 
 
 1. Read the existing version-7 record without modifying it.
 2. Save a timestamped pre-migration snapshot under a separate local key.
-3. Transform a cloned record into version 9.
+3. Transform a cloned record into the current schema version.
 4. Validate required collections, IDs, record counts and key financial totals.
 5. Save the migrated record only after validation succeeds.
 6. Keep the pre-migration snapshot until the user deliberately removes it.
