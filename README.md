@@ -22,7 +22,7 @@ A dependency-free, mobile-first personal command centre organised around six mod
 - Financial ledger, obligations, investments, and auditable forecast states that never silently change cash
 - Private local assistant with fact/assumption separation, explicit data permissions, approval before changes, and reversible change history
 - Optional reminders and a local PIN or device-authenticator lock
-- End-to-end encrypted phone/desktop sync, one-time device handoffs, and portable backup files
+- End-to-end encrypted phone/desktop sync with automatic Inbox merging, one-time device handoffs, and portable backup files
 - Backed-up version-10 migration with recoverable upgrade snapshots
 
 The current assistant is deliberately local and rule-based. It does not send records to an external model. A future model provider can be added behind the existing permissions and approval controls without making the core app dependent on AI.

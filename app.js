@@ -123,7 +123,7 @@ const defaultState = () => ({
   monthly: {},
   assistant: { recommendations: [], approvedChanges: [] },
   preferences: { reminders: { enabled: false, morning: "08:00", evening: "21:00", weeklyDay: "0", weeklyTime: "18:00", lastFired: {} }, assistant: { provider: "local", shareFinancial: true, shareLife: false, shareJournal: false } },
-  sync: { lastHandoff: null }
+  sync: { lastHandoff: null, inboxTombstones: {} }
 });
 
 function normalizeModes(inputModes) {
@@ -340,6 +340,17 @@ function normalizeSavingsGoals(items) {
   return items.map(item => ({ id: item.id || crypto.randomUUID(), name: String(item.name || "Savings goal"), target: Math.max(0, Number(item.target) || fromMinor(item.targetMinor)), targetMinor: Math.max(0, minorValue(item, "targetMinor", "target")), saved: Math.max(0, Number(item.saved) || fromMinor(item.savedMinor)), savedMinor: Math.max(0, minorValue(item, "savedMinor", "saved")), deadline: String(item.deadline || ""), status: ["active", "completed", "paused"].includes(item.status) ? item.status : "active", createdAt: item.createdAt || new Date().toISOString() }));
 }
 
+function normalizeInbox(items) {
+  if (!Array.isArray(items)) return [];
+  return items.filter(item => item && typeof item === "object").map(item => ({
+    id: item.id || crypto.randomUUID(),
+    text: String(item.text || ""),
+    type: ["idea", "task", "concern", "later"].includes(item.type) ? item.type : "idea",
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
+  })).filter(item => item.text);
+}
+
 function normalizePlannedPurchases(items) {
   if (!Array.isArray(items)) return [];
   return items.map(item => ({
@@ -411,7 +422,7 @@ function normalizeState(input) {
     milestones: normalizeMilestones(input.milestones),
     projectDecisions: normalizeProjectRecords(input.projectDecisions, "decision"),
     projectBlockers: normalizeProjectRecords(input.projectBlockers, "blocker"),
-    inbox: Array.isArray(input.inbox) ? input.inbox : [],
+    inbox: normalizeInbox(input.inbox),
     history: Array.isArray(input.history) ? input.history : [],
     modes: normalizeModes(input.modes),
     cues,
@@ -439,7 +450,7 @@ function normalizeState(input) {
     monthly: input.monthly && typeof input.monthly === "object" ? input.monthly : {},
     assistant: { recommendations: Array.isArray(input.assistant?.recommendations) ? input.assistant.recommendations : [], approvedChanges: Array.isArray(input.assistant?.approvedChanges) ? input.assistant.approvedChanges : [] },
     preferences: { ...base.preferences, ...(input.preferences || {}), reminders: { ...base.preferences.reminders, ...(input.preferences?.reminders || {}), lastFired: input.preferences?.reminders?.lastFired || {} }, assistant: { ...base.preferences.assistant, ...(input.preferences?.assistant || {}) } },
-    sync: { ...base.sync, ...(input.sync || {}) }
+    sync: { ...base.sync, ...(input.sync || {}), inboxTombstones: input.sync?.inboxTombstones && typeof input.sync.inboxTombstones === "object" && !Array.isArray(input.sync.inboxTombstones) ? input.sync.inboxTombstones : {} }
   };
   return validateState(normalized) ? normalized : base;
 }
@@ -472,7 +483,7 @@ function loadSecurity() {
 }
 
 function loadCloudSync() {
-  const base = { deviceId: crypto.randomUUID(), namespace: "", relayKey: "", encryptionKey: "", lastRevision: 0, lastChangeId: "", lastSyncedAt: "", dirty: false, conflict: false };
+  const base = { deviceId: crypto.randomUUID(), namespace: "", relayKey: "", encryptionKey: "", lastRevision: 0, lastChangeId: "", lastSyncedAt: "", dirty: false, dirtySections: [], conflict: false };
   try {
     return { ...base, ...JSON.parse(localStorage.getItem(CLOUD_SYNC_KEY)) };
   } catch {
@@ -501,6 +512,9 @@ function saveState(message, options = {}) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   if (cloudSync.namespace && !options.fromSync) {
     cloudSync.dirty = true;
+    const sections = Array.isArray(cloudSync.dirtySections) ? cloudSync.dirtySections : [];
+    const scope = options.scope || "all";
+    cloudSync.dirtySections = scope === "all" || sections.includes("all") ? ["all"] : [...new Set([...sections, scope])];
     saveCloudSync();
     scheduleCloudSync();
   }
@@ -1940,7 +1954,7 @@ async function saveEditor() {
     const daily = todayState();
     if (setupChanged && daily.tomorrowTaskId === item.id) daily.tomorrowReady = false;
   }
-  if (editor.type === "inbox") Object.assign(item, { text: data.text.trim(), type: data.type, createdAt: item.createdAt || new Date().toISOString() });
+  if (editor.type === "inbox") Object.assign(item, { text: data.text.trim(), type: data.type, createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
   if (editor.type === "maintenance") Object.assign(item, { name: data.name.trim(), category: data.category, dueDate: data.dueDate, recurrence: data.recurrence, remindDays: Number(data.remindDays), notes: data.notes.trim(), createdAt: item.createdAt || new Date().toISOString(), completedPeriods: item.completedPeriods || [] });
   if (editor.type === "cue") Object.assign(item, { name: data.name.trim(), cue: data.cue.trim(), response: data.response.trim(), setup: data.setup.trim(), remove: data.remove.trim() });
   if (editor.type === "script") Object.assign(item, { trigger: data.trigger.trim(), response: data.response.trim() });
@@ -1976,7 +1990,7 @@ async function saveEditor() {
   if (editor.type === "income") Object.assign(item, { source: data.source.trim(), amount: fromMinor(toMinor(data.amount)), amountMinor: toMinor(data.amount), expectedDate: data.expectedDate || "", status: data.status, account: data.account, notes: data.notes.trim(), createdAt: item.createdAt || new Date().toISOString(), receivedAt: data.status === "received" ? (item.receivedAt || new Date().toISOString()) : "" });
   if (editor.type === "savings") Object.assign(item, { name: data.name.trim(), target: fromMinor(toMinor(data.target)), targetMinor: toMinor(data.target), saved: fromMinor(toMinor(data.saved)), savedMinor: toMinor(data.saved), deadline: data.deadline || "", status: data.status, createdAt: item.createdAt || new Date().toISOString() });
   if (editor.type === "purchase") Object.assign(item, { name: data.name.trim(), url: safeExternalURL(data.url) || "", amount: fromMinor(Math.max(0, toMinor(data.amount))), amountMinor: Math.max(0, toMinor(data.amount)), category: data.category, account: data.account, priority: data.priority, targetDate: data.targetDate || "", status: data.status, reserved: form.elements.reserved.checked, notes: data.notes.trim(), createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString(), boughtAt: data.status === "bought" ? (item.boughtAt || new Date().toISOString()) : "" });
-  saveState(editor.type === "inbox" ? "Captured without changing direction" : "System updated");
+  saveState(editor.type === "inbox" ? "Captured without changing direction" : "System updated", { scope: editor.type === "inbox" ? "inbox" : "all" });
   render();
   return true;
 }
@@ -1985,12 +1999,13 @@ function deleteEditor() {
   if (!editor?.id || !confirm("Delete this item?")) return;
   const collection = editorCollection(editor.type);
   const index = collection.findIndex(entry => entry.id === editor.id);
+  if (editor.type === "inbox" && index >= 0) recordInboxDeletion(editor.id);
   if (index >= 0) collection.splice(index, 1);
   if (editor.type === "task" && todayState().tomorrowTaskId === editor.id) {
     todayState().tomorrowTaskId = "";
     todayState().tomorrowReady = false;
   }
-  saveState("Item deleted");
+  saveState("Item deleted", { scope: editor.type === "inbox" ? "inbox" : "all" });
   render();
   document.getElementById("editor-dialog").close();
 }
@@ -2008,6 +2023,7 @@ function promoteInboxItem(id) {
   if (index < 0) return;
   const item = state.inbox[index];
   state.tasks.push({ id: crypto.randomUUID(), name: item.text, impact: 2, complexity: 1, energy: "medium", duration: 30, dueDate: "", alignment: "supporting", createdAt: new Date().toISOString(), done: false });
+  recordInboxDeletion(item.id);
   state.inbox.splice(index, 1);
   saveState("Capture moved into actions");
   render();
@@ -2394,6 +2410,55 @@ function readSyncPairFromHash() {
   }
 }
 
+function inboxRecordTime(item) {
+  const value = Date.parse(item?.updatedAt || item?.createdAt || "");
+  return Number.isFinite(value) ? value : 0;
+}
+
+function inboxTombstoneTime(value) {
+  const parsed = Date.parse(value || "");
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function recordInboxDeletion(id) {
+  if (!id) return;
+  if (!state.sync || typeof state.sync !== "object") state.sync = { lastHandoff: null, inboxTombstones: {} };
+  if (!state.sync.inboxTombstones || typeof state.sync.inboxTombstones !== "object") state.sync.inboxTombstones = {};
+  state.sync.inboxTombstones[id] = new Date().toISOString();
+}
+
+function inboxOnlySyncDifference(localState, remoteState) {
+  const comparable = value => {
+    const copy = normalizeState(value);
+    copy.inbox = [];
+    copy.sync = { ...copy.sync, inboxTombstones: {} };
+    return JSON.stringify(copy);
+  };
+  return comparable(localState) === comparable(remoteState);
+}
+
+function mergeInboxStates(localState, remoteState) {
+  const local = normalizeState(localState);
+  const merged = normalizeState(remoteState);
+  const tombstones = { ...(merged.sync.inboxTombstones || {}) };
+  Object.entries(local.sync.inboxTombstones || {}).forEach(([id, deletedAt]) => {
+    if (inboxTombstoneTime(deletedAt) >= inboxTombstoneTime(tombstones[id])) tombstones[id] = deletedAt;
+  });
+  const records = new Map();
+  [...merged.inbox, ...local.inbox].forEach(item => {
+    const existing = records.get(item.id);
+    if (!existing || inboxRecordTime(item) >= inboxRecordTime(existing)) records.set(item.id, item);
+  });
+  merged.inbox = [...records.values()].filter(item => !tombstones[item.id]);
+  merged.sync = { ...merged.sync, inboxTombstones: tombstones };
+  return merged;
+}
+
+function canAutoMergeInbox(localState, remoteState) {
+  const dirtySections = Array.isArray(cloudSync.dirtySections) ? cloudSync.dirtySections : [];
+  return (dirtySections.length === 1 && dirtySections[0] === "inbox") || inboxOnlySyncDifference(localState, remoteState);
+}
+
 function cloudPairingUrl() {
   const base = location.protocol === "https:" ? `${location.origin}${location.pathname}` : LIVE_URL;
   return `${base}#sync=${pairPayload()}`;
@@ -2426,12 +2491,12 @@ async function startCloudSync() {
     if (!response.ok) throw new Error("Private sync space could not be created");
     const claim = await response.json();
     if (!claim.key) throw new Error("Private sync key was not returned");
-    cloudSync = { deviceId: previous.deviceId || crypto.randomUUID(), namespace, relayKey: claim.key, encryptionKey: bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32))), lastRevision: 0, lastChangeId: "", lastSyncedAt: "", dirty: true, conflict: false };
+    cloudSync = { deviceId: previous.deviceId || crypto.randomUUID(), namespace, relayKey: claim.key, encryptionKey: bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32))), lastRevision: 0, lastChangeId: "", lastSyncedAt: "", dirty: true, dirtySections: ["all"], conflict: false };
     const envelope = await encryptCloudState(cloudSync, 1);
     await writeRemoteEnvelope(envelope, cloudSync);
     const verified = await fetchRemoteEnvelope(cloudSync);
     if (verified?.changeId !== envelope.changeId) throw new Error("Private sync could not be verified");
-    Object.assign(cloudSync, { lastRevision: 1, lastChangeId: envelope.changeId, lastSyncedAt: new Date().toISOString(), dirty: false, conflict: false });
+    Object.assign(cloudSync, { lastRevision: 1, lastChangeId: envelope.changeId, lastSyncedAt: new Date().toISOString(), dirty: false, dirtySections: [], conflict: false });
     saveCloudSync();
     syncPhase = "idle";
     refreshSyncUI();
@@ -2451,7 +2516,7 @@ async function connectCloudSync(payload) {
   const previousPhase = cloudSync.namespace ? "idle" : "off";
   try {
     const pair = parsePairPayload(payload);
-    const nextConfig = { deviceId: cloudSync.deviceId || crypto.randomUUID(), namespace: pair.namespace, relayKey: pair.relayKey, encryptionKey: pair.encryptionKey, lastRevision: 0, lastChangeId: "", lastSyncedAt: "", dirty: false, conflict: false };
+    const nextConfig = { deviceId: cloudSync.deviceId || crypto.randomUUID(), namespace: pair.namespace, relayKey: pair.relayKey, encryptionKey: pair.encryptionKey, lastRevision: 0, lastChangeId: "", lastSyncedAt: "", dirty: false, dirtySections: [], conflict: false };
     syncPhase = "syncing";
     refreshSyncUI();
     const envelope = await fetchRemoteEnvelope(nextConfig);
@@ -2482,6 +2547,7 @@ function applyRemoteEnvelope(envelope, imported) {
   cloudSync.lastChangeId = envelope.changeId || cloudSync.lastChangeId;
   cloudSync.lastSyncedAt = new Date().toISOString();
   cloudSync.dirty = false;
+  cloudSync.dirtySections = [];
   cloudSync.conflict = false;
   saveCloudSync();
   render();
@@ -2503,12 +2569,13 @@ async function pushLocalState(remote) {
   cloudSync.lastChangeId = envelope.changeId;
   cloudSync.lastSyncedAt = new Date().toISOString();
   cloudSync.dirty = false;
+  cloudSync.dirtySections = [];
   cloudSync.conflict = false;
   saveCloudSync();
 }
 
 async function performCloudSync(silent = false) {
-  if (!cloudSync.namespace || cloudSync.conflict) return;
+  if (!cloudSync.namespace) return;
   if (!navigator.onLine) {
     syncPhase = "offline";
     refreshSyncUI();
@@ -2520,14 +2587,30 @@ async function performCloudSync(silent = false) {
     const remote = await fetchRemoteEnvelope();
     if (!remote) throw new Error("Your private sync space is unavailable");
     const remoteChanged = Number(remote.revision) !== Number(cloudSync.lastRevision) || String(remote.changeId || "") !== String(cloudSync.lastChangeId || "");
-    if (remoteChanged && cloudSync.dirty) {
-      cloudSync.conflict = true;
-      saveCloudSync();
-      syncPhase = "conflict";
-      if (!silent) showToast("Sync needs a quick decision");
-      return;
+    if ((remoteChanged && cloudSync.dirty) || cloudSync.conflict) {
+      const imported = await decryptCloudState(remote);
+      if (canAutoMergeInbox(state, imported)) {
+        state = mergeInboxStates(state, imported);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        cloudSync.lastRevision = Number(remote.revision) || cloudSync.lastRevision;
+        cloudSync.lastChangeId = remote.changeId || cloudSync.lastChangeId;
+        cloudSync.lastSyncedAt = new Date().toISOString();
+        cloudSync.dirty = true;
+        cloudSync.dirtySections = ["inbox"];
+        cloudSync.conflict = false;
+        saveCloudSync();
+        await pushLocalState(remote);
+        render();
+        if (!silent) showToast("Inbox changes merged safely");
+      } else {
+        cloudSync.conflict = true;
+        saveCloudSync();
+        syncPhase = "conflict";
+        if (!silent) showToast("Sync needs a quick decision");
+        return;
+      }
     }
-    if (remoteChanged) applyRemoteEnvelope(remote, await decryptCloudState(remote));
+    else if (remoteChanged) applyRemoteEnvelope(remote, await decryptCloudState(remote));
     if (cloudSync.dirty) await pushLocalState(remote);
     cloudSync.lastSyncedAt = new Date().toISOString();
     saveCloudSync();
@@ -2550,7 +2633,7 @@ function syncNow(options = {}) {
 
 function scheduleCloudSync(delay = 1200) {
   clearTimeout(syncDebounce);
-  if (!cloudSync.namespace || cloudSync.conflict) return;
+  if (!cloudSync.namespace) return;
   syncDebounce = setTimeout(() => syncNow({ silent: true }), delay);
 }
 
@@ -2562,6 +2645,7 @@ async function keepLocalSyncCopy() {
     if (!remote) throw new Error("The other copy is unavailable");
     cloudSync.conflict = false;
     cloudSync.dirty = true;
+    cloudSync.dirtySections = ["all"];
     await pushLocalState(remote);
     syncPhase = "idle";
     showToast("This device's copy is now synced");
@@ -2594,7 +2678,7 @@ async function useRemoteSyncCopy() {
 function disconnectCloudSync() {
   if (!confirm("Disconnect sync on this device? Your Life OS data will stay saved here.")) return false;
   const deviceId = cloudSync.deviceId || crypto.randomUUID();
-  cloudSync = { deviceId, namespace: "", relayKey: "", encryptionKey: "", lastRevision: 0, lastChangeId: "", lastSyncedAt: "", dirty: false, conflict: false };
+  cloudSync = { deviceId, namespace: "", relayKey: "", encryptionKey: "", lastRevision: 0, lastChangeId: "", lastSyncedAt: "", dirty: false, dirtySections: [], conflict: false };
   localStorage.setItem(CLOUD_SYNC_KEY, JSON.stringify(cloudSync));
   clearTimeout(syncDebounce);
   syncPhase = "off";
