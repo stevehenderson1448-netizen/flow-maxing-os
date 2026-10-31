@@ -1,7 +1,7 @@
 {
   "name": "50X Life OS",
   "short_name": "50X Life",
-  "description": "A connected personal operating system for money, routines, clarity, execution, and life.",
+  "description": "A private command centre for building, maintaining, and experiencing a meaningful life.",
   "start_url": "./",
   "id": "./",
   "display": "standalone",

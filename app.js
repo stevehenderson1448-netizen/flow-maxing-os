@@ -1,6 +1,9 @@
 const STORAGE_KEY = "flow-maxing-os-v1";
 const SECURITY_KEY = "50x-life-os-security-v1";
 const CLOUD_SYNC_KEY = "50x-life-os-cloud-sync-v1";
+const MIGRATION_BACKUP_KEY = "50x-life-os-pre-v8-backup";
+const PRE_RESTORE_BACKUP_KEY = "50x-life-os-before-snapshot-restore";
+const CURRENT_STATE_VERSION = 8;
 const LIVE_URL = "https://stevehenderson1448-netizen.github.io/flow-maxing-os/";
 const SYNC_RELAY = "https://mantledb.sh/v2";
 const SYNC_PATH = "life-os";
@@ -53,7 +56,7 @@ function weekStartKey(date = new Date()) {
 }
 
 const defaultState = () => ({
-  version: 7,
+  version: CURRENT_STATE_VERSION,
   week: { startedAt: weekStartKey(), outcome: "Create consistent movement in the business", secondary: "Protect health, clarity, and recovery while executing", evidence: "Complete one meaningful business deliverable and identify the next milestone.", why: "Build proof that focused mornings compound into real momentum." },
   tasks: [
     { id: crypto.randomUUID(), name: "Define this week's business needle-mover", impact: 3, complexity: 2, energy: "high", duration: 30, dueDate: "", alignment: "primary", ...TASK_SETUP_DEFAULTS["Define this week's business needle-mover"], createdAt: new Date().toISOString(), done: false },
@@ -72,11 +75,19 @@ const defaultState = () => ({
     { id: crypto.randomUUID(), trigger: "I become distracted", response: "I capture the distraction in a note and return to the current task." },
     { id: crypto.randomUUID(), trigger: "I feel mentally exhausted", response: "I switch to a simpler task or recover instead of forcing complex work." }
   ],
-  finances: { balances: { personal: 0, business: 0, held: 0 }, settings: { reserveTarget: 500 }, transactions: [], bills: [{ id: crypto.randomUUID(), name: "Known monthly commitments", amount: 710, frequency: "monthly", dueDay: new Date().getDate(), dueMonth: new Date().getMonth() + 1, dueDate: "", kind: "essential", autopay: false, account: "personal", remindDays: 3, createdAt: new Date().toISOString(), paidPeriods: [], previousAmount: 0, amountChangedAt: "", lastReviewed: "" }], obligations: [{ id: crypto.randomUUID(), name: "Money to replace", target: 3000, paid: 0, monthlyPayment: 0 }], investments: [] },
+  finances: { balances: { personal: 0, business: 0, held: 0 }, settings: { reserveTarget: 500, enjoymentAllowance: 0 }, transactions: [], bills: [{ id: crypto.randomUUID(), name: "Known monthly commitments", amount: 710, frequency: "monthly", dueDay: new Date().getDate(), dueMonth: new Date().getMonth() + 1, dueDate: "", kind: "essential", autopay: false, account: "personal", remindDays: 3, createdAt: new Date().toISOString(), paidPeriods: [], previousAmount: 0, amountChangedAt: "", lastReviewed: "" }], obligations: [{ id: crypto.randomUUID(), name: "Money to replace", target: 3000, paid: 0, monthlyPayment: 0 }], investments: [] },
   maintenance: [],
   daily: {},
   reflection: { win: "", friction: "", lesson: "", next: "", recovery: "maintain", ratings: [3, 3, 3, 3, 3] },
-  life: { relationships: "", enjoyment: "", health: "", growth: "" },
+  life: {
+    relationships: "", enjoyment: "", health: "", growth: "",
+    identity: { principles: "", vision: "", boundaries: "", commitments: "", patterns: "" },
+    contacts: [],
+    experiences: [],
+    care: { appearance: "", interests: "", selfCare: "" },
+    faith: { prayer: "", reading: "", reflection: "" },
+    journal: []
+  },
   monthly: {},
   preferences: { reminders: { enabled: false, morning: "08:00", evening: "21:00", weeklyDay: "0", weeklyTime: "18:00", lastFired: {} } },
   sync: { lastHandoff: null }
@@ -163,6 +174,62 @@ function normalizeMaintenance(items) {
   }));
 }
 
+function normalizeLife(inputLife, fallback) {
+  const source = inputLife && typeof inputLife === "object" ? inputLife : {};
+  const contacts = Array.isArray(source.contacts) ? source.contacts.map(item => ({
+    id: item.id || crypto.randomUUID(),
+    name: String(item.name || "Someone important"),
+    relationship: String(item.relationship || ""),
+    intention: String(item.intention || ""),
+    nextContactDate: String(item.nextContactDate || ""),
+    lastConnected: String(item.lastConnected || ""),
+    notes: String(item.notes || ""),
+    status: ["active", "paused", "archived"].includes(item.status) ? item.status : "active",
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
+  })) : [];
+  const experiences = Array.isArray(source.experiences) ? source.experiences.map(item => ({
+    id: item.id || crypto.randomUUID(),
+    name: String(item.name || "Meaningful experience"),
+    category: ["social", "outing", "travel", "hobby", "celebration", "personal"].includes(item.category) ? item.category : "personal",
+    targetDate: String(item.targetDate || ""),
+    costEstimate: Math.max(0, Number(item.costEstimate) || 0),
+    status: ["idea", "planned", "completed", "archived"].includes(item.status) ? item.status : "idea",
+    notes: String(item.notes || ""),
+    completedAt: String(item.completedAt || ""),
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
+  })) : [];
+  const journal = Array.isArray(source.journal) ? source.journal.map(item => ({
+    id: item.id || crypto.randomUUID(),
+    date: String(item.date || dayKey()),
+    type: ["reflection", "faith", "gratitude", "pattern", "memory"].includes(item.type) ? item.type : "reflection",
+    content: String(item.content || ""),
+    private: item.private !== false,
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
+  })) : [];
+  return {
+    ...fallback,
+    ...source,
+    identity: { ...fallback.identity, ...(source.identity || {}) },
+    contacts,
+    experiences,
+    care: { ...fallback.care, ...(source.care || {}) },
+    faith: { ...fallback.faith, ...(source.faith || {}) },
+    journal
+  };
+}
+
+function validateState(candidate) {
+  if (!candidate || typeof candidate !== "object") return false;
+  if (candidate.version !== CURRENT_STATE_VERSION) return false;
+  if (!candidate.week || !Array.isArray(candidate.tasks) || !Array.isArray(candidate.inbox)) return false;
+  if (!candidate.finances || !Array.isArray(candidate.finances.transactions) || !Array.isArray(candidate.finances.bills)) return false;
+  if (!candidate.life || !Array.isArray(candidate.life.contacts) || !Array.isArray(candidate.life.experiences) || !Array.isArray(candidate.life.journal)) return false;
+  return true;
+}
+
 function normalizeState(input) {
   const base = defaultState();
   if (!input || typeof input !== "object") return base;
@@ -182,10 +249,10 @@ function normalizeState(input) {
     if (day.mode === "recovery") day.mode = "minimum";
     if (day.mode === "steady") day.mode = "standard";
   });
-  return {
+  const normalized = {
     ...base,
     ...input,
-    version: 7,
+    version: CURRENT_STATE_VERSION,
     week: { ...base.week, ...(input.week || {}), startedAt: input.week?.startedAt || weekStartKey() },
     tasks: normalizeTasks(input.tasks, base.tasks),
     inbox: Array.isArray(input.inbox) ? input.inbox : [],
@@ -207,17 +274,22 @@ function normalizeState(input) {
     maintenance: normalizeMaintenance(input.maintenance),
     daily,
     reflection: { ...base.reflection, ...(input.reflection || {}), ratings: Array.isArray(input.reflection?.ratings) ? input.reflection.ratings : base.reflection.ratings },
-    life: { ...base.life, ...(input.life || {}) },
+    life: normalizeLife(input.life, base.life),
     monthly: input.monthly && typeof input.monthly === "object" ? input.monthly : {},
     preferences: { reminders: { ...base.preferences.reminders, ...(input.preferences?.reminders || {}), lastFired: input.preferences?.reminders?.lastFired || {} } },
     sync: { ...base.sync, ...(input.sync || {}) }
   };
+  return validateState(normalized) ? normalized : base;
 }
 
 function loadState() {
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
     const normalized = normalizeState(stored);
+    if (stored && Number(stored.version || 0) < CURRENT_STATE_VERSION && !localStorage.getItem(MIGRATION_BACKUP_KEY)) {
+      localStorage.setItem(MIGRATION_BACKUP_KEY, JSON.stringify({ createdAt: new Date().toISOString(), fromVersion: Number(stored.version || 0), data: stored }));
+    }
+    if (!validateState(normalized)) throw new Error("State validation failed");
     if (stored?.version !== normalized.version) localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
     return normalized;
   } catch {
@@ -300,7 +372,7 @@ function addDays(date, amount) {
 function todayState() {
   const key = dayKey();
   const existing = state.daily[key] || {};
-  state.daily[key] = { energy: 0, clarity: 0, availableMinutes: 120, mode: "standard", routine: [], win: "", friction: "", tomorrow: "", tomorrowTaskId: "", tomorrowReady: false, ...existing, connection: { ...CONNECTION_DEFAULT, ...(existing.connection || {}) } };
+  state.daily[key] = { intention: "", primaryOutcome: "", experienceIntention: "", energy: 0, clarity: 0, availableMinutes: 120, mode: "standard", routine: [], win: "", friction: "", tomorrow: "", tomorrowTaskId: "", tomorrowReady: false, ...existing, connection: { ...CONNECTION_DEFAULT, ...(existing.connection || {}) } };
   return state.daily[key];
 }
 
@@ -570,6 +642,31 @@ function maintenanceSchedule(reference = new Date()) {
   return state.maintenance.map(item => maintenanceScheduleEntry(item, reference)).sort((a, b) => Number(a.actionDone) - Number(b.actionDone) || a.due - b.due);
 }
 
+function relationshipOpportunity(reference = new Date()) {
+  const contacts = state.life.contacts.filter(item => item.status === "active");
+  if (!contacts.length) return null;
+  return contacts.map(contact => {
+    const days = contact.nextContactDate ? daysFromToday(dateFromKey(contact.nextContactDate), reference) : null;
+    return { contact, days };
+  }).sort((a, b) => {
+    if (a.days === null && b.days === null) return String(a.contact.lastConnected || "").localeCompare(String(b.contact.lastConnected || ""));
+    if (a.days === null) return 1;
+    if (b.days === null) return -1;
+    return a.days - b.days;
+  })[0];
+}
+
+function experienceOpportunity(totals = moneyTotals(), reference = new Date()) {
+  const available = Number(totals.enjoymentAvailable || 0);
+  const experiences = state.life.experiences.filter(item => ["idea", "planned"].includes(item.status));
+  if (!experiences.length) return null;
+  return experiences.map(experience => ({
+    experience,
+    days: experience.targetDate ? daysFromToday(dateFromKey(experience.targetDate), reference) : null,
+    affordable: Number(experience.costEstimate || 0) <= available
+  })).sort((a, b) => Number(b.affordable) - Number(a.affordable) || (a.days ?? 9999) - (b.days ?? 9999))[0];
+}
+
 function moneyTotals() {
   const totals = { ...state.finances.balances };
   state.finances.transactions.forEach(item => {
@@ -590,9 +687,11 @@ function moneyTotals() {
   const reserveTarget = Math.max(0, Number(state.finances.settings?.reserveTarget) || 0);
   const protectedCash = dueThirty + overdueBills + obligationPlan + reserveTarget;
   const safeToSpend = Math.max(0, available - protectedCash);
+  const configuredEnjoyment = Math.max(0, Number(state.finances.settings?.enjoymentAllowance) || 0);
+  const enjoymentAvailable = Math.min(safeToSpend, configuredEnjoyment || safeToSpend);
   const subscriptions = state.finances.bills.filter(item => item.kind === "subscription");
   const subscriptionAnnual = subscriptions.reduce((sum, item) => sum + (item.frequency === "monthly" ? Number(item.amount) * 12 : item.frequency === "annual" ? Number(item.amount) : 0), 0);
-  return { ...totals, available, safeToSpend, protectedCash, reserveTarget, monthlyBills, overdueBills, dueSoon, dueThirty, billSchedule, coverMonths: monthlyBills ? available / monthlyBills : null, obligations, obligationPlan, investments, subscriptions, subscriptionAnnual };
+  return { ...totals, available, safeToSpend, enjoymentAvailable, configuredEnjoyment, protectedCash, reserveTarget, monthlyBills, overdueBills, dueSoon, dueThirty, billSchedule, coverMonths: monthlyBills ? available / monthlyBills : null, obligations, obligationPlan, investments, subscriptions, subscriptionAnnual };
 }
 
 function buildDailyPlan(daily = todayState()) {
@@ -611,7 +710,9 @@ function buildDailyPlan(daily = todayState()) {
   });
   const bill = moneyTotals().billSchedule.find(entry => entry.hasOutstanding && entry.days <= 3);
   const maintenance = maintenanceSchedule().find(entry => !entry.actionDone && entry.days <= 3);
-  return { recovery, mode, routineMinutes, capacity, tasks, bill, maintenance, plannedMinutes: capacity - remaining };
+  const relationship = relationshipOpportunity();
+  const experience = experienceOpportunity();
+  return { recovery, mode, routineMinutes, capacity, tasks, bill, maintenance, relationship, experience, plannedMinutes: capacity - remaining };
 }
 
 function weeklyCoach() {
@@ -661,6 +762,7 @@ function weekMetrics(startKey = state.week.startedAt, tasks = state.tasks, ratin
 
 function render() {
   renderToday();
+  renderLife();
   renderMoney();
   renderWeek();
   renderArchitecture();
@@ -687,17 +789,20 @@ function renderToday() {
   const openTasks = rankedTasks(daily);
   const primary = openTasks[0];
   const lifeDue = maintenanceSchedule().filter(item => !item.actionDone && item.days <= 7).length;
+  const relationship = plan.relationship?.contact;
+  const experience = plan.experience?.experience;
   document.getElementById("view-today").innerHTML = `
-    <div class="page-head"><p class="eyebrow">${escapeHTML(formatDate())} · Command centre</p><h1 id="today-heading">${greeting()}</h1><p>Protect the foundations, move one meaningful outcome, and keep the rest of life visible.</p></div>
-    <div class="engine-grid">${engineStat("Safe to spend", currency(totals.safeToSpend), "After protected money", "money")}${engineStat("Routine", `${routineDone}/${mode.routine.length}`, `${mode.label} mode`, "today")}${engineStat("Recovery", plan.recovery.key === "restore" ? "Protect" : plan.recovery.key === "expand" ? "Expand" : "Steady", plan.recovery.label, "today")}${engineStat("Execution", primary ? "1 next" : "Clear", primary?.name || "No open actions", "week")}${engineStat("Life admin", lifeDue ? `${lifeDue} due` : "Clear", "Next 7 days", "architecture")}</div>
+    <div class="page-head"><p class="eyebrow">${escapeHTML(formatDate())} · Daily command centre</p><h1 id="today-heading">${greeting()}</h1><p>Build the future, maintain what matters, and experience the life happening now.</p></div>
+    <div class="engine-grid operating-grid">${engineStat("Money", currency(totals.safeToSpend), "Safe after protection", "money")}${engineStat("Foundations", `${routineDone}/${mode.routine.length}`, `${mode.label} mode`, "today")}${engineStat("Build", primary ? "1 next" : "Clear", primary?.name || "Choose a meaningful action", "week")}${engineStat("Maintain", lifeDue ? `${lifeDue} due` : "Clear", lifeDue ? "Next 7 days" : "Responsibilities covered", "architecture")}${engineStat("Experience", relationship ? relationship.name : experience ? experience.name : "Make space", relationship ? "Connection opportunity" : experience ? "Life plan" : "Life is not a reward", "life")}</div>
     <div class="grid two-column">
       <div class="stack">
+        ${dailyNorthStarCard(daily)}
         ${dailyCommandCard(plan, daily)}
         <article class="card"><div class="card-head"><div><p class="eyebrow">Daily routine OS</p><h2>${escapeHTML(mode.label)} mode</h2><p>${escapeHTML(mode.note)}</p></div><span class="tag">${routineDone}/${mode.routine.length}</span></div><div class="routine-list">${mode.routine.map((item, index) => routineTemplate(item, index, daily.routine[index])).join("")}</div></article>
         <article class="card"><div class="card-head"><div><p class="eyebrow">Execution OS</p><h2>Best use of this energy</h2></div><button class="text-button" data-add="task">+ Add</button></div><div class="task-list">${openTasks.length ? openTasks.slice(0, 4).map(taskTemplate).join("") : '<div class="empty">No open actions. Choose the next meaningful outcome.</div>'}</div></article>
       </div>
       <aside class="stack">
-        <article class="card card-muted"><div class="card-head"><div><p class="eyebrow">State check-in</p><h2>What capacity is here?</h2></div></div><span class="micro-label">Energy</span><div class="energy-picker">${[1,2,3,4,5].map(value => `<button class="energy-button ${daily.energy === value ? "selected" : ""}" data-energy="${value}"><span>${["○","◔","◑","◕","●"][value-1]}</span><small>${value}</small></button>`).join("")}</div><span class="micro-label clarity-label">Mental clarity</span><div class="energy-picker compact-picker">${[1,2,3,4,5].map(value => `<button class="energy-button ${daily.clarity === value ? "selected" : ""}" data-clarity="${value}"><small>${value}</small></button>`).join("")}</div><span class="micro-label time-label">Focused time available</span><div class="time-picker">${[[45,"45m"],[90,"1.5h"],[180,"3h"],[300,"5h"]].map(([value,label]) => `<button class="time-button ${Number(daily.availableMinutes) === value ? "selected" : ""}" data-available-minutes="${value}">${label}</button>`).join("")}</div><div class="mode-row">${Object.entries(state.modes).map(([key, value]) => `<button class="mode-button ${daily.mode === key ? "selected" : ""}" data-mode="${key}">${escapeHTML(value.label)}</button>`).join("")}</div><p class="suggestion"><strong>${escapeHTML(plan.recovery.label)}.</strong> ${escapeHTML(plan.recovery.note)}</p></article>
+        <article class="card card-muted"><div class="card-head"><div><p class="eyebrow">State check-in</p><h2>What capacity is here?</h2></div></div><span class="micro-label">Energy</span><div class="energy-picker">${[1,2,3,4,5].map(value => `<button class="energy-button ${daily.energy === value ? "selected" : ""}" data-energy="${value}"><span>${["○","◔","◑","◕","●"][value-1]}</span><small>${value}</small></button>`).join("")}</div><span class="micro-label clarity-label">Mental clarity</span><div class="energy-picker compact-picker">${[1,2,3,4,5].map(value => `<button class="energy-button ${daily.clarity === value ? "selected" : ""}" data-clarity="${value}"><small>${value}</small></button>`).join("")}</div><span class="micro-label time-label">Focused time available</span><div class="time-picker">${[[45,"45m"],[90,"1.5h"],[180,"3h"],[300,"5h"]].map(([value,label]) => `<button class="time-button ${Number(daily.availableMinutes) === value ? "selected" : ""}" data-available-minutes="${value}">${label}</button>`).join("")}</div><span class="micro-label mode-label">Choose today’s mode</span><div class="mode-row">${Object.entries(state.modes).map(([key, value]) => `<button class="mode-button ${daily.mode === key ? "selected" : ""}" data-mode="${key}">${escapeHTML(value.label)}</button>`).join("")}</div><div class="suggestion mode-suggestion"><span><strong>Suggestion: ${escapeHTML(state.modes[plan.recovery.mode]?.label || "Standard")}.</strong> ${escapeHTML(plan.recovery.note)}</span>${daily.mode !== plan.recovery.mode ? `<button class="text-button" data-use-suggested-mode="${plan.recovery.mode}">Use suggestion</button>` : ""}</div></article>
         ${connectionRestCard(daily)}
         <article class="card weekly-anchor-card"><p class="eyebrow">Primary weekly outcome</p><h2>${escapeHTML(state.week.outcome || "Define the result that would make this week count.")}</h2><p>${escapeHTML(state.week.evidence || "Name the evidence that will prove it is complete.")}</p></article>
         ${tomorrowSetupCard(daily, openTasks)}
@@ -706,15 +811,16 @@ function renderToday() {
     </div>`;
 }
 
+function dailyNorthStarCard(daily = todayState()) {
+  return `<article class="card north-star-card"><div class="north-star-head"><div><p class="eyebrow">Today’s direction</p><h2>Decide once. Move with less friction.</h2></div><span>3 minutes</span></div><div class="north-star-fields"><div class="field"><label for="daily-intention">How do I want to show up?</label><input id="daily-intention" data-daily-field="intention" value="${escapeHTML(daily.intention)}" placeholder="Calm, direct, present…" /></div><div class="field"><label for="daily-primary">Most important outcome</label><textarea id="daily-primary" data-daily-field="primaryOutcome" placeholder="One finish condition that makes today count.">${escapeHTML(daily.primaryOutcome)}</textarea></div><div class="field"><label for="daily-experience">Life participation</label><input id="daily-experience" data-daily-field="experienceIntention" value="${escapeHTML(daily.experienceIntention)}" placeholder="Call someone, walk outside, enjoy dinner…" /></div></div></article>`;
+}
+
 function dailyCommandCard(plan, daily = todayState()) {
-  const rows = [`<div class="command-row foundation"><i>01</i><span><strong>Foundations</strong><small>${plan.routineMinutes ? `${plan.routineMinutes} minutes remain in ${plan.mode.label} mode` : "Routine foundations complete"}</small></span></div>`];
-  const connection = connectionSignal(daily);
-  if (!connection.completed) rows.push(`<div class="command-row connection"><i>♥</i><span><strong>One human connection</strong><small>${escapeHTML(connection.recommendation)} · keep people inside the plan</small></span><button class="mini-arrow" data-scroll-target="connection-card" aria-label="Open human connection">›</button></div>`);
-  if (!connection.restCompleted) rows.push(`<div class="command-row rest"><i>R</i><span><strong>Protected rest</strong><small>${Number(daily.connection.restMinutes) || 30} minutes with no performance demand</small></span><button class="mini-check" data-rest-complete aria-label="Mark protected rest complete">✓</button></div>`);
-  plan.tasks.forEach((task, index) => rows.push(`<div class="command-row"><i>${String(index + 2).padStart(2, "0")}</i><span><strong>${escapeHTML(task.name)}</strong><small>${escapeHTML(taskReason(task))} · ${task.duration} min</small></span><button class="mini-check" data-task-toggle="${task.id}" aria-label="Complete ${escapeHTML(task.name)}">✓</button></div>`));
-  if (plan.maintenance) rows.push(`<div class="command-row alert"><i>!</i><span><strong>${escapeHTML(plan.maintenance.item.name)}</strong><small>Life maintenance · ${escapeHTML(maintenanceDueLabel(plan.maintenance))}</small></span><button class="mini-arrow" data-view-target="architecture">›</button></div>`);
-  if (plan.bill) rows.push(`<div class="command-row alert"><i>£</i><span><strong>${escapeHTML(plan.bill.bill.name)}</strong><small>${currency(plan.bill.bill.amount)} · ${escapeHTML(billDueLabel(plan.bill))}</small></span><button class="mini-arrow" data-view-target="money">›</button></div>`);
-  return `<article class="card card-green command-card"><div class="command-head"><div><p class="eyebrow">Adaptive daily plan</p><h2>${escapeHTML(plan.recovery.label)}</h2><p>${escapeHTML(plan.recovery.note)}</p></div><span>${plan.capacity} min</span></div><div class="command-list">${rows.join("")}</div><div class="command-anchor"><span>Anchored to</span><strong>${escapeHTML(state.week.outcome || "your weekly outcome")}</strong></div></article>`;
+  const build = plan.tasks[0];
+  const maintain = plan.bill ? { label: plan.bill.bill.name, note: `${currency(plan.bill.bill.amount)} · ${billDueLabel(plan.bill)}`, view: "money" } : plan.maintenance ? { label: plan.maintenance.item.name, note: maintenanceDueLabel(plan.maintenance), view: "architecture" } : { label: "Keep the foundations", note: plan.routineMinutes ? `${plan.routineMinutes} minutes remain in ${plan.mode.label} mode` : "Routine foundations complete", view: "today" };
+  const experience = daily.experienceIntention ? { label: daily.experienceIntention, note: "Chosen for today" } : plan.relationship ? { label: `Connect with ${plan.relationship.contact.name}`, note: plan.relationship.contact.intention || "Make one genuine point of contact" } : plan.experience ? { label: plan.experience.experience.name, note: plan.experience.affordable ? "Fits the current enjoyment allowance" : "Keep the idea visible without financial pressure" } : { label: "Make room for life", note: "Connection, enjoyment, care, or unstructured rest" };
+  const queue = plan.tasks.slice(1);
+  return `<article class="card command-card command-card-v2"><div class="command-head"><div><p class="eyebrow">Today’s operating plan</p><h2>Three moves are enough.</h2><p>One action to build, one to maintain, and one to experience.</p></div><span>${plan.capacity} min</span></div><div class="operating-lanes"><div class="operating-lane build"><i>B</i><span><small>Build</small><strong>${escapeHTML(build?.name || daily.primaryOutcome || "Choose the next visible action")}</strong><em>${escapeHTML(build ? `${taskReason(build)} · ${build.duration} min` : "Move the most important outcome")}</em></span>${build ? `<button class="mini-check" data-task-toggle="${build.id}" aria-label="Complete ${escapeHTML(build.name)}">✓</button>` : `<button class="mini-arrow" data-view-target="week">›</button>`}</div><div class="operating-lane maintain"><i>M</i><span><small>Maintain</small><strong>${escapeHTML(maintain.label)}</strong><em>${escapeHTML(maintain.note)}</em></span><button class="mini-arrow" data-view-target="${maintain.view}">›</button></div><div class="operating-lane experience"><i>E</i><span><small>Experience</small><strong>${escapeHTML(experience.label)}</strong><em>${escapeHTML(experience.note)}</em></span><button class="mini-arrow" data-view-target="life">›</button></div></div>${queue.length ? `<div class="command-queue"><span>Next, only if capacity remains</span>${queue.map(task => `<button data-edit-task="${task.id}"><strong>${escapeHTML(task.name)}</strong><small>${task.duration} min · ${escapeHTML(taskReason(task))}</small></button>`).join("")}</div>` : ""}<div class="command-anchor"><span>Weekly direction</span><strong>${escapeHTML(state.week.outcome || "Define the outcome that makes this week count")}</strong></div></article>`;
 }
 
 function connectionRestCard(daily = todayState()) {
@@ -756,6 +862,60 @@ function taskTemplate(task) {
   const due = taskDueDays(task);
   const dueTag = task.done || due === null ? "" : `<span class="tag ${due < 0 ? "tag-danger" : due <= 3 ? "tag-warm" : ""}">${due < 0 ? `${Math.abs(due)}d overdue` : due === 0 ? "Due today" : `Due ${formatCompactDate(task.dueDate)}`}</span>`;
   return `<div class="task-card ${task.done ? "done" : ""}"><button class="check-button ${task.done ? "done" : ""}" data-task-toggle="${task.id}" aria-label="Toggle task"></button><div class="task-copy"><p class="task-name">${escapeHTML(task.name)}</p><small class="smart-reason">${escapeHTML(taskReason(task))}</small><div class="task-meta"><span class="tag tag-impact">${escapeHTML(task.alignment)}</span><span class="tag">Impact ${task.impact}</span><span class="tag">${escapeHTML(energyLabel(task.energy))}</span><span class="tag">${task.duration} min</span>${dueTag}</div></div><button class="edit-button" data-edit-task="${task.id}" aria-label="Edit task">•••</button></div>`;
+}
+
+function renderLife() {
+  const totals = moneyTotals();
+  const contactOpportunity = relationshipOpportunity();
+  const experience = experienceOpportunity(totals);
+  const upcomingContacts = state.life.contacts.filter(item => item.status === "active").sort((a, b) => String(a.nextContactDate || "9999").localeCompare(String(b.nextContactDate || "9999")));
+  const openExperiences = state.life.experiences.filter(item => item.status !== "archived").sort((a, b) => Number(a.status === "completed") - Number(b.status === "completed") || String(a.targetDate || "9999").localeCompare(String(b.targetDate || "9999")));
+  const recentJournal = [...state.life.journal].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 8);
+  document.getElementById("view-life").innerHTML = `
+    <div class="page-head life-page-head"><p class="eyebrow">Life OS · Experience</p><h1 id="life-heading">Life is not a reward.</h1><p>Keep identity, people, care, faith, enjoyment, and meaningful experiences inside the plan—not waiting at the end of it.</p></div>
+    <div class="life-principles"><div><span>Build</span><strong>Create the future</strong></div><div><span>Maintain</span><strong>Protect what matters</strong></div><div><span>Experience</span><strong>Live in the present</strong></div></div>
+    <div class="grid two-column life-grid">
+      <div class="stack">
+        <article class="card identity-card"><div class="card-head"><div><p class="eyebrow">Identity + values</p><h2>Operate from who you choose to be</h2><p>Use these as decision filters, not standards for self-punishment.</p></div></div><div class="identity-grid">${lifeObjectField("identity", "principles", "Guiding principles", "What remains true when pressure rises?")}${lifeObjectField("identity", "vision", "Long-term vision", "What kind of life are you building?")}${lifeObjectField("identity", "boundaries", "Boundaries", "What protects your time, money, dignity, and peace?")}${lifeObjectField("identity", "commitments", "Behavioural commitments", "What do you practise regardless of mood?")}${lifeObjectField("identity", "patterns", "Patterns to notice", "Observe recurring loops without turning them into identity.")}</div></article>
+        <article class="card relationships-card"><div class="card-head"><div><p class="eyebrow">Relationships</p><h2>Keep people inside real life</h2><p>Optional reminders for intentions you choose. Nobody is scored.</p></div><button class="button button-secondary button-small" data-add="contact">+ Person</button></div>${contactOpportunity ? `<div class="life-opportunity"><span>Reconnection opportunity</span><strong>${escapeHTML(contactOpportunity.contact.name)}</strong><small>${escapeHTML(contactOpportunity.contact.intention || contactDueLabel(contactOpportunity))}</small></div>` : ""}<div class="contact-list">${upcomingContacts.length ? upcomingContacts.map(contactTemplate).join("") : '<div class="empty">Add someone only when a reminder would genuinely help you act with care.</div>'}</div></article>
+        <article class="card experiences-card"><div class="card-head"><div><p class="eyebrow">Experiences + enjoyment</p><h2>Plan a life you can actually enter</h2><p>Ideas can remain free, affordable, and pressure-free.</p></div><button class="button button-secondary button-small" data-add="experience">+ Experience</button></div><div class="enjoyment-budget"><span>Available within current protection</span><strong>${currency(totals.enjoymentAvailable)}</strong><button class="text-button" data-add="moneySettings">Set allowance</button></div>${experience ? `<div class="life-opportunity experience-opportunity"><span>${experience.affordable ? "Affordable next experience" : "Keep visible without pressure"}</span><strong>${escapeHTML(experience.experience.name)}</strong><small>${experience.experience.costEstimate ? `${currency(experience.experience.costEstimate)} estimated` : "No spending required"}</small></div>` : ""}<div class="experience-list">${openExperiences.length ? openExperiences.map(item => experienceTemplate(item, totals)).join("") : '<div class="empty">Add one activity, outing, hobby, celebration, or place you would genuinely enjoy.</div>'}</div></article>
+      </div>
+      <aside class="stack">
+        <article class="card care-card"><div class="card-head"><div><p class="eyebrow">Personal care</p><h2>Care without earning it</h2></div></div>${lifeObjectField("care", "appearance", "Appearance + clothing", "What would help you feel prepared and self-respecting?")}${lifeObjectField("care", "interests", "Interests", "What do you want to explore for its own sake?")}${lifeObjectField("care", "selfCare", "Care intention", "One practical act of care that fits real life.")}</article>
+        <article class="card faith-card"><div class="card-head"><div><p class="eyebrow">Faith + reflection</p><h2>Private grounding</h2><p>Optional and private by default.</p></div></div>${lifeObjectField("faith", "prayer", "Prayer intention", "What practice would help you become still?")}${lifeObjectField("faith", "reading", "Scripture or spiritual reading", "What are you reading or returning to?")}${lifeObjectField("faith", "reflection", "Current reflection", "What feels important to sit with?")}</article>
+        <article class="card journal-card"><div class="card-head"><div><p class="eyebrow">Private reflections</p><h2>Remember what life felt like</h2><p>Encrypted during device sync and secure handoff. Standard exported backups remain readable files.</p></div><button class="button button-secondary button-small" data-add="journal">+ Write</button></div><div class="journal-list">${recentJournal.length ? recentJournal.map(journalTemplate).join("") : '<div class="empty">No entry is required. Write only when reflection would be useful.</div>'}</div></article>
+      </aside>
+    </div>`;
+}
+
+function lifeObjectField(group, key, label, placeholder) {
+  const value = state.life[group]?.[key] || "";
+  return `<div class="field"><label for="life-${group}-${key}">${label}</label><textarea id="life-${group}-${key}" data-life-group="${group}" data-life-key="${key}" placeholder="${placeholder}">${escapeHTML(value)}</textarea></div>`;
+}
+
+function contactDueLabel(entry) {
+  if (!entry || entry.days === null) return entry?.contact.lastConnected ? `Last connected ${formatCompactDate(String(entry.contact.lastConnected).slice(0, 10))}` : "No reminder date";
+  if (entry.days < 0) return `Reminder was ${Math.abs(entry.days)} day${Math.abs(entry.days) === 1 ? "" : "s"} ago`;
+  if (entry.days === 0) return "Reconnect today";
+  if (entry.days === 1) return "Reconnect tomorrow";
+  return `Reconnect in ${entry.days} days`;
+}
+
+function contactTemplate(contact) {
+  const entry = { contact, days: contact.nextContactDate ? daysFromToday(dateFromKey(contact.nextContactDate)) : null };
+  return `<div class="contact-row"><button class="contact-done" data-contact-connected="${contact.id}" aria-label="Record connection with ${escapeHTML(contact.name)}">✓</button><div><strong>${escapeHTML(contact.name)}</strong><small>${escapeHTML(contact.relationship || "Relationship")}</small><p>${escapeHTML(contact.intention || contactDueLabel(entry))}</p></div><span>${escapeHTML(contactDueLabel(entry))}</span><button class="edit-button" data-edit-contact="${contact.id}" aria-label="Edit ${escapeHTML(contact.name)}">•••</button></div>`;
+}
+
+function experienceTemplate(experience, totals = moneyTotals()) {
+  const completed = experience.status === "completed";
+  const affordable = Number(experience.costEstimate || 0) <= Number(totals.enjoymentAvailable || 0);
+  const dateLabel = experience.targetDate ? formatCompactDate(experience.targetDate) : "No date pressure";
+  return `<div class="experience-row ${completed ? "completed" : ""}"><button class="experience-done ${completed ? "done" : ""}" data-experience-toggle="${experience.id}" aria-label="${completed ? "Reopen" : "Complete"} ${escapeHTML(experience.name)}"></button><div><strong>${escapeHTML(experience.name)}</strong><small>${escapeHTML(experience.category)} · ${escapeHTML(dateLabel)}</small></div><span class="affordability ${affordable ? "affordable" : "hold"}">${experience.costEstimate ? currency(experience.costEstimate) : "Free"}</span><button class="edit-button" data-edit-experience="${experience.id}" aria-label="Edit ${escapeHTML(experience.name)}">•••</button></div>`;
+}
+
+function journalTemplate(entry) {
+  const preview = entry.content.length > 110 ? `${entry.content.slice(0, 110)}…` : entry.content;
+  return `<button class="journal-row" data-edit-journal="${entry.id}"><span><small>${escapeHTML(entry.type)} · ${formatCompactDate(entry.date)}</small><strong>${escapeHTML(preview || "Private entry")}</strong></span><i>${entry.private ? "Private" : "Personal"}</i></button>`;
 }
 
 function renderMoney() {
@@ -902,14 +1062,13 @@ function cueTemplate(cue, index) {
 }
 
 function renderReview() {
-  const averageRating = average(state.reflection.ratings).toFixed(1);
   const metrics = weekMetrics();
   const coach = weeklyCoach();
   document.getElementById("view-review").innerHTML = `
     <div class="page-head"><p class="eyebrow">Life OS + feedback loop</p><h1 id="review-heading">Learn, then adjust.</h1><p>Review the quality of the system—not your worth. Look for patterns across weeks and months.</p></div>
-    <div class="review-metrics">${reviewMetric("Life score", `${averageRating}/5`, "Current reflection")}${reviewMetric("Energy", metrics.energy ? `${metrics.energy.toFixed(1)}/5` : "—", `${metrics.daysChecked} days checked`)}${reviewMetric("Routine", `${metrics.routine}%`, "Foundations kept")}${reviewMetric("Execution", String(metrics.tasksDone), "Actions completed")}</div>
+    <div class="review-metrics">${reviewMetric("Evidence", `${metrics.daysChecked} days`, "Check-ins recorded")}${reviewMetric("Energy", metrics.energy ? `${metrics.energy.toFixed(1)}/5` : "—", "Self-reported average")}${reviewMetric("Foundations", `${metrics.routine}%`, "Routine steps kept")}${reviewMetric("Outputs", String(metrics.tasksDone), "Actions completed")}</div>
     ${weeklyCoachCard(coach)}
-    <div class="grid two-column"><div class="stack"><article class="card"><div class="card-head"><div><p class="eyebrow">Weekly life assessment</p><h2>Five connected engines</h2></div><strong class="average-score">${averageRating}<small>/5</small></strong></div><div class="rating-list">${DIMENSIONS.map((item, index) => ratingTemplate(item, index)).join("")}</div></article><article class="card"><div class="card-head"><div><p class="eyebrow">Weekly reflection</p><h2>Close the loop</h2></div></div><div class="reflection-prompts">${reflectionField("win", "What moved forward?", "Name the real win.")}${reflectionField("friction", "Where did friction appear?", "Notice the system, not a character flaw.")}${reflectionField("lesson", "What cue or design will change?", "One environmental or behavioural adjustment.")}${reflectionField("next", "What may matter next week?", "Capture it without overcommitting.")}</div></article><article class="card week-close-card"><div><p class="eyebrow">Weekly rollover</p><h2>Archive the learning. Keep the momentum.</h2><p>Completed work moves into history. Open actions carry forward and the next week starts clean.</p></div><button class="button button-primary" data-close-week>Close this week</button></article></div><aside class="stack"><article class="card card-muted"><div class="card-head"><div><p class="eyebrow">Life stays visible</p><h2>Protect what work is for</h2></div></div>${lifeField("relationships", "Relationships", "Who needs intentional time?")}${lifeField("enjoyment", "Enjoyment", "Padel, music, socialising, creativity, freedom.")}${lifeField("health", "Health", "Sleep, food, movement, recovery.")}${lifeField("growth", "Growth", "What knowledge will you apply?")}</article><article class="card"><div class="card-head"><div><p class="eyebrow">Monthly strategic review</p><h2>${new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" }).format(new Date())}</h2></div></div>${monthlyField("financial", "Financial position", "What changed in cash, commitments, investments, or liabilities?")}${monthlyField("growth", "Personal development", "What changed in capability or character?")}${monthlyField("business", "Business progress", "What value, systems, or revenue moved?")}${monthlyField("lifestyle", "Lifestyle quality", "Is life actually becoming calmer, freer, and fuller?")}${monthlyField("adjustment", "One strategic adjustment", "What single change matters next month?")}</article><article class="card card-muted"><div class="card-head"><div><p class="eyebrow">Recovery decision</p><h2>What does next week need?</h2></div></div><div class="recovery-grid">${[["restore","Restore","Lower load"],["maintain","Maintain","Stay steady"],["expand","Expand","Add stretch"]].map(([key,label,note]) => `<button class="recovery-option ${state.reflection.recovery === key ? "selected" : ""}" data-recovery="${key}"><strong>${label}</strong><small>${note}</small></button>`).join("")}</div></article></aside></div>
+    <div class="grid two-column"><div class="stack"><article class="card"><div class="card-head"><div><p class="eyebrow">Weekly evidence by area</p><h2>Notice patterns without grading your life</h2><p>These are self-reports for context, not a combined score.</p></div></div><div class="rating-list">${DIMENSIONS.map((item, index) => ratingTemplate(item, index)).join("")}</div></article><article class="card"><div class="card-head"><div><p class="eyebrow">Weekly reflection</p><h2>Close the loop</h2></div></div><div class="reflection-prompts">${reflectionField("win", "What moved forward?", "Name the real win.")}${reflectionField("friction", "Where did friction appear?", "Notice the system, not a character flaw.")}${reflectionField("lesson", "What cue or design will change?", "One environmental or behavioural adjustment.")}${reflectionField("next", "What may matter next week?", "Capture it without overcommitting.")}</div></article><article class="card week-close-card"><div><p class="eyebrow">Weekly rollover</p><h2>Archive the learning. Keep the momentum.</h2><p>Completed work moves into history. Open actions carry forward and the next week starts clean.</p></div><button class="button button-primary" data-close-week>Close this week</button></article></div><aside class="stack"><article class="card card-muted"><div class="card-head"><div><p class="eyebrow">Life stays visible</p><h2>Protect what work is for</h2></div></div>${lifeField("relationships", "Relationships", "Who needs intentional time?")}${lifeField("enjoyment", "Enjoyment", "Padel, music, socialising, creativity, freedom.")}${lifeField("health", "Health", "Sleep, food, movement, recovery.")}${lifeField("growth", "Growth", "What knowledge will you apply?")}</article><article class="card"><div class="card-head"><div><p class="eyebrow">Monthly strategic review</p><h2>${new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" }).format(new Date())}</h2></div></div>${monthlyField("financial", "Financial position", "What changed in cash, commitments, investments, or liabilities?")}${monthlyField("growth", "Personal development", "What changed in capability or character?")}${monthlyField("business", "Business progress", "What value, systems, or revenue moved?")}${monthlyField("lifestyle", "Lifestyle quality", "Is life actually becoming calmer, freer, and fuller?")}${monthlyField("adjustment", "One strategic adjustment", "What single change matters next month?")}</article><article class="card card-muted"><div class="card-head"><div><p class="eyebrow">Recovery decision</p><h2>What does next week need?</h2></div></div><div class="recovery-grid">${[["restore","Restore","Lower load"],["maintain","Maintain","Stay steady"],["expand","Expand","Add stretch"]].map(([key,label,note]) => `<button class="recovery-option ${state.reflection.recovery === key ? "selected" : ""}" data-recovery="${key}"><strong>${label}</strong><small>${note}</small></button>`).join("")}</div></article></aside></div>
     <article class="card history-card"><div class="card-head"><div><p class="eyebrow">System memory</p><h2>Previous weeks</h2><p>Patterns become visible when the system remembers.</p></div><span class="tag">${state.history.length} archived</span></div>${historyView()}</article>`;
 }
 
@@ -924,11 +1083,11 @@ function reviewMetric(label, value, note) {
 function historyView() {
   if (!state.history.length) return '<div class="history-empty"><strong>Your first trend starts when you close this week.</strong><span>Nothing is lost before then; current data remains live.</span></div>';
   const recent = state.history.slice(0, 8);
-  return `<div class="history-trends">${recent.slice().reverse().map(item => `<div class="trend-column"><div class="trend-bar"><i style="height:${Math.max(8, Math.min(100, Number(item.metrics?.score || 0) * 20))}%"></i></div><span>${formatCompactDate(item.end)}</span></div>`).join("")}</div><div class="history-list">${recent.map(historyTemplate).join("")}</div>`;
+  return `<div class="history-trends">${recent.slice().reverse().map(item => `<div class="trend-column"><div class="trend-bar"><i style="height:${Math.max(8, Math.min(100, Number(item.metrics?.routine || 0)))}%"></i></div><span>${formatCompactDate(item.end)}</span></div>`).join("")}</div><div class="history-list">${recent.map(historyTemplate).join("")}</div>`;
 }
 
 function historyTemplate(item) {
-  return `<details class="history-item"><summary><span><small>${formatCompactDate(item.start)}–${formatCompactDate(item.end)}</small><strong>${escapeHTML(item.week?.outcome || "Week without a named outcome")}</strong></span><b>${Number(item.metrics?.score || 0).toFixed(1)}/5</b></summary><div class="history-detail"><div><span>Energy</span><strong>${item.metrics?.energy ? Number(item.metrics.energy).toFixed(1) : "—"}</strong></div><div><span>Routine</span><strong>${Number(item.metrics?.routine || 0)}%</strong></div><div><span>Completed</span><strong>${Number(item.metrics?.tasksDone || 0)}</strong></div><p><b>Win</b>${escapeHTML(item.reflection?.win || "No win recorded.")}</p><p><b>Lesson</b>${escapeHTML(item.reflection?.lesson || "No lesson recorded.")}</p></div></details>`;
+  return `<details class="history-item"><summary><span><small>${formatCompactDate(item.start)}–${formatCompactDate(item.end)}</small><strong>${escapeHTML(item.week?.outcome || "Week without a named outcome")}</strong></span><b>${Number(item.metrics?.tasksDone || 0)} moved</b></summary><div class="history-detail"><div><span>Energy</span><strong>${item.metrics?.energy ? Number(item.metrics.energy).toFixed(1) : "—"}</strong></div><div><span>Routine</span><strong>${Number(item.metrics?.routine || 0)}%</strong></div><div><span>Completed</span><strong>${Number(item.metrics?.tasksDone || 0)}</strong></div><p><b>Win</b>${escapeHTML(item.reflection?.win || "No win recorded.")}</p><p><b>Lesson</b>${escapeHTML(item.reflection?.lesson || "No lesson recorded.")}</p></div></details>`;
 }
 
 function ratingTemplate(item, index) {
@@ -978,16 +1137,19 @@ function editorCollection(type) {
   if (type === "bill") return state.finances.bills;
   if (type === "obligation") return state.finances.obligations;
   if (type === "investment") return state.finances.investments;
+  if (type === "contact") return state.life.contacts;
+  if (type === "experience") return state.life.experiences;
+  if (type === "journal") return state.life.journal;
   return [];
 }
 
 function openEditor(type, id = null) {
   const dialog = document.getElementById("editor-dialog");
   const fields = document.getElementById("dialog-fields");
-  const collectionTypes = ["task", "inbox", "maintenance", "cue", "script", "transaction", "bill", "obligation", "investment"];
+  const collectionTypes = ["task", "inbox", "maintenance", "cue", "script", "transaction", "bill", "obligation", "investment", "contact", "experience", "journal"];
   const item = collectionTypes.includes(type) && id ? editorCollection(type).find(entry => entry.id === id) : null;
   editor = ["handoffImport", "syncPair"].includes(type) ? { type, payload: id } : { type, id };
-  const titles = { task: "Smart action", inbox: "Quick capture", maintenance: "Life maintenance date", cue: "Cue architecture", script: "If–then script", transaction: "Transaction", bill: "Bill + due date", obligation: "Obligation", investment: "Investment", moneySettings: "Spending guardrails", routine: `${state.modes[id]?.label || "Routine"} mode`, reminders: "Gentle reminders", security: "App lock", sync: "Device sync", syncPair: "Connect this device", handoff: "Secure phone handoff", handoffImport: "Import secure handoff" };
+  const titles = { task: "Smart action", inbox: "Quick capture", maintenance: "Life maintenance date", cue: "Cue architecture", script: "If–then script", transaction: "Transaction", bill: "Bill + due date", obligation: "Obligation", investment: "Investment", contact: "Relationship intention", experience: "Experience", journal: "Private reflection", moneySettings: "Spending guardrails", routine: `${state.modes[id]?.label || "Routine"} mode`, reminders: "Gentle reminders", security: "App lock", sync: "Device sync", syncPair: "Connect this device", handoff: "Secure phone handoff", handoffImport: "Import secure handoff" };
   document.getElementById("dialog-eyebrow").textContent = ({ routine: "Personalise your system", reminders: "Stay gently connected", security: "Local privacy", sync: "Encrypted private relay", syncPair: "Encrypted private relay", handoff: "Encrypted device transfer", handoffImport: "Encrypted device transfer" })[type] || (id ? "Update your system" : "Add to your system");
   document.getElementById("dialog-title").textContent = titles[type] || "Item";
   document.getElementById("delete-item").classList.toggle("hidden", !(id && collectionTypes.includes(type)));
@@ -1001,6 +1163,9 @@ function openEditor(type, id = null) {
   if (type === "bill") fields.innerHTML = billEditor(item);
   if (type === "obligation") fields.innerHTML = `<div class="field"><label>Name</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Total owed (£)</label><input name="target" type="number" min="0" step="0.01" required value="${item?.target || ""}" /></div><div class="field"><label>Already restored (£)</label><input name="paid" type="number" min="0" step="0.01" value="${item?.paid || 0}" /></div><div class="field"><label>Planned this month (£)</label><input name="monthlyPayment" type="number" min="0" step="0.01" value="${item?.monthlyPayment || 0}" /></div></div>`;
   if (type === "investment") fields.innerHTML = `<div class="field"><label>Name</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Contributed (£)</label><input name="contributed" type="number" min="0" step="0.01" value="${item?.contributed || 0}" /></div><div class="field"><label>Current value (£)</label><input name="current" type="number" min="0" step="0.01" value="${item?.current || 0}" /></div></div>`;
+  if (type === "contact") fields.innerHTML = contactEditor(item);
+  if (type === "experience") fields.innerHTML = experienceEditor(item);
+  if (type === "journal") fields.innerHTML = journalEditor(item);
   if (type === "moneySettings") fields.innerHTML = moneySettingsEditor();
   if (type === "routine") fields.innerHTML = routineEditor(id);
   if (type === "reminders") fields.innerHTML = remindersEditor();
@@ -1037,6 +1202,18 @@ function maintenanceEditor(item) {
   return `<div class="field"><label>What needs remembering?</label><input name="name" required value="${escapeHTML(item?.name || "")}" placeholder="Dentist, birthday, MOT, passport…" /></div><div class="inline-fields"><div class="field"><label>Category</label><select name="category">${[["appointment","Appointment"],["birthday","Birthday"],["renewal","Renewal"],["car","Car"],["document","Document"],["health","Health"],["home","Home"],["other","Other"]].map(([value,label]) => `<option value="${value}" ${item?.category === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Date</label><input name="dueDate" type="date" required value="${item?.dueDate || dayKey()}" /></div><div class="field"><label>Repeats</label><select name="recurrence">${[["oneoff","One-off"],["annual","Every year"],["monthly","Every month"]].map(([value,label]) => `<option value="${value}" ${item?.recurrence === value ? "selected" : ""}>${label}</option>`).join("")}</select></div></div><div class="field"><label>Remind me before</label><select name="remindDays">${[[0,"On the day"],[1,"1 day"],[3,"3 days"],[7,"7 days"],[14,"14 days"],[30,"30 days"],[60,"60 days"]].map(([value,label]) => `<option value="${value}" ${Number(item?.remindDays ?? 7) === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Useful details</label><textarea name="notes" placeholder="Location, document needed, person to contact…">${escapeHTML(item?.notes || "")}</textarea></div>`;
 }
 
+function contactEditor(item) {
+  return `<div class="field"><label>Name</label><input name="name" required value="${escapeHTML(item?.name || "")}" placeholder="Who do you want to stay connected with?" /></div><div class="inline-fields"><div class="field"><label>Relationship</label><input name="relationship" value="${escapeHTML(item?.relationship || "")}" placeholder="Friend, family, network…" /></div><div class="field"><label>Optional reminder</label><input name="nextContactDate" type="date" value="${item?.nextContactDate || ""}" /></div></div><div class="field"><label>Relationship intention</label><textarea name="intention" placeholder="Call properly, create a link-up, check how they are…">${escapeHTML(item?.intention || "")}</textarea></div><div class="field"><label>Private context</label><textarea name="notes" placeholder="Only record details that are genuinely useful and respectful.">${escapeHTML(item?.notes || "")}</textarea></div><div class="field"><label>Status</label><select name="status">${[["active","Active"],["paused","Paused"],["archived","Archived"]].map(([value,label]) => `<option value="${value}" ${(item?.status || "active") === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><p class="dialog-note">This is a reminder for your intention, not a score for the person or relationship.</p>`;
+}
+
+function experienceEditor(item) {
+  return `<div class="field"><label>Experience</label><input name="name" required value="${escapeHTML(item?.name || "")}" placeholder="Padel, dinner, day trip, creative session…" /></div><div class="inline-fields"><div class="field"><label>Type</label><select name="category">${[["social","Social"],["outing","Outing"],["travel","Travel"],["hobby","Hobby"],["celebration","Celebration"],["personal","Personal"]].map(([value,label]) => `<option value="${value}" ${(item?.category || "personal") === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Optional date</label><input name="targetDate" type="date" value="${item?.targetDate || ""}" /></div><div class="field"><label>Estimated cost (£)</label><input name="costEstimate" type="number" min="0" step="0.01" value="${Number(item?.costEstimate) || 0}" /></div></div><div class="field"><label>Status</label><select name="status">${[["idea","Idea"],["planned","Planned"],["completed","Completed"],["archived","Archived"]].map(([value,label]) => `<option value="${value}" ${(item?.status || "idea") === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Useful details</label><textarea name="notes" placeholder="Who, where, what would make it enjoyable, or a free alternative.">${escapeHTML(item?.notes || "")}</textarea></div><p class="dialog-note">Experiences do not need to be expensive, social, or productive to belong in your life.</p>`;
+}
+
+function journalEditor(item) {
+  return `<div class="inline-fields"><div class="field"><label>Date</label><input name="date" type="date" required value="${item?.date || dayKey()}" /></div><div class="field"><label>Type</label><select name="type">${[["reflection","Reflection"],["faith","Faith"],["gratitude","Gratitude"],["pattern","Pattern"],["memory","Memory"]].map(([value,label]) => `<option value="${value}" ${(item?.type || "reflection") === value ? "selected" : ""}>${label}</option>`).join("")}</select></div></div><div class="field"><label>Reflection</label><textarea name="content" required rows="8" placeholder="Write only what is useful to remember or understand.">${escapeHTML(item?.content || "")}</textarea></div><label class="toggle-row"><span><strong>Mark as private</strong><small>Encrypted during sync and secure handoff; standard JSON exports remain readable</small></span><input name="private" type="checkbox" ${item?.private !== false ? "checked" : ""} /><i></i></label>`;
+}
+
 function cueEditor(item) {
   return `<div class="field"><label>Behaviour</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="field"><label>When this happens</label><textarea name="cue" required>${escapeHTML(item?.cue || "")}</textarea></div><div class="field"><label>I immediately</label><textarea name="response" required>${escapeHTML(item?.response || "")}</textarea></div><div class="field"><label>Install this positive cue</label><textarea name="setup" required>${escapeHTML(item?.setup || "")}</textarea></div><div class="field"><label>Remove this competing cue</label><textarea name="remove" required>${escapeHTML(item?.remove || "")}</textarea></div>`;
 }
@@ -1056,7 +1233,7 @@ function billEditor(item) {
 }
 
 function moneySettingsEditor() {
-  return `<div class="field"><label>Cash reserve floor (£)</label><input name="reserveTarget" type="number" min="0" step="10" required value="${Number(state.finances.settings.reserveTarget) || 0}" /></div><p class="dialog-note">Safe to spend = available cash − unpaid bills in the next 30 days − overdue bills − this reserve − planned obligation payments.</p>`;
+  return `<div class="field"><label>Cash reserve floor (£)</label><input name="reserveTarget" type="number" min="0" step="10" required value="${Number(state.finances.settings.reserveTarget) || 0}" /></div><div class="field"><label>Monthly enjoyment allowance (£)</label><input name="enjoymentAllowance" type="number" min="0" step="5" value="${Number(state.finances.settings.enjoymentAllowance) || 0}" /></div><p class="dialog-note">Safe to spend = available cash − unpaid bills in the next 30 days − overdue bills − this reserve − planned obligation payments. Enjoyment is capped by the allowance only when one is set.</p>`;
 }
 
 function updateBillEditorFields() {
@@ -1134,6 +1311,7 @@ async function saveEditor() {
   }
   if (editor.type === "moneySettings") {
     state.finances.settings.reserveTarget = Math.max(0, Number(data.reserveTarget) || 0);
+    state.finances.settings.enjoymentAllowance = Math.max(0, Number(data.enjoymentAllowance) || 0);
     saveState("Spending guardrails updated");
     render();
     return true;
@@ -1187,6 +1365,9 @@ async function saveEditor() {
   }
   if (editor.type === "obligation") Object.assign(item, { name: data.name.trim(), target: Number(data.target), paid: Number(data.paid), monthlyPayment: Number(data.monthlyPayment) });
   if (editor.type === "investment") Object.assign(item, { name: data.name.trim(), contributed: Number(data.contributed), current: Number(data.current) });
+  if (editor.type === "contact") Object.assign(item, { name: data.name.trim(), relationship: data.relationship.trim(), intention: data.intention.trim(), nextContactDate: data.nextContactDate || "", notes: data.notes.trim(), status: data.status, lastConnected: item.lastConnected || "", createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
+  if (editor.type === "experience") Object.assign(item, { name: data.name.trim(), category: data.category, targetDate: data.targetDate || "", costEstimate: Math.max(0, Number(data.costEstimate) || 0), status: data.status, notes: data.notes.trim(), completedAt: data.status === "completed" ? (item.completedAt || new Date().toISOString()) : "", createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
+  if (editor.type === "journal") Object.assign(item, { date: data.date, type: data.type, content: data.content.trim(), private: Boolean(data.private), createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
   saveState(editor.type === "inbox" ? "Captured without changing direction" : "System updated");
   render();
   return true;
@@ -1233,9 +1414,26 @@ function renumberRoutineSteps() {
 function refreshSettings() {
   const reminderStatus = document.getElementById("reminder-status");
   const securityStatus = document.getElementById("security-status");
+  const migrationRestore = document.getElementById("restore-migration");
   if (reminderStatus) reminderStatus.textContent = state.preferences.reminders.enabled ? `On · ${state.preferences.reminders.morning} + ${state.preferences.reminders.evening}` : "Off";
   if (securityStatus) securityStatus.textContent = security.pinHash ? (security.credentialId ? "PIN + device unlock" : "PIN enabled") : "Off";
+  if (migrationRestore) migrationRestore.classList.toggle("hidden", !localStorage.getItem(MIGRATION_BACKUP_KEY));
   refreshSyncUI();
+}
+
+function restoreMigrationSnapshot() {
+  try {
+    const snapshot = JSON.parse(localStorage.getItem(MIGRATION_BACKUP_KEY));
+    if (!snapshot?.data) throw new Error("Snapshot unavailable");
+    if (!confirm("Restore the data snapshot created immediately before the 2.0 upgrade? Your current copy will be kept as a separate recovery snapshot.")) return;
+    localStorage.setItem(PRE_RESTORE_BACKUP_KEY, JSON.stringify({ createdAt: new Date().toISOString(), data: state }));
+    state = normalizeState(snapshot.data);
+    saveState("Pre-2.0 data restored and safely upgraded");
+    render();
+    document.getElementById("settings-dialog").close();
+  } catch {
+    showToast("The migration snapshot could not be restored");
+  }
 }
 
 function formatSyncTime(value) {
@@ -1974,9 +2172,6 @@ document.addEventListener("click", async event => {
   if (target.dataset.energy) {
     const daily = todayState();
     daily.energy = Number(target.dataset.energy);
-    const nextMode = recoverySignal(daily).mode;
-    if (daily.mode !== nextMode) daily.routine = [];
-    daily.mode = nextMode;
     saveState();
     return render();
   }
@@ -1997,6 +2192,15 @@ document.addEventListener("click", async event => {
       daily.routine = [];
     }
     saveState();
+    return render();
+  }
+  if (target.dataset.useSuggestedMode) {
+    const daily = todayState();
+    if (daily.mode !== target.dataset.useSuggestedMode) {
+      daily.mode = target.dataset.useSuggestedMode;
+      daily.routine = [];
+    }
+    saveState("Mode changed by your choice");
     return render();
   }
   if (target.dataset.routineIndex !== undefined) {
@@ -2043,6 +2247,29 @@ document.addEventListener("click", async event => {
     saveState(done ? "Life item reopened" : "Life item completed");
     return render();
   }
+  if (target.dataset.contactConnected) {
+    const contact = state.life.contacts.find(item => item.id === target.dataset.contactConnected);
+    if (!contact) return;
+    contact.lastConnected = dayKey();
+    contact.updatedAt = new Date().toISOString();
+    const connection = todayState().connection;
+    connection.person = contact.name;
+    connection.plan = contact.intention || connection.plan;
+    connection.completed = true;
+    connection.completedAt = new Date().toISOString();
+    saveState(`Connection with ${contact.name} recorded`);
+    return render();
+  }
+  if (target.dataset.experienceToggle) {
+    const experience = state.life.experiences.find(item => item.id === target.dataset.experienceToggle);
+    if (!experience) return;
+    const completed = experience.status === "completed";
+    experience.status = completed ? "planned" : "completed";
+    experience.completedAt = completed ? "" : new Date().toISOString();
+    experience.updatedAt = new Date().toISOString();
+    saveState(completed ? "Experience reopened" : "Experience remembered");
+    return render();
+  }
   if (target.dataset.reviewSubscription) {
     const bill = state.finances.bills.find(item => item.id === target.dataset.reviewSubscription);
     if (!bill) return;
@@ -2072,7 +2299,7 @@ document.addEventListener("click", async event => {
     return renumberRoutineSteps();
   }
   if (target.hasAttribute("data-disable-lock")) return disableLock();
-  ["task", "inbox", "maintenance", "cue", "script", "transaction", "bill", "obligation", "investment"].forEach(type => {
+  ["task", "inbox", "maintenance", "cue", "script", "transaction", "bill", "obligation", "investment", "contact", "experience", "journal"].forEach(type => {
     const key = `edit${type[0].toUpperCase()}${type.slice(1)}`;
     if (target.dataset[key]) openEditor(type, target.dataset[key]);
   });
@@ -2109,19 +2336,28 @@ document.addEventListener("change", event => {
   if (target.dataset.balance) state.finances.balances[target.dataset.balance] = Number(target.value);
   if (target.dataset.reflection) state.reflection[target.dataset.reflection] = target.value.trim();
   if (target.dataset.lifeField) state.life[target.dataset.lifeField] = target.value.trim();
+  if (target.dataset.lifeGroup && target.dataset.lifeKey) state.life[target.dataset.lifeGroup][target.dataset.lifeKey] = target.value.trim();
   if (target.dataset.monthlyField) monthlyState()[target.dataset.monthlyField] = target.value.trim();
   if (target.dataset.rating !== undefined) state.reflection.ratings[Number(target.dataset.rating)] = Number(target.value);
-  if (target.matches("[data-week-field],[data-daily-field],[data-balance],[data-reflection],[data-life-field],[data-monthly-field],[data-rating]")) {
+  if (target.matches("[data-week-field],[data-daily-field],[data-balance],[data-reflection],[data-life-field],[data-life-group],[data-monthly-field],[data-rating]")) {
     saveState("Saved");
     if (target.dataset.rating !== undefined || target.dataset.balance) render();
   }
 });
 
 document.addEventListener("input", event => {
-  if (event.target.matches("[data-auto-resize]")) resizeOutcomeInput(event.target);
-  if (event.target.dataset.rating !== undefined) {
-    state.reflection.ratings[Number(event.target.dataset.rating)] = Number(event.target.value);
-    event.target.closest(".rating-control").querySelector("span").textContent = `${event.target.value}/5`;
+  const target = event.target;
+  if (target.matches("[data-auto-resize]")) resizeOutcomeInput(target);
+  if (target.dataset.weekField) state.week[target.dataset.weekField] = target.value;
+  if (target.dataset.dailyField) todayState()[target.dataset.dailyField] = target.value;
+  if (target.dataset.reflection) state.reflection[target.dataset.reflection] = target.value;
+  if (target.dataset.lifeField) state.life[target.dataset.lifeField] = target.value;
+  if (target.dataset.lifeGroup && target.dataset.lifeKey) state.life[target.dataset.lifeGroup][target.dataset.lifeKey] = target.value;
+  if (target.dataset.monthlyField) monthlyState()[target.dataset.monthlyField] = target.value;
+  if (target.matches("[data-week-field],[data-daily-field],[data-reflection],[data-life-field],[data-life-group],[data-monthly-field]")) saveState();
+  if (target.dataset.rating !== undefined) {
+    state.reflection.ratings[Number(target.dataset.rating)] = Number(target.value);
+    target.closest(".rating-control").querySelector("span").textContent = `${target.value}/5`;
   }
 });
 
@@ -2145,6 +2381,7 @@ document.getElementById("security-settings").addEventListener("click", () => { d
 document.getElementById("device-sync").addEventListener("click", () => { document.getElementById("settings-dialog").close(); openEditor("sync"); });
 document.getElementById("create-handoff").addEventListener("click", () => { document.getElementById("settings-dialog").close(); openEditor("handoff"); });
 document.getElementById("export-data").addEventListener("click", exportBackup);
+document.getElementById("restore-migration").addEventListener("click", restoreMigrationSnapshot);
 document.getElementById("import-data").addEventListener("change", async event => {
   try {
     await importBackupFile(event.target.files[0]);

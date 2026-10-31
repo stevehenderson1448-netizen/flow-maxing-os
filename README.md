@@ -1,10 +1,12 @@
 # 50X Life OS
 
-A dependency-free, mobile-first personal operating system connecting five engines: finances, daily routines, mental clarity, execution, and life balance.
+A dependency-free, mobile-first personal command centre organised around six modules and one philosophy: **Build · Maintain · Experience**.
 
 ## Included systems
 
 - Adaptive daily command centre using energy, available time, routines, deadlines, bills, and life-maintenance dates
+- A dedicated Life module for identity, relationships, experiences, personal care, faith, and private reflection
+- Build/Maintain/Experience daily planning with explicit user-controlled operating modes
 - Daily human-connection and protected-rest foundations with seven-day consistency feedback
 - Deadline-aware task scheduling with weekly-outcome alignment and nightly Tomorrow Setup
 - Editable Minimum, Standard, and Peak routine modes
@@ -17,6 +19,9 @@ A dependency-free, mobile-first personal operating system connecting five engine
 - Financial ledger, obligations, and investments
 - Optional reminders and a local PIN or device-authenticator lock
 - End-to-end encrypted phone/desktop sync, one-time device handoffs, and portable backup files
+- Backed-up version-8 migration with a pre-2.0 recovery snapshot
+
+The verified 2.0 audit, architecture, data model, migration strategy, and roadmap are documented in `docs/50X-LIFE-OS-2.0-AUDIT.md`.
 
 ## Live app
 
