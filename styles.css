@@ -416,6 +416,33 @@ select:focus-visible,
   box-shadow: 0 0 0 3px rgba(92, 191, 135, .1), 0 0 12px rgba(92, 191, 135, .35);
 }
 
+.local-status[data-sync-phase="syncing"] i,
+.local-status[data-sync-phase="pending"] i {
+  background: #df7682;
+  box-shadow: 0 0 0 3px rgba(212,91,105,.12), 0 0 12px rgba(212,91,105,.42);
+  animation: sync-pulse 1.4s ease-in-out infinite;
+}
+
+.local-status[data-sync-phase="offline"] i,
+.local-status[data-sync-phase="error"] i {
+  background: #a89878;
+  box-shadow: 0 0 0 3px rgba(168,152,120,.1);
+}
+
+.local-status[data-sync-phase="conflict"] {
+  color: #e98a94;
+  border-color: rgba(212,91,105,.25);
+}
+
+.local-status[data-sync-phase="conflict"] i {
+  background: #e06472;
+  box-shadow: 0 0 0 3px rgba(224,100,114,.13), 0 0 12px rgba(224,100,114,.4);
+}
+
+@keyframes sync-pulse {
+  50% { opacity: .45; transform: scale(.75); }
+}
+
 .icon-button {
   width: 38px;
   height: 38px;
@@ -1875,6 +1902,184 @@ textarea::placeholder {
   color: #8a8085;
   font-size: 11px;
   line-height: 1.45;
+}
+
+.sync-settings-row {
+  border-color: rgba(212,91,105,.16);
+  background: linear-gradient(145deg, rgba(95,30,41,.2), #171416 62%);
+}
+
+.settings-row > span:first-child {
+  min-width: 0;
+}
+
+.sync-intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  padding: 17px;
+  border: 1px solid rgba(212,91,105,.16);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(103,34,47,.3), rgba(255,255,255,.018));
+}
+
+.sync-intro.sync-connected {
+  border-color: rgba(92,191,135,.17);
+  background: linear-gradient(145deg, rgba(37,83,61,.22), rgba(255,255,255,.018));
+}
+
+.sync-intro.sync-conflict {
+  border-color: rgba(224,100,114,.32);
+  background: linear-gradient(145deg, rgba(122,34,49,.42), rgba(255,255,255,.018));
+}
+
+.sync-orb {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 11px;
+  color: #f4c5ca;
+  background: rgba(212,91,105,.13);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.sync-connected .sync-orb {
+  color: #bfe0ce;
+  background: rgba(92,191,135,.1);
+}
+
+.sync-conflict .sync-orb {
+  color: #fff;
+  background: rgba(212,91,105,.28);
+}
+
+.sync-intro > div {
+  min-width: 0;
+}
+
+.sync-intro strong {
+  font-size: 13px;
+}
+
+.sync-intro p {
+  margin: 6px 0 0;
+  color: #94898e;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.sync-promise-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.sync-promise-grid > div {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-height: 105px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #100e0f;
+}
+
+.sync-promise-grid span {
+  color: #d56976;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .08em;
+}
+
+.sync-promise-grid strong {
+  margin-top: 5px;
+  font-size: 11px;
+}
+
+.sync-promise-grid small {
+  color: #786f73;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.sync-pair-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.sync-control-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.sync-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  color: var(--ink);
+  background: #100e0f;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .2s ease, background .2s ease, transform .18s ease;
+}
+
+.sync-control:hover {
+  border-color: var(--line-strong);
+  background: #171315;
+}
+
+.sync-control:active {
+  transform: scale(.985);
+}
+
+.sync-control span {
+  display: grid;
+  gap: 3px;
+}
+
+.sync-control strong {
+  font-size: 11px;
+}
+
+.sync-control small {
+  color: #786f73;
+  font-size: 9px;
+}
+
+.sync-control b {
+  color: #d76875;
+  font-size: 16px;
+}
+
+.sync-control-danger strong,
+.sync-control-danger b {
+  color: #d56b77;
+}
+
+.sync-conflict-actions {
+  margin-top: 2px;
+}
+
+@media (max-width: 480px) {
+  .sync-promise-grid,
+  .sync-pair-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sync-promise-grid > div {
+    min-height: 0;
+  }
 }
 
 .danger-button {

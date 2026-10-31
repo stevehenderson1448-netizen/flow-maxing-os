@@ -16,15 +16,17 @@ A dependency-free, mobile-first personal operating system connecting five engine
 - Life-maintenance calendar for appointments, birthdays, renewals, car, documents, health, and home
 - Financial ledger, obligations, and investments
 - Optional reminders and a local PIN or device-authenticator lock
-- Encrypted one-time device handoffs plus portable backup files
+- End-to-end encrypted phone/desktop sync, one-time device handoffs, and portable backup files
 
 ## Live app
 
 https://stevehenderson1448-netizen.github.io/flow-maxing-os/
 
-Open the live app on a phone and add it to the home screen. Once opened online, its core interface also works offline. Existing Flow Maxing data upgrades automatically. Personal entries remain in that browser; use Settings to export regular backups.
+Open the live app on a phone and add it to the home screen. Once opened online, its core interface also works offline. Existing Flow Maxing data upgrades automatically. Use **Settings → Encrypted device sync** on the device with the latest data, then open its private pairing link on the second device.
 
-The secure handoff creates an encrypted copy for another device. It is intentionally not continuous cloud sync: no private financial or reflection data is stored on an application server.
+Continuous sync encrypts the complete Life OS before it leaves the browser. The relay receives only ciphertext; the separate decryption key stays in the private pairing link and connected browsers. Changes save locally first and sync while the app is open. Keep the pairing link private and continue exporting occasional backups.
+
+The secure handoff remains available as a one-time, password-protected copy when continuous sync is not wanted.
 
 ## Run locally
 

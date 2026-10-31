@@ -1,6 +1,9 @@
 const STORAGE_KEY = "flow-maxing-os-v1";
 const SECURITY_KEY = "50x-life-os-security-v1";
+const CLOUD_SYNC_KEY = "50x-life-os-cloud-sync-v1";
 const LIVE_URL = "https://stevehenderson1448-netizen.github.io/flow-maxing-os/";
+const SYNC_RELAY = "https://mantledb.sh/v2";
+const SYNC_PATH = "life-os";
 
 const DEFAULT_MODES = {
   minimum: { label: "Minimum", note: "An intentionally smaller day. Preserve the foundations and one essential action.", routine: [["Water + daylight", "Open the curtains and begin from now.", 2], ["Breathe or meditate", "Choose the easiest two-minute version.", 2], ["Eat properly", "Protect basic energy before performance.", 10], ["One essential action", "Complete the smallest useful version.", 25], ["Prepare for sleep", "Reduce tomorrow's recovery debt.", 10]] },
@@ -230,25 +233,50 @@ function loadSecurity() {
   }
 }
 
+function loadCloudSync() {
+  const base = { deviceId: crypto.randomUUID(), namespace: "", relayKey: "", encryptionKey: "", lastRevision: 0, lastChangeId: "", lastSyncedAt: "", dirty: false, conflict: false };
+  try {
+    return { ...base, ...JSON.parse(localStorage.getItem(CLOUD_SYNC_KEY)) };
+  } catch {
+    return base;
+  }
+}
+
 let state = loadState();
 let security = loadSecurity();
+let cloudSync = loadCloudSync();
 let activeView = "today";
 let editor = null;
 let toastTimer;
 let lockTimer;
+let syncTimer;
+let syncDebounce;
+let syncOperation;
+let syncPhase = cloudSync.namespace ? (cloudSync.conflict ? "conflict" : "idle") : "off";
 let appUnlocked = !security.pinHash;
 let hiddenAt = 0;
 let reminderTimer;
 let pendingHandoff = readHandoffFromHash();
+let pendingSyncPair = readSyncPairFromHash();
 
-function saveState(message) {
+function saveState(message, options = {}) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (cloudSync.namespace && !options.fromSync) {
+    cloudSync.dirty = true;
+    saveCloudSync();
+    scheduleCloudSync();
+  }
   if (message) showToast(message);
+  refreshSyncUI();
 }
 
 function saveSecurity() {
   localStorage.setItem(SECURITY_KEY, JSON.stringify(security));
   refreshSettings();
+}
+
+function saveCloudSync() {
+  localStorage.setItem(CLOUD_SYNC_KEY, JSON.stringify(cloudSync));
 }
 
 function dayKey(date = new Date()) {
@@ -958,12 +986,12 @@ function openEditor(type, id = null) {
   const fields = document.getElementById("dialog-fields");
   const collectionTypes = ["task", "inbox", "maintenance", "cue", "script", "transaction", "bill", "obligation", "investment"];
   const item = collectionTypes.includes(type) && id ? editorCollection(type).find(entry => entry.id === id) : null;
-  editor = type === "handoffImport" ? { type, payload: id } : { type, id };
-  const titles = { task: "Smart action", inbox: "Quick capture", maintenance: "Life maintenance date", cue: "Cue architecture", script: "If–then script", transaction: "Transaction", bill: "Bill + due date", obligation: "Obligation", investment: "Investment", moneySettings: "Spending guardrails", routine: `${state.modes[id]?.label || "Routine"} mode`, reminders: "Gentle reminders", security: "App lock", handoff: "Secure phone handoff", handoffImport: "Import secure handoff" };
-  document.getElementById("dialog-eyebrow").textContent = ({ routine: "Personalise your system", reminders: "Stay gently connected", security: "Local privacy", handoff: "Encrypted device transfer", handoffImport: "Encrypted device transfer" })[type] || (id ? "Update your system" : "Add to your system");
+  editor = ["handoffImport", "syncPair"].includes(type) ? { type, payload: id } : { type, id };
+  const titles = { task: "Smart action", inbox: "Quick capture", maintenance: "Life maintenance date", cue: "Cue architecture", script: "If–then script", transaction: "Transaction", bill: "Bill + due date", obligation: "Obligation", investment: "Investment", moneySettings: "Spending guardrails", routine: `${state.modes[id]?.label || "Routine"} mode`, reminders: "Gentle reminders", security: "App lock", sync: "Device sync", syncPair: "Connect this device", handoff: "Secure phone handoff", handoffImport: "Import secure handoff" };
+  document.getElementById("dialog-eyebrow").textContent = ({ routine: "Personalise your system", reminders: "Stay gently connected", security: "Local privacy", sync: "Encrypted private relay", syncPair: "Encrypted private relay", handoff: "Encrypted device transfer", handoffImport: "Encrypted device transfer" })[type] || (id ? "Update your system" : "Add to your system");
   document.getElementById("dialog-title").textContent = titles[type] || "Item";
   document.getElementById("delete-item").classList.toggle("hidden", !(id && collectionTypes.includes(type)));
-  document.getElementById("save-item").textContent = ({ handoff: "Create secure link", handoffImport: "Import", security: "Save lock", reminders: "Save reminders", routine: "Save routine" })[type] || "Save";
+  document.getElementById("save-item").textContent = ({ sync: cloudSync.namespace ? "Done" : "Start sync + share", syncPair: "Connect this device", handoff: "Create secure link", handoffImport: "Import", security: "Save lock", reminders: "Save reminders", routine: "Save routine" })[type] || "Save";
   if (type === "task") fields.innerHTML = taskEditor(item);
   if (type === "inbox") fields.innerHTML = inboxEditor(item);
   if (type === "maintenance") fields.innerHTML = maintenanceEditor(item);
@@ -977,6 +1005,8 @@ function openEditor(type, id = null) {
   if (type === "routine") fields.innerHTML = routineEditor(id);
   if (type === "reminders") fields.innerHTML = remindersEditor();
   if (type === "security") fields.innerHTML = securityEditor();
+  if (type === "sync") fields.innerHTML = syncEditor();
+  if (type === "syncPair") fields.innerHTML = syncPairEditor();
   if (type === "handoff") fields.innerHTML = handoffEditor();
   if (type === "handoffImport") fields.innerHTML = handoffImportEditor();
   connectEditorLabels(fields, type);
@@ -1054,6 +1084,19 @@ function securityEditor() {
   return `${security.pinHash ? '<div class="field"><label>Current PIN</label><input name="currentPin" type="password" inputmode="numeric" maxlength="12" required autocomplete="current-password" /></div>' : ""}<div class="field"><label>${security.pinHash ? "New PIN (optional)" : "Create PIN"}</label><input name="newPin" type="password" inputmode="numeric" minlength="4" maxlength="12" ${security.pinHash ? "" : "required"} autocomplete="new-password" /></div><div class="field"><label>Confirm new PIN</label><input name="confirmPin" type="password" inputmode="numeric" minlength="4" maxlength="12" ${security.pinHash ? "" : "required"} autocomplete="new-password" /></div><div class="field"><label>Auto-lock after</label><select name="lockMinutes">${[[1,"1 minute"],[5,"5 minutes"],[15,"15 minutes"],[30,"30 minutes"]].map(([value,label]) => `<option value="${value}" ${Number(security.lockMinutes) === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><label class="toggle-row"><span><strong>Face ID / device unlock</strong><small>${deviceAvailable ? "Use this device's secure authenticator" : "Available only in the installed secure app"}</small></span><input name="deviceUnlock" type="checkbox" ${security.credentialId ? "checked" : ""} ${deviceAvailable ? "" : "disabled"} /><i></i></label>${security.pinHash ? '<button class="button button-ghost button-wide danger-button" type="button" data-disable-lock>Turn off app lock</button>' : ""}<p class="dialog-note">The PIN verifier stays only on this device and is never included in backups or handoffs.</p>`;
 }
 
+function syncEditor() {
+  if (!cloudSync.namespace) {
+    return `<div class="sync-intro"><span class="sync-orb">↻</span><div><strong>Keep phone and desktop together</strong><p>Your Life OS is encrypted on this device before syncing. The relay stores unreadable data; the private key stays inside your pairing link.</p></div></div><div class="sync-promise-grid"><div><span>01</span><strong>Start here</strong><small>Use the device with your latest data.</small></div><div><span>02</span><strong>Share link</strong><small>Open the private pairing link on your other device.</small></div><div><span>03</span><strong>Stay current</strong><small>Changes sync whenever either app is open.</small></div></div><p class="dialog-note">For your current mobile updates, start this on the phone first. Keep the pairing link private: it unlocks your encrypted sync.</p>`;
+  }
+  const conflict = cloudSync.conflict || syncPhase === "conflict";
+  const status = conflict ? "Two devices changed before they could sync" : syncPhase === "syncing" ? "Syncing your latest changes…" : cloudSync.dirty ? "Changes saved here and waiting to sync" : `Up to date${cloudSync.lastSyncedAt ? ` · ${formatSyncTime(cloudSync.lastSyncedAt)}` : ""}`;
+  return `<div class="sync-intro ${conflict ? "sync-conflict" : "sync-connected"}"><span class="sync-orb">${conflict ? "!" : "✓"}</span><div><strong>${conflict ? "Choose which copy to keep" : "Encrypted sync is connected"}</strong><p>${status}</p></div></div>${conflict ? `<div class="sync-conflict-actions"><button class="button button-primary button-wide" type="button" data-sync-use-local>Keep this device's copy</button><button class="button button-secondary button-wide" type="button" data-sync-use-cloud>Use the other device's copy</button></div><p class="dialog-note">Nothing is overwritten until you choose. If unsure, export a backup first.</p>` : `<div class="sync-control-list"><button class="sync-control" type="button" data-sync-now><span><strong>Sync now</strong><small>Check for updates immediately</small></span><b>↻</b></button><button class="sync-control" type="button" data-sync-share><span><strong>Share pairing link</strong><small>Send the private encrypted link</small></span><b>↗</b></button><button class="sync-control" type="button" data-sync-copy><span><strong>Copy pairing link</strong><small>Paste it into the other device</small></span><b>⧉</b></button><button class="sync-control sync-control-danger" type="button" data-sync-disconnect><span><strong>Disconnect this device</strong><small>Data remains safely stored here</small></span><b>×</b></button></div><p class="dialog-note">Changes are saved locally first, so the app still works offline. Sync resumes when the app is open and connected.</p>`}`;
+}
+
+function syncPairEditor() {
+  return `<div class="sync-intro sync-connected"><span class="sync-orb">↻</span><div><strong>Private sync invitation found</strong><p>Connect this device and load the latest encrypted Life OS copy.</p></div></div><div class="sync-promise-grid sync-pair-grid"><div><span>✓</span><strong>End-to-end encrypted</strong><small>The decryption key is in this private link, not the relay.</small></div><div><span>✓</span><strong>Local-first</strong><small>Your app keeps working even when you are offline.</small></div></div><p class="dialog-note">Connecting replaces the Life OS data currently saved in this browser. Local app-lock settings stay on this device.</p>`;
+}
+
 function handoffEditor() {
   return `<div class="handoff-intro"><strong>Encrypted before it leaves this device</strong><p>Create a one-time link for your phone. Share the password separately.</p></div><div class="field"><label>Transfer password</label><input name="password" type="password" minlength="6" required autocomplete="new-password" /></div><div class="field"><label>Confirm password</label><input name="confirmPassword" type="password" minlength="6" required autocomplete="new-password" /></div><p class="dialog-note">This safely copies your current data; it does not create a cloud account or continuous background sync.</p>`;
 }
@@ -1080,6 +1123,15 @@ async function saveEditor() {
   }
   if (editor.type === "reminders") return saveReminders(form, data);
   if (editor.type === "security") return saveLockSettings(form, data);
+  if (editor.type === "sync") {
+    if (!cloudSync.namespace) await startCloudSync();
+    return true;
+  }
+  if (editor.type === "syncPair") {
+    if (!confirm("Connect this device and replace its current Life OS data with the synced copy?")) return false;
+    await connectCloudSync(editor.payload);
+    return true;
+  }
   if (editor.type === "moneySettings") {
     state.finances.settings.reserveTarget = Math.max(0, Number(data.reserveTarget) || 0);
     saveState("Spending guardrails updated");
@@ -1183,6 +1235,59 @@ function refreshSettings() {
   const securityStatus = document.getElementById("security-status");
   if (reminderStatus) reminderStatus.textContent = state.preferences.reminders.enabled ? `On · ${state.preferences.reminders.morning} + ${state.preferences.reminders.evening}` : "Off";
   if (securityStatus) securityStatus.textContent = security.pinHash ? (security.credentialId ? "PIN + device unlock" : "PIN enabled") : "Off";
+  refreshSyncUI();
+}
+
+function formatSyncTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "recently";
+  const sameDay = dayKey(date) === dayKey();
+  return new Intl.DateTimeFormat("en-GB", sameDay ? { hour: "2-digit", minute: "2-digit" } : { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+function refreshSyncUI() {
+  const topStatus = document.getElementById("cloud-status");
+  const settingsStatus = document.getElementById("sync-status");
+  const settingsAction = document.getElementById("sync-action");
+  const privacyNote = document.getElementById("privacy-note");
+  let topLabel = "Private";
+  let detail = "Not connected · this device only";
+  let phase = "private";
+  if (cloudSync.namespace) {
+    phase = syncPhase;
+    if (cloudSync.conflict || syncPhase === "conflict") {
+      topLabel = "Review sync";
+      detail = "Action needed · choose which copy to keep";
+      phase = "conflict";
+    } else if (syncPhase === "syncing") {
+      topLabel = "Syncing";
+      detail = "Encrypting and checking devices…";
+    } else if (syncPhase === "offline" || !navigator.onLine) {
+      topLabel = "Saved offline";
+      detail = cloudSync.dirty ? "Changes queued · sync resumes online" : "Offline · latest copy saved here";
+      phase = "offline";
+    } else if (syncPhase === "error") {
+      topLabel = "Sync paused";
+      detail = "Saved here · tap to retry";
+      phase = "error";
+    } else if (cloudSync.dirty) {
+      topLabel = "Saving";
+      detail = "Changes saved here · syncing shortly";
+      phase = "pending";
+    } else {
+      topLabel = "Synced";
+      detail = `Up to date${cloudSync.lastSyncedAt ? ` · ${formatSyncTime(cloudSync.lastSyncedAt)}` : ""}`;
+      phase = "synced";
+    }
+  }
+  if (topStatus) {
+    topStatus.dataset.syncPhase = phase;
+    const label = topStatus.querySelector("span");
+    if (label) label.textContent = topLabel;
+  }
+  if (settingsStatus) settingsStatus.textContent = detail;
+  if (settingsAction) settingsAction.textContent = cloudSync.conflict ? "!" : "›";
+  if (privacyNote) privacyNote.textContent = cloudSync.namespace ? "Your synced data is encrypted before leaving this device. Keep your pairing link private." : "Your data stays private to this browser unless you deliberately transfer or sync it.";
 }
 
 function openSettings() {
@@ -1360,7 +1465,7 @@ function hideLock() {
   document.body.classList.remove("locked");
   document.getElementById("lock-screen").classList.add("hidden");
   scheduleAutoLock();
-  processPendingHandoff();
+  processPendingTransfers();
 }
 
 function scheduleAutoLock() {
@@ -1415,14 +1520,300 @@ async function decryptHandoff(payload, password) {
   return JSON.parse(new TextDecoder().decode(unpacked));
 }
 
+function randomHex(size = 12) {
+  return [...crypto.getRandomValues(new Uint8Array(size))].map(value => value.toString(16).padStart(2, "0")).join("");
+}
+
+function syncRelayUrl(config = cloudSync) {
+  return `${SYNC_RELAY}/${encodeURIComponent(config.namespace)}/${SYNC_PATH}`;
+}
+
+function syncHeaders(config = cloudSync, includeContent = false) {
+  const headers = { "X-Mantle-Key": config.relayKey };
+  if (includeContent) headers["Content-Type"] = "application/json";
+  return headers;
+}
+
+async function encryptCloudState(config, revision, parentChangeId = "") {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const packed = await gzipBytes(new TextEncoder().encode(JSON.stringify(state)));
+  const key = await crypto.subtle.importKey("raw", base64UrlToBytes(config.encryptionKey), { name: "AES-GCM" }, false, ["encrypt"]);
+  const additionalData = new TextEncoder().encode(`50x-sync:${config.namespace}`);
+  const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData }, key, packed.bytes);
+  return { kind: "50x-sync", version: 1, revision, changeId: crypto.randomUUID(), parentChangeId, updatedAt: new Date().toISOString(), updatedBy: config.deviceId, compressed: packed.compressed, iv: bytesToBase64Url(iv), data: bytesToBase64Url(new Uint8Array(encrypted)) };
+}
+
+async function decryptCloudState(envelope, config = cloudSync) {
+  if (envelope?.kind !== "50x-sync" || Number(envelope.version) !== 1 || !envelope.iv || !envelope.data) throw new Error("Invalid encrypted sync data");
+  const key = await crypto.subtle.importKey("raw", base64UrlToBytes(config.encryptionKey), { name: "AES-GCM" }, false, ["decrypt"]);
+  const additionalData = new TextEncoder().encode(`50x-sync:${config.namespace}`);
+  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: base64UrlToBytes(envelope.iv), additionalData }, key, base64UrlToBytes(envelope.data));
+  const unpacked = await gunzipBytes(new Uint8Array(decrypted), envelope.compressed);
+  const result = JSON.parse(new TextDecoder().decode(unpacked));
+  if (!result?.week || !Array.isArray(result.tasks)) throw new Error("Invalid Life OS state");
+  return result;
+}
+
+async function fetchRemoteEnvelope(config = cloudSync) {
+  const response = await fetch(syncRelayUrl(config), { headers: syncHeaders(config), cache: "no-store" });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`Sync read failed (${response.status})`);
+  return response.json();
+}
+
+async function writeRemoteEnvelope(envelope, config = cloudSync) {
+  const body = JSON.stringify(envelope);
+  if (new Blob([body]).size > 63000) throw new Error("Your encrypted Life OS has outgrown the free sync space. Export a backup and trim older history.");
+  const response = await fetch(syncRelayUrl(config), { method: "POST", headers: syncHeaders(config, true), body, cache: "no-store" });
+  if (!response.ok) throw new Error(`Sync write failed (${response.status})`);
+}
+
+function pairPayload(config = cloudSync) {
+  return bytesToBase64Url(new TextEncoder().encode(JSON.stringify({ version: 1, namespace: config.namespace, relayKey: config.relayKey, encryptionKey: config.encryptionKey })));
+}
+
+function parsePairPayload(value) {
+  const payload = typeof value === "string" ? JSON.parse(new TextDecoder().decode(base64UrlToBytes(value))) : value;
+  if (Number(payload?.version) !== 1 || !/^[a-z0-9-]{10,80}$/i.test(payload.namespace || "") || !/^[a-f0-9]{32,128}$/i.test(payload.relayKey || "") || !/^[A-Za-z0-9_-]{40,60}$/.test(payload.encryptionKey || "")) throw new Error("Invalid pairing link");
+  return payload;
+}
+
+function readSyncPairFromHash() {
+  try {
+    const match = location.hash.match(/(?:^#|&)sync=([^&]+)/);
+    const value = match ? decodeURIComponent(match[1]) : "";
+    return value ? parsePairPayload(value) : null;
+  } catch {
+    return null;
+  }
+}
+
+function cloudPairingUrl() {
+  const base = location.protocol === "https:" ? `${location.origin}${location.pathname}` : LIVE_URL;
+  return `${base}#sync=${pairPayload()}`;
+}
+
+async function shareCloudPairingLink() {
+  if (!cloudSync.namespace) return;
+  const url = cloudPairingUrl();
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: "50X Life OS private sync", text: "Open this private pairing link on your other device. Anyone with the link can unlock your encrypted sync.", url });
+      showToast("Private pairing link shared");
+      return;
+    } catch (error) {
+      if (error.name !== "AbortError" && error.name !== "NotAllowedError") throw error;
+    }
+  }
+  await copyText(url);
+  showToast("Private pairing link copied");
+}
+
+async function startCloudSync() {
+  if (!crypto.subtle) throw new Error("Encryption is unavailable in this browser");
+  syncPhase = "syncing";
+  refreshSyncUI();
+  const previous = cloudSync;
+  try {
+    const namespace = `50x-${randomHex(14)}`;
+    const response = await fetch(`${SYNC_RELAY}/claim/${namespace}`, { cache: "no-store" });
+    if (!response.ok) throw new Error("Private sync space could not be created");
+    const claim = await response.json();
+    if (!claim.key) throw new Error("Private sync key was not returned");
+    cloudSync = { deviceId: previous.deviceId || crypto.randomUUID(), namespace, relayKey: claim.key, encryptionKey: bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32))), lastRevision: 0, lastChangeId: "", lastSyncedAt: "", dirty: true, conflict: false };
+    const envelope = await encryptCloudState(cloudSync, 1);
+    await writeRemoteEnvelope(envelope, cloudSync);
+    const verified = await fetchRemoteEnvelope(cloudSync);
+    if (verified?.changeId !== envelope.changeId) throw new Error("Private sync could not be verified");
+    Object.assign(cloudSync, { lastRevision: 1, lastChangeId: envelope.changeId, lastSyncedAt: new Date().toISOString(), dirty: false, conflict: false });
+    saveCloudSync();
+    syncPhase = "idle";
+    refreshSyncUI();
+    copyText(cloudPairingUrl()).then(() => showToast("Sync started · pairing link copied")).catch(() => showToast("Sync started · open Device sync to pair another device"));
+  } catch (error) {
+    cloudSync = previous;
+    saveCloudSync();
+    syncPhase = cloudSync.namespace ? "error" : "off";
+    refreshSyncUI();
+    showToast(error.message || "Private sync could not be started");
+    throw error;
+  }
+}
+
+async function connectCloudSync(payload) {
+  if (!crypto.subtle) throw new Error("Encryption is unavailable in this browser");
+  const previousPhase = cloudSync.namespace ? "idle" : "off";
+  try {
+    const pair = parsePairPayload(payload);
+    const nextConfig = { deviceId: cloudSync.deviceId || crypto.randomUUID(), namespace: pair.namespace, relayKey: pair.relayKey, encryptionKey: pair.encryptionKey, lastRevision: 0, lastChangeId: "", lastSyncedAt: "", dirty: false, conflict: false };
+    syncPhase = "syncing";
+    refreshSyncUI();
+    const envelope = await fetchRemoteEnvelope(nextConfig);
+    if (!envelope) throw new Error("The synced copy is no longer available");
+    const imported = await decryptCloudState(envelope, nextConfig);
+    state = normalizeState(imported);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    cloudSync = { ...nextConfig, lastRevision: Number(envelope.revision) || 1, lastChangeId: envelope.changeId || "", lastSyncedAt: new Date().toISOString() };
+    saveCloudSync();
+    pendingSyncPair = null;
+    if (location.hash.includes("sync=")) history.replaceState(null, "", `${location.pathname}${location.search}`);
+    syncPhase = "idle";
+    render();
+    refreshSyncUI();
+    showToast("This device is now synced");
+  } catch (error) {
+    syncPhase = navigator.onLine ? previousPhase : "offline";
+    refreshSyncUI();
+    showToast(error.message || "This device could not connect");
+    throw error;
+  }
+}
+
+function applyRemoteEnvelope(envelope, imported) {
+  state = normalizeState(imported);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  cloudSync.lastRevision = Number(envelope.revision) || cloudSync.lastRevision;
+  cloudSync.lastChangeId = envelope.changeId || cloudSync.lastChangeId;
+  cloudSync.lastSyncedAt = new Date().toISOString();
+  cloudSync.dirty = false;
+  cloudSync.conflict = false;
+  saveCloudSync();
+  render();
+}
+
+async function pushLocalState(remote) {
+  const revision = Math.max(Number(remote?.revision) || 0, Number(cloudSync.lastRevision) || 0) + 1;
+  const envelope = await encryptCloudState(cloudSync, revision, remote?.changeId || "");
+  await writeRemoteEnvelope(envelope);
+  const verified = await fetchRemoteEnvelope();
+  if (verified?.changeId !== envelope.changeId) {
+    cloudSync.conflict = true;
+    cloudSync.dirty = true;
+    saveCloudSync();
+    syncPhase = "conflict";
+    throw new Error("Another device changed at the same time");
+  }
+  cloudSync.lastRevision = revision;
+  cloudSync.lastChangeId = envelope.changeId;
+  cloudSync.lastSyncedAt = new Date().toISOString();
+  cloudSync.dirty = false;
+  cloudSync.conflict = false;
+  saveCloudSync();
+}
+
+async function performCloudSync(silent = false) {
+  if (!cloudSync.namespace || cloudSync.conflict) return;
+  if (!navigator.onLine) {
+    syncPhase = "offline";
+    refreshSyncUI();
+    return;
+  }
+  syncPhase = "syncing";
+  refreshSyncUI();
+  try {
+    const remote = await fetchRemoteEnvelope();
+    if (!remote) throw new Error("Your private sync space is unavailable");
+    const remoteChanged = Number(remote.revision) !== Number(cloudSync.lastRevision) || String(remote.changeId || "") !== String(cloudSync.lastChangeId || "");
+    if (remoteChanged && cloudSync.dirty) {
+      cloudSync.conflict = true;
+      saveCloudSync();
+      syncPhase = "conflict";
+      if (!silent) showToast("Sync needs a quick decision");
+      return;
+    }
+    if (remoteChanged) applyRemoteEnvelope(remote, await decryptCloudState(remote));
+    if (cloudSync.dirty) await pushLocalState(remote);
+    cloudSync.lastSyncedAt = new Date().toISOString();
+    saveCloudSync();
+    syncPhase = "idle";
+    if (!silent) showToast("Everything is synced");
+  } catch (error) {
+    if (cloudSync.conflict) syncPhase = "conflict";
+    else syncPhase = navigator.onLine ? "error" : "offline";
+    if (!silent) showToast(error.message || "Sync is paused; your changes are safe here");
+  } finally {
+    refreshSyncUI();
+  }
+}
+
+function syncNow(options = {}) {
+  if (syncOperation) return syncOperation;
+  syncOperation = performCloudSync(Boolean(options.silent)).finally(() => { syncOperation = null; });
+  return syncOperation;
+}
+
+function scheduleCloudSync(delay = 1200) {
+  clearTimeout(syncDebounce);
+  if (!cloudSync.namespace || cloudSync.conflict) return;
+  syncDebounce = setTimeout(() => syncNow({ silent: true }), delay);
+}
+
+async function keepLocalSyncCopy() {
+  syncPhase = "syncing";
+  refreshSyncUI();
+  try {
+    const remote = await fetchRemoteEnvelope();
+    if (!remote) throw new Error("The other copy is unavailable");
+    cloudSync.conflict = false;
+    cloudSync.dirty = true;
+    await pushLocalState(remote);
+    syncPhase = "idle";
+    showToast("This device's copy is now synced");
+  } catch (error) {
+    syncPhase = cloudSync.conflict ? "conflict" : "error";
+    showToast(error.message || "Could not finish syncing");
+  } finally {
+    saveCloudSync();
+    refreshSyncUI();
+  }
+}
+
+async function useRemoteSyncCopy() {
+  syncPhase = "syncing";
+  refreshSyncUI();
+  try {
+    const remote = await fetchRemoteEnvelope();
+    if (!remote) throw new Error("The other copy is unavailable");
+    applyRemoteEnvelope(remote, await decryptCloudState(remote));
+    syncPhase = "idle";
+    showToast("The other device's copy is now here");
+  } catch (error) {
+    syncPhase = "conflict";
+    showToast(error.message || "Could not load the other copy");
+  } finally {
+    refreshSyncUI();
+  }
+}
+
+function disconnectCloudSync() {
+  if (!confirm("Disconnect sync on this device? Your Life OS data will stay saved here.")) return false;
+  const deviceId = cloudSync.deviceId || crypto.randomUUID();
+  cloudSync = { deviceId, namespace: "", relayKey: "", encryptionKey: "", lastRevision: 0, lastChangeId: "", lastSyncedAt: "", dirty: false, conflict: false };
+  localStorage.setItem(CLOUD_SYNC_KEY, JSON.stringify(cloudSync));
+  clearTimeout(syncDebounce);
+  syncPhase = "off";
+  refreshSyncUI();
+  showToast("This device is disconnected");
+  return true;
+}
+
 async function copyText(value) {
-  if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(value);
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return;
+    } catch {}
+  }
   const area = document.createElement("textarea");
   area.value = value;
+  area.setAttribute("readonly", "");
+  area.style.position = "fixed";
+  area.style.opacity = "0";
   document.body.appendChild(area);
   area.select();
-  document.execCommand("copy");
+  const copied = document.execCommand("copy");
   area.remove();
+  if (!copied) throw new Error("Copy unavailable");
 }
 
 function downloadBlob(blob, filename) {
@@ -1477,6 +1868,21 @@ function processPendingHandoff() {
   setTimeout(() => openEditor("handoffImport", pendingHandoff), 250);
 }
 
+function processPendingTransfers() {
+  if (!appUnlocked || document.getElementById("editor-dialog").open) return;
+  if (pendingSyncPair) {
+    if (cloudSync.namespace && cloudSync.namespace === pendingSyncPair.namespace) {
+      pendingSyncPair = null;
+      if (location.hash.includes("sync=")) history.replaceState(null, "", `${location.pathname}${location.search}`);
+      showToast("This device is already connected");
+      return;
+    }
+    setTimeout(() => openEditor("syncPair", pendingSyncPair), 250);
+    return;
+  }
+  processPendingHandoff();
+}
+
 function exportBackup() {
   downloadBlob(new Blob([JSON.stringify(state, null, 2)], { type: "application/json" }), `50x-life-os-backup-${dayKey()}.json`);
   showToast("Backup exported");
@@ -1490,7 +1896,7 @@ async function importBackupFile(file) {
   render();
 }
 
-document.addEventListener("click", event => {
+document.addEventListener("click", async event => {
   const target = event.target.closest("button, [data-edit-script]");
   if (!target || document.body.classList.contains("locked")) return;
   if (target.dataset.closeDialog) {
@@ -1500,6 +1906,38 @@ document.addEventListener("click", event => {
   if (target.dataset.viewTarget) return goToView(target.dataset.viewTarget);
   if (target.dataset.scrollTarget) {
     document.getElementById(target.dataset.scrollTarget)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+  if (target.hasAttribute("data-sync-now")) {
+    await syncNow();
+    if (editor?.type === "sync") document.getElementById("dialog-fields").innerHTML = syncEditor();
+    return;
+  }
+  if (target.hasAttribute("data-sync-share")) {
+    try { await shareCloudPairingLink(); } catch { showToast("The pairing link could not be shared"); }
+    return;
+  }
+  if (target.hasAttribute("data-sync-copy")) {
+    try {
+      await copyText(cloudPairingUrl());
+      showToast("Private pairing link copied");
+    } catch {
+      showToast("The pairing link could not be copied");
+    }
+    return;
+  }
+  if (target.hasAttribute("data-sync-disconnect")) {
+    if (disconnectCloudSync()) document.getElementById("editor-dialog").close();
+    return;
+  }
+  if (target.hasAttribute("data-sync-use-local")) {
+    await keepLocalSyncCopy();
+    if (!cloudSync.conflict) document.getElementById("editor-dialog").close();
+    return;
+  }
+  if (target.hasAttribute("data-sync-use-cloud")) {
+    await useRemoteSyncCopy();
+    if (!cloudSync.conflict) document.getElementById("editor-dialog").close();
     return;
   }
   if (target.dataset.connectionType) {
@@ -1704,6 +2142,7 @@ document.getElementById("open-settings").addEventListener("click", openSettings)
 document.getElementById("edit-routines").addEventListener("click", () => { document.getElementById("settings-dialog").close(); goToView("architecture"); });
 document.getElementById("reminder-settings").addEventListener("click", () => { document.getElementById("settings-dialog").close(); openEditor("reminders"); });
 document.getElementById("security-settings").addEventListener("click", () => { document.getElementById("settings-dialog").close(); openEditor("security"); });
+document.getElementById("device-sync").addEventListener("click", () => { document.getElementById("settings-dialog").close(); openEditor("sync"); });
 document.getElementById("create-handoff").addEventListener("click", () => { document.getElementById("settings-dialog").close(); openEditor("handoff"); });
 document.getElementById("export-data").addEventListener("click", exportBackup);
 document.getElementById("import-data").addEventListener("change", async event => {
@@ -1749,17 +2188,28 @@ document.getElementById("device-unlock").addEventListener("click", unlockWithDev
 
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) hiddenAt = Date.now();
-  else if (security.pinHash && hiddenAt && Date.now() - hiddenAt >= Math.max(1, Number(security.lockMinutes) || 5) * 60000) showLock();
+  else {
+    if (security.pinHash && hiddenAt && Date.now() - hiddenAt >= Math.max(1, Number(security.lockMinutes) || 5) * 60000) showLock();
+    if (!pendingSyncPair) syncNow({ silent: true });
+  }
 });
+
+window.addEventListener("online", () => syncNow({ silent: true }));
+window.addEventListener("offline", () => { syncPhase = cloudSync.namespace ? "offline" : "off"; refreshSyncUI(); });
+window.addEventListener("focus", () => { if (!pendingSyncPair) syncNow({ silent: true }); });
 
 async function initialise() {
   if ("serviceWorker" in navigator && location.protocol !== "file:") {
     try { await navigator.serviceWorker.register("service-worker.js"); } catch {}
   }
   render();
+  refreshSyncUI();
   startReminderChecks();
+  clearInterval(syncTimer);
+  syncTimer = setInterval(() => syncNow({ silent: true }), 45000);
   if (security.pinHash) showLock();
-  else processPendingHandoff();
+  else processPendingTransfers();
+  if (cloudSync.namespace && !pendingSyncPair) scheduleCloudSync(400);
 }
 
 initialise();

@@ -19,7 +19,7 @@
           <span class="brand-copy"><strong>Life OS</strong><small>Personal command system</small></span>
         </button>
         <div class="top-actions">
-          <span class="local-status"><i></i>Private</span>
+          <span class="local-status" id="cloud-status"><i></i><span>Private</span></span>
           <button class="icon-button capture-button" id="quick-capture" aria-label="Quick capture">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
           </button>
@@ -90,6 +90,7 @@
           <button type="button" class="settings-row" id="reminder-settings"><span><strong>Gentle reminders</strong><small id="reminder-status">Off</small></span><span>›</span></button>
           <button type="button" class="settings-row" id="security-settings"><span><strong>App lock</strong><small id="security-status">Off</small></span><span>›</span></button>
           <p class="settings-section-label">Data + devices</p>
+          <button type="button" class="settings-row sync-settings-row" id="device-sync"><span><strong>Encrypted device sync</strong><small id="sync-status">Not connected · this device only</small></span><span id="sync-action">›</span></button>
           <button type="button" class="settings-row" id="create-handoff"><span><strong>Secure phone handoff</strong><small>Share an encrypted copy with another device</small></span><span>↗</span></button>
           <label class="settings-row file-row"><span><strong>Import secure handoff</strong><small>Open an encrypted 50X transfer file</small></span><span>↑</span><input id="import-handoff" type="file" accept=".50x,application/json" /></label>
           <button type="button" class="settings-row" id="export-data"><span><strong>Export backup</strong><small>Save everything as a file</small></span><span>↓</span></button>
@@ -97,7 +98,7 @@
           <p class="settings-section-label">Reset</p>
           <button type="button" class="settings-row danger-row" id="reset-data"><span><strong>Reset app</strong><small>Return to the 50X starter system</small></span><span>↺</span></button>
         </div>
-        <p class="privacy-note">Your data stays private to this browser unless you deliberately transfer it.</p>
+        <p class="privacy-note" id="privacy-note">Your data stays private to this browser unless you deliberately transfer it.</p>
       </form>
     </dialog>
 
