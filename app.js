@@ -108,10 +108,10 @@ function normalizeTasks(inputTasks, fallback) {
     duration: Math.max(5, Number(item.duration) || 30),
     dueDate: String(item.dueDate || ""),
     alignment: ["primary", "supporting", "maintenance"].includes(item.alignment) ? item.alignment : "supporting",
-    preparation: String(item.preparation || setup.preparation || ""),
-    placement: String(item.placement || setup.placement || ""),
-    launchCue: String(item.launchCue || setup.launchCue || ""),
-    fallback: String(item.fallback || setup.fallback || ""),
+    preparation: String(item.preparation ?? setup.preparation ?? ""),
+    placement: String(item.placement ?? setup.placement ?? ""),
+    launchCue: String(item.launchCue ?? setup.launchCue ?? ""),
+    fallback: String(item.fallback ?? setup.fallback ?? ""),
     createdAt: item.createdAt || new Date().toISOString(),
     done: Boolean(item.done)
     };
@@ -163,14 +163,17 @@ function normalizeMaintenance(items) {
 function normalizeState(input) {
   const base = defaultState();
   if (!input || typeof input !== "object") return base;
+  const inputVersion = Number(input.version) || 0;
   const sourceCues = Array.isArray(input.cues) ? input.cues : [];
   const cues = sourceCues.map(cue => {
     const match = CUE_DEFAULTS.find(item => item.name.toLowerCase() === String(cue.name).toLowerCase());
-    return { id: cue.id || crypto.randomUUID(), ...match, ...cue, setup: cue.setup || match?.setup || "Prepare the environment before the cue arrives", remove: cue.remove || match?.remove || "Remove the easiest competing action" };
+    return { id: cue.id || crypto.randomUUID(), ...match, ...cue, setup: cue.setup ?? match?.setup ?? "Prepare the environment before the cue arrives", remove: cue.remove ?? match?.remove ?? "Remove the easiest competing action" };
   });
-  CUE_DEFAULTS.forEach(cue => {
-    if (!cues.some(item => item.name.toLowerCase() === cue.name.toLowerCase())) cues.push({ id: crypto.randomUUID(), ...cue });
-  });
+  if (inputVersion < 7) {
+    CUE_DEFAULTS.forEach(cue => {
+      if (!cues.some(item => item.name.toLowerCase() === cue.name.toLowerCase())) cues.push({ id: crypto.randomUUID(), ...cue });
+    });
+  }
   const daily = input.daily && typeof input.daily === "object" ? input.daily : {};
   Object.values(daily).forEach(day => {
     if (day.mode === "recovery") day.mode = "minimum";
@@ -349,7 +352,11 @@ function taskReason(task, daily = todayState()) {
 
 function recentDailyRecords(length = 7) {
   const earliest = startOfDay(addDays(new Date(), -(length - 1)));
-  return Object.entries(state.daily).filter(([key]) => dateFromKey(key) >= earliest).sort(([a], [b]) => a.localeCompare(b));
+  const tomorrow = startOfDay(addDays(new Date(), 1));
+  return Object.entries(state.daily).filter(([key]) => {
+    const date = dateFromKey(key);
+    return date >= earliest && date < tomorrow;
+  }).sort(([a], [b]) => a.localeCompare(b));
 }
 
 function connectionSignal(daily = todayState()) {
@@ -419,26 +426,73 @@ function billCycle(bill, reference = new Date()) {
   return { period: bill.dueDate || dayKey(due), due };
 }
 
+function firstRecurringBillCycle(bill, reference = new Date()) {
+  const parsedCreated = new Date(bill.createdAt || reference);
+  const created = Number.isNaN(parsedCreated.getTime()) ? startOfDay(reference) : startOfDay(parsedCreated);
+  if (bill.frequency === "annual") {
+    let year = created.getFullYear();
+    let due = clampedDate(year, bill.dueMonth - 1, bill.dueDay);
+    if (due < created) {
+      year += 1;
+      due = clampedDate(year, bill.dueMonth - 1, bill.dueDay);
+    }
+    return { period: String(year), due };
+  }
+  let month = new Date(created.getFullYear(), created.getMonth(), 1);
+  let due = clampedDate(month.getFullYear(), month.getMonth(), bill.dueDay);
+  if (due < created) {
+    month = new Date(month.getFullYear(), month.getMonth() + 1, 1);
+    due = clampedDate(month.getFullYear(), month.getMonth(), bill.dueDay);
+  }
+  return { period: monthKey(month), due };
+}
+
 function nextOutstandingBillCycle(bill, reference = new Date()) {
   if (bill.frequency === "oneoff") {
     const cycle = billCycle(bill, reference);
     return bill.paidPeriods.includes(cycle.period) ? null : cycle;
   }
-  const created = new Date(bill.createdAt || reference);
+  const first = firstRecurringBillCycle(bill, reference);
   if (bill.frequency === "annual") {
-    for (let year = created.getFullYear(); year <= reference.getFullYear() + 2; year += 1) {
+    for (let year = first.due.getFullYear(); year <= reference.getFullYear() + 2; year += 1) {
       const period = String(year);
       if (!bill.paidPeriods.includes(period)) return { period, due: clampedDate(year, bill.dueMonth - 1, bill.dueDay) };
     }
     return null;
   }
-  const firstMonth = new Date(created.getFullYear(), created.getMonth(), 1);
+  const firstMonth = new Date(first.due.getFullYear(), first.due.getMonth(), 1);
   const lastMonth = new Date(reference.getFullYear(), reference.getMonth() + 12, 1);
   for (let cursor = new Date(firstMonth); cursor <= lastMonth; cursor.setMonth(cursor.getMonth() + 1)) {
     const period = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`;
     if (!bill.paidPeriods.includes(period)) return { period, due: clampedDate(cursor.getFullYear(), cursor.getMonth(), bill.dueDay) };
   }
   return null;
+}
+
+function outstandingBillCycles(bill, reference = new Date(), horizonDays = 30) {
+  const horizon = startOfDay(addDays(reference, horizonDays));
+  const horizonEnd = addDays(horizon, 1);
+  if (bill.frequency === "oneoff") {
+    const cycle = billCycle(bill, reference);
+    return !bill.paidPeriods.includes(cycle.period) && cycle.due < horizonEnd ? [{ ...cycle, days: daysFromToday(cycle.due, reference) }] : [];
+  }
+  const first = firstRecurringBillCycle(bill, reference);
+  const cycles = [];
+  if (bill.frequency === "annual") {
+    for (let year = first.due.getFullYear(); year <= horizon.getFullYear(); year += 1) {
+      const period = String(year);
+      const due = clampedDate(year, bill.dueMonth - 1, bill.dueDay);
+      if (due < horizonEnd && !bill.paidPeriods.includes(period)) cycles.push({ period, due, days: daysFromToday(due, reference) });
+    }
+    return cycles;
+  }
+  const lastMonth = new Date(horizon.getFullYear(), horizon.getMonth(), 1);
+  for (let cursor = new Date(first.due.getFullYear(), first.due.getMonth(), 1); cursor <= lastMonth; cursor.setMonth(cursor.getMonth() + 1)) {
+    const period = monthKey(cursor);
+    const due = clampedDate(cursor.getFullYear(), cursor.getMonth(), bill.dueDay);
+    if (due < horizonEnd && !bill.paidPeriods.includes(period)) cycles.push({ period, due, days: daysFromToday(due, reference) });
+  }
+  return cycles;
 }
 
 function billScheduleEntry(bill, reference = new Date()) {
@@ -494,11 +548,13 @@ function moneyTotals() {
     const sign = item.type === "income" ? 1 : -1;
     totals[item.account] = (Number(totals[item.account]) || 0) + sign * Number(item.amount || 0);
   });
-  const billSchedule = state.finances.bills.map(bill => billScheduleEntry(bill)).sort((a, b) => a.due - b.due);
+  const reference = new Date();
+  const billSchedule = state.finances.bills.map(bill => billScheduleEntry(bill, reference)).sort((a, b) => a.due - b.due);
+  const protectedBillCycles = state.finances.bills.flatMap(bill => outstandingBillCycles(bill, reference).map(cycle => ({ bill, ...cycle })));
   const monthlyBills = state.finances.bills.reduce((sum, item) => sum + monthlyBillEquivalent(item), 0);
-  const overdueBills = billSchedule.filter(item => item.hasOutstanding && item.days < 0).reduce((sum, item) => sum + Number(item.bill.amount || 0), 0);
-  const dueSoon = billSchedule.filter(item => item.hasOutstanding && item.days >= 0 && item.days <= 7).reduce((sum, item) => sum + Number(item.bill.amount || 0), 0);
-  const dueThirty = billSchedule.filter(item => item.hasOutstanding && item.days >= 0 && item.days <= 30).reduce((sum, item) => sum + Number(item.bill.amount || 0), 0);
+  const overdueBills = protectedBillCycles.filter(item => item.days < 0).reduce((sum, item) => sum + Number(item.bill.amount || 0), 0);
+  const dueSoon = protectedBillCycles.filter(item => item.days >= 0 && item.days <= 7).reduce((sum, item) => sum + Number(item.bill.amount || 0), 0);
+  const dueThirty = protectedBillCycles.filter(item => item.days >= 0 && item.days <= 30).reduce((sum, item) => sum + Number(item.bill.amount || 0), 0);
   const obligations = state.finances.obligations.reduce((sum, item) => sum + Math.max(0, Number(item.target || 0) - Number(item.paid || 0)), 0);
   const obligationPlan = state.finances.obligations.reduce((sum, item) => sum + Number(item.monthlyPayment || 0), 0);
   const investments = state.finances.investments.reduce((sum, item) => sum + Number(item.current || 0), 0);
@@ -1014,9 +1070,10 @@ async function saveEditor() {
   if (editor.type === "routine") {
     const steps = [...form.querySelectorAll(".routine-step-editor")].map(row => [row.querySelector('[name="stepName"]').value.trim(), row.querySelector('[name="stepCue"]').value.trim(), Math.max(1, Number(row.querySelector('[name="stepDuration"]').value) || 5)]).filter(step => step[0]);
     if (!steps.length) return showToast("Keep at least one routine step"), false;
+    const sequenceChanged = JSON.stringify(state.modes[editor.id].routine) !== JSON.stringify(steps);
     state.modes[editor.id].note = data.note.trim();
     state.modes[editor.id].routine = steps;
-    if (todayState().mode === editor.id) todayState().routine = [];
+    if (sequenceChanged && todayState().mode === editor.id) todayState().routine = [];
     saveState("Routine updated");
     render();
     return true;
@@ -1479,8 +1536,9 @@ document.addEventListener("click", event => {
   if (target.dataset.energy) {
     const daily = todayState();
     daily.energy = Number(target.dataset.energy);
-    daily.mode = recoverySignal(daily).mode;
-    daily.routine = [];
+    const nextMode = recoverySignal(daily).mode;
+    if (daily.mode !== nextMode) daily.routine = [];
+    daily.mode = nextMode;
     saveState();
     return render();
   }
@@ -1496,8 +1554,10 @@ document.addEventListener("click", event => {
   }
   if (target.dataset.mode) {
     const daily = todayState();
-    daily.mode = target.dataset.mode;
-    daily.routine = [];
+    if (daily.mode !== target.dataset.mode) {
+      daily.mode = target.dataset.mode;
+      daily.routine = [];
+    }
     saveState();
     return render();
   }
