@@ -1436,6 +1436,10 @@ async function importBackupFile(file) {
 document.addEventListener("click", event => {
   const target = event.target.closest("button, [data-edit-script]");
   if (!target || document.body.classList.contains("locked")) return;
+  if (target.dataset.closeDialog) {
+    document.getElementById(target.dataset.closeDialog)?.close();
+    return;
+  }
   if (target.dataset.viewTarget) return goToView(target.dataset.viewTarget);
   if (target.dataset.scrollTarget) {
     document.getElementById(target.dataset.scrollTarget)?.scrollIntoView({ behavior: "smooth", block: "center" });
