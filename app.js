@@ -3,7 +3,7 @@ const SECURITY_KEY = "50x-life-os-security-v1";
 const CLOUD_SYNC_KEY = "50x-life-os-cloud-sync-v1";
 const MIGRATION_BACKUP_KEY = "50x-life-os-pre-v8-backup";
 const PRE_RESTORE_BACKUP_KEY = "50x-life-os-before-snapshot-restore";
-const CURRENT_STATE_VERSION = 8;
+const CURRENT_STATE_VERSION = 9;
 const LIVE_URL = "https://stevehenderson1448-netizen.github.io/flow-maxing-os/";
 const SYNC_RELAY = "https://mantledb.sh/v2";
 const SYNC_PATH = "life-os";
@@ -47,6 +47,18 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function toMinor(value) {
+  return Math.round((Number(value) || 0) * 100);
+}
+
+function fromMinor(value) {
+  return Math.round(Number(value) || 0) / 100;
+}
+
+function minorValue(item, minorKey, majorKey) {
+  return Number.isInteger(item?.[minorKey]) ? item[minorKey] : toMinor(item?.[majorKey]);
+}
+
 function weekStartKey(date = new Date()) {
   const result = new Date(date);
   const day = result.getDay() || 7;
@@ -63,6 +75,11 @@ const defaultState = () => ({
     { id: crypto.randomUUID(), name: "Complete one focused business work block", impact: 3, complexity: 3, energy: "high", duration: 90, dueDate: "", alignment: "primary", ...TASK_SETUP_DEFAULTS["Complete one focused business work block"], createdAt: new Date().toISOString(), done: false },
     { id: crypto.randomUUID(), name: "Capture decisions and the next visible action", impact: 2, complexity: 1, energy: "low", duration: 15, dueDate: "", alignment: "supporting", ...TASK_SETUP_DEFAULTS["Capture decisions and the next visible action"], createdAt: new Date().toISOString(), done: false }
   ],
+  goals: [],
+  projects: [],
+  milestones: [],
+  projectDecisions: [],
+  projectBlockers: [],
   inbox: [],
   history: [],
   modes: clone(DEFAULT_MODES),
@@ -75,7 +92,21 @@ const defaultState = () => ({
     { id: crypto.randomUUID(), trigger: "I become distracted", response: "I capture the distraction in a note and return to the current task." },
     { id: crypto.randomUUID(), trigger: "I feel mentally exhausted", response: "I switch to a simpler task or recover instead of forcing complex work." }
   ],
-  finances: { balances: { personal: 0, business: 0, held: 0 }, settings: { reserveTarget: 500, enjoymentAllowance: 0 }, transactions: [], bills: [{ id: crypto.randomUUID(), name: "Known monthly commitments", amount: 710, frequency: "monthly", dueDay: new Date().getDate(), dueMonth: new Date().getMonth() + 1, dueDate: "", kind: "essential", autopay: false, account: "personal", remindDays: 3, createdAt: new Date().toISOString(), paidPeriods: [], previousAmount: 0, amountChangedAt: "", lastReviewed: "" }], obligations: [{ id: crypto.randomUUID(), name: "Money to replace", target: 3000, paid: 0, monthlyPayment: 0 }], investments: [] },
+  finances: {
+    balances: { personal: 0, business: 0, held: 0 }, balancesMinor: { personal: 0, business: 0, held: 0 },
+    settings: { reserveTarget: 500, reserveTargetMinor: 50000, enjoymentAllowance: 0, enjoymentAllowanceMinor: 0 },
+    transactions: [],
+    bills: [
+      { id: crypto.randomUUID(), name: "Rent", amount: 300, amountMinor: 30000, frequency: "monthly", dueDay: 1, dueMonth: 1, dueDate: "", kind: "essential", autopay: false, account: "personal", remindDays: 5, createdAt: new Date().toISOString(), paidPeriods: [], previousAmount: 0, amountChangedAt: "", lastReviewed: "" },
+      { id: crypto.randomUUID(), name: "Food", amount: 100, amountMinor: 10000, frequency: "monthly", dueDay: 1, dueMonth: 1, dueDate: "", kind: "essential", autopay: false, account: "personal", remindDays: 3, createdAt: new Date().toISOString(), paidPeriods: [], previousAmount: 0, amountChangedAt: "", lastReviewed: "" },
+      { id: crypto.randomUUID(), name: "Transport", amount: 100, amountMinor: 10000, frequency: "monthly", dueDay: 1, dueMonth: 1, dueDate: "", kind: "essential", autopay: false, account: "personal", remindDays: 3, createdAt: new Date().toISOString(), paidPeriods: [], previousAmount: 0, amountChangedAt: "", lastReviewed: "" },
+      { id: crypto.randomUUID(), name: "Business AI development tools", amount: 125, amountMinor: 12500, frequency: "monthly", dueDay: 1, dueMonth: 1, dueDate: "", kind: "essential", autopay: false, account: "business", remindDays: 3, createdAt: new Date().toISOString(), paidPeriods: [], previousAmount: 0, amountChangedAt: "", lastReviewed: "" },
+      { id: crypto.randomUUID(), name: "Phone", amount: 65, amountMinor: 6500, frequency: "monthly", dueDay: 1, dueMonth: 1, dueDate: "", kind: "essential", autopay: false, account: "personal", remindDays: 3, createdAt: new Date().toISOString(), paidPeriods: [], previousAmount: 0, amountChangedAt: "", lastReviewed: "" },
+      { id: crypto.randomUUID(), name: "Credit card minimum", amount: 20, amountMinor: 2000, frequency: "monthly", dueDay: 1, dueMonth: 1, dueDate: "", kind: "essential", autopay: false, account: "personal", remindDays: 5, createdAt: new Date().toISOString(), paidPeriods: [], previousAmount: 0, amountChangedAt: "", lastReviewed: "" }
+    ],
+    obligations: [{ id: crypto.randomUUID(), name: "Personal repayment obligation", target: 3000, targetMinor: 300000, paid: 0, paidMinor: 0, monthlyPayment: 0, monthlyPaymentMinor: 0 }],
+    investments: [], budgets: [], incomeForecasts: [], savingsGoals: []
+  },
   maintenance: [],
   daily: {},
   reflection: { win: "", friction: "", lesson: "", next: "", recovery: "maintain", ratings: [3, 3, 3, 3, 3] },
@@ -89,7 +120,8 @@ const defaultState = () => ({
     journal: []
   },
   monthly: {},
-  preferences: { reminders: { enabled: false, morning: "08:00", evening: "21:00", weeklyDay: "0", weeklyTime: "18:00", lastFired: {} } },
+  assistant: { recommendations: [], approvedChanges: [] },
+  preferences: { reminders: { enabled: false, morning: "08:00", evening: "21:00", weeklyDay: "0", weeklyTime: "18:00", lastFired: {} }, assistant: { provider: "local", shareFinancial: true, shareLife: false, shareJournal: false } },
   sync: { lastHandoff: null }
 });
 
@@ -122,6 +154,9 @@ function normalizeTasks(inputTasks, fallback) {
     duration: Math.max(5, Number(item.duration) || 30),
     dueDate: String(item.dueDate || ""),
     alignment: ["primary", "supporting", "maintenance"].includes(item.alignment) ? item.alignment : "supporting",
+    projectId: String(item.projectId || ""),
+    goalId: String(item.goalId || ""),
+    dependencyIds: Array.isArray(item.dependencyIds) ? item.dependencyIds.map(String) : [],
     preparation: String(item.preparation ?? setup.preparation ?? ""),
     placement: String(item.placement ?? setup.placement ?? ""),
     launchCue: String(item.launchCue ?? setup.launchCue ?? ""),
@@ -142,7 +177,8 @@ function normalizeBills(finances, fallback) {
   return source.map(item => ({
     id: item.id || crypto.randomUUID(),
     name: String(item.name || "Untitled bill"),
-    amount: Math.max(0, Number(item.amount) || 0),
+    amount: Math.max(0, Number(item.amount) || fromMinor(item.amountMinor)),
+    amountMinor: Math.max(0, minorValue(item, "amountMinor", "amount")),
     frequency: ["monthly", "annual", "oneoff"].includes(item.frequency) ? item.frequency : "monthly",
     dueDay: Math.min(31, Math.max(1, Number(item.dueDay) || today.getDate())),
     dueMonth: Math.min(12, Math.max(1, Number(item.dueMonth) || today.getMonth() + 1)),
@@ -153,7 +189,8 @@ function normalizeBills(finances, fallback) {
     remindDays: Math.min(30, Math.max(0, Number(item.remindDays ?? 3))),
     createdAt: item.createdAt || new Date().toISOString(),
     paidPeriods: Array.isArray(item.paidPeriods) ? [...new Set(item.paidPeriods.map(String))] : [],
-    previousAmount: Math.max(0, Number(item.previousAmount) || 0),
+    previousAmount: Math.max(0, Number(item.previousAmount) || fromMinor(item.previousAmountMinor)),
+    previousAmountMinor: Math.max(0, minorValue(item, "previousAmountMinor", "previousAmount")),
     amountChangedAt: String(item.amountChangedAt || ""),
     lastReviewed: String(item.lastReviewed || "")
   }));
@@ -193,7 +230,8 @@ function normalizeLife(inputLife, fallback) {
     name: String(item.name || "Meaningful experience"),
     category: ["social", "outing", "travel", "hobby", "celebration", "personal"].includes(item.category) ? item.category : "personal",
     targetDate: String(item.targetDate || ""),
-    costEstimate: Math.max(0, Number(item.costEstimate) || 0),
+    costEstimate: Math.max(0, Number(item.costEstimate) || fromMinor(item.costEstimateMinor)),
+    costEstimateMinor: Math.max(0, minorValue(item, "costEstimateMinor", "costEstimate")),
     status: ["idea", "planned", "completed", "archived"].includes(item.status) ? item.status : "idea",
     notes: String(item.notes || ""),
     completedAt: String(item.completedAt || ""),
@@ -221,11 +259,93 @@ function normalizeLife(inputLife, fallback) {
   };
 }
 
+function normalizeGoals(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map(item => ({
+    id: item.id || crypto.randomUUID(),
+    name: String(item.name || "Meaningful goal"),
+    area: ["business", "money", "education", "life", "health", "faith", "creative"].includes(item.area) ? item.area : "life",
+    horizon: ["month", "quarter", "year", "longterm"].includes(item.horizon) ? item.horizon : "quarter",
+    targetDate: String(item.targetDate || ""),
+    why: String(item.why || ""),
+    evidence: String(item.evidence || ""),
+    status: ["active", "paused", "completed", "archived"].includes(item.status) ? item.status : "active",
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
+  }));
+}
+
+function normalizeProjects(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map(item => ({
+    id: item.id || crypto.randomUUID(),
+    name: String(item.name || "Project"),
+    category: ["business", "software", "education", "creative", "personal"].includes(item.category) ? item.category : "personal",
+    goalId: String(item.goalId || ""),
+    outcome: String(item.outcome || ""),
+    nextReviewDate: String(item.nextReviewDate || ""),
+    priority: Math.min(3, Math.max(1, Number(item.priority) || 2)),
+    status: ["active", "paused", "completed", "archived"].includes(item.status) ? item.status : "active",
+    notes: String(item.notes || ""),
+    links: Array.isArray(item.links) ? item.links.map(link => ({ label: String(link.label || "Link"), url: String(link.url || "") })).filter(link => link.url) : [],
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
+  }));
+}
+
+function normalizeMilestones(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map(item => ({
+    id: item.id || crypto.randomUUID(),
+    projectId: String(item.projectId || ""),
+    name: String(item.name || "Milestone"),
+    dueDate: String(item.dueDate || ""),
+    status: ["open", "completed"].includes(item.status) ? item.status : "open",
+    createdAt: item.createdAt || new Date().toISOString(),
+    completedAt: String(item.completedAt || "")
+  }));
+}
+
+function normalizeProjectRecords(items, type) {
+  if (!Array.isArray(items)) return [];
+  return items.map(item => ({
+    id: item.id || crypto.randomUUID(),
+    projectId: String(item.projectId || ""),
+    text: String(item.text || ""),
+    reason: String(item.reason || ""),
+    status: type === "blocker" && ["open", "resolved"].includes(item.status) ? item.status : type === "decision" ? "recorded" : "open",
+    createdAt: item.createdAt || new Date().toISOString(),
+    resolvedAt: String(item.resolvedAt || "")
+  }));
+}
+
+function normalizeTransactions(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map(item => ({ ...item, id: item.id || crypto.randomUUID(), amount: Math.max(0, Number(item.amount) || fromMinor(item.amountMinor)), amountMinor: Math.max(0, minorValue(item, "amountMinor", "amount")), createdAt: item.createdAt || new Date().toISOString() }));
+}
+
+function normalizeBudgets(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map(item => ({ id: item.id || crypto.randomUUID(), name: String(item.name || "Budget line"), category: String(item.category || "Other"), account: ["personal", "business"].includes(item.account) ? item.account : "personal", amount: Math.max(0, Number(item.amount) || fromMinor(item.amountMinor)), amountMinor: Math.max(0, minorValue(item, "amountMinor", "amount")), month: String(item.month || monthKey()), createdAt: item.createdAt || new Date().toISOString() }));
+}
+
+function normalizeIncomeForecasts(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map(item => ({ id: item.id || crypto.randomUUID(), source: String(item.source || "Expected income"), amount: Math.max(0, Number(item.amount) || fromMinor(item.amountMinor)), amountMinor: Math.max(0, minorValue(item, "amountMinor", "amount")), expectedDate: String(item.expectedDate || ""), status: ["expected", "confirmed", "received", "cancelled"].includes(item.status) ? item.status : "expected", account: ["personal", "business"].includes(item.account) ? item.account : "personal", notes: String(item.notes || ""), createdAt: item.createdAt || new Date().toISOString(), receivedAt: String(item.receivedAt || "") }));
+}
+
+function normalizeSavingsGoals(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map(item => ({ id: item.id || crypto.randomUUID(), name: String(item.name || "Savings goal"), target: Math.max(0, Number(item.target) || fromMinor(item.targetMinor)), targetMinor: Math.max(0, minorValue(item, "targetMinor", "target")), saved: Math.max(0, Number(item.saved) || fromMinor(item.savedMinor)), savedMinor: Math.max(0, minorValue(item, "savedMinor", "saved")), deadline: String(item.deadline || ""), status: ["active", "completed", "paused"].includes(item.status) ? item.status : "active", createdAt: item.createdAt || new Date().toISOString() }));
+}
+
 function validateState(candidate) {
   if (!candidate || typeof candidate !== "object") return false;
   if (candidate.version !== CURRENT_STATE_VERSION) return false;
   if (!candidate.week || !Array.isArray(candidate.tasks) || !Array.isArray(candidate.inbox)) return false;
   if (!candidate.finances || !Array.isArray(candidate.finances.transactions) || !Array.isArray(candidate.finances.bills)) return false;
+  if (!Array.isArray(candidate.goals) || !Array.isArray(candidate.projects) || !Array.isArray(candidate.milestones)) return false;
+  if (!Array.isArray(candidate.finances.budgets) || !Array.isArray(candidate.finances.incomeForecasts) || !Array.isArray(candidate.finances.savingsGoals)) return false;
   if (!candidate.life || !Array.isArray(candidate.life.contacts) || !Array.isArray(candidate.life.experiences) || !Array.isArray(candidate.life.journal)) return false;
   return true;
 }
@@ -249,12 +369,26 @@ function normalizeState(input) {
     if (day.mode === "recovery") day.mode = "minimum";
     if (day.mode === "steady") day.mode = "standard";
   });
+  const balances = { ...base.finances.balances, ...(input.finances?.balances || {}) };
+  const balancesMinor = {
+    personal: Number.isInteger(input.finances?.balancesMinor?.personal) ? input.finances.balancesMinor.personal : toMinor(balances.personal),
+    business: Number.isInteger(input.finances?.balancesMinor?.business) ? input.finances.balancesMinor.business : toMinor(balances.business),
+    held: Number.isInteger(input.finances?.balancesMinor?.held) ? input.finances.balancesMinor.held : toMinor(balances.held)
+  };
+  const financeSettings = { ...base.finances.settings, ...(input.finances?.settings || {}) };
+  financeSettings.reserveTargetMinor = Number.isInteger(input.finances?.settings?.reserveTargetMinor) ? input.finances.settings.reserveTargetMinor : toMinor(financeSettings.reserveTarget);
+  financeSettings.enjoymentAllowanceMinor = Number.isInteger(input.finances?.settings?.enjoymentAllowanceMinor) ? input.finances.settings.enjoymentAllowanceMinor : toMinor(financeSettings.enjoymentAllowance);
   const normalized = {
     ...base,
     ...input,
     version: CURRENT_STATE_VERSION,
     week: { ...base.week, ...(input.week || {}), startedAt: input.week?.startedAt || weekStartKey() },
     tasks: normalizeTasks(input.tasks, base.tasks),
+    goals: normalizeGoals(input.goals),
+    projects: normalizeProjects(input.projects),
+    milestones: normalizeMilestones(input.milestones),
+    projectDecisions: normalizeProjectRecords(input.projectDecisions, "decision"),
+    projectBlockers: normalizeProjectRecords(input.projectBlockers, "blocker"),
     inbox: Array.isArray(input.inbox) ? input.inbox : [],
     history: Array.isArray(input.history) ? input.history : [],
     modes: normalizeModes(input.modes),
@@ -263,20 +397,25 @@ function normalizeState(input) {
     finances: {
       ...base.finances,
       ...(input.finances || {}),
-      balances: { ...base.finances.balances, ...(input.finances?.balances || {}) },
-      settings: { ...base.finances.settings, ...(input.finances?.settings || {}) },
-      transactions: Array.isArray(input.finances?.transactions) ? input.finances.transactions : [],
+      balances,
+      balancesMinor,
+      settings: financeSettings,
+      transactions: normalizeTransactions(input.finances?.transactions),
       bills: normalizeBills(input.finances, base.finances.bills),
       commitments: undefined,
-      obligations: (Array.isArray(input.finances?.obligations) ? input.finances.obligations : base.finances.obligations).map(item => ({ ...item, id: item.id || crypto.randomUUID(), monthlyPayment: Math.max(0, Number(item.monthlyPayment) || 0) })),
-      investments: Array.isArray(input.finances?.investments) ? input.finances.investments : []
+      obligations: (Array.isArray(input.finances?.obligations) ? input.finances.obligations : base.finances.obligations).map(item => ({ ...item, id: item.id || crypto.randomUUID(), target: Math.max(0, Number(item.target) || fromMinor(item.targetMinor)), targetMinor: Math.max(0, minorValue(item, "targetMinor", "target")), paid: Math.max(0, Number(item.paid) || fromMinor(item.paidMinor)), paidMinor: Math.max(0, minorValue(item, "paidMinor", "paid")), monthlyPayment: Math.max(0, Number(item.monthlyPayment) || fromMinor(item.monthlyPaymentMinor)), monthlyPaymentMinor: Math.max(0, minorValue(item, "monthlyPaymentMinor", "monthlyPayment")) })),
+      investments: (Array.isArray(input.finances?.investments) ? input.finances.investments : []).map(item => ({ ...item, id: item.id || crypto.randomUUID(), contributed: Math.max(0, Number(item.contributed) || fromMinor(item.contributedMinor)), contributedMinor: Math.max(0, minorValue(item, "contributedMinor", "contributed")), current: Math.max(0, Number(item.current) || fromMinor(item.currentMinor)), currentMinor: Math.max(0, minorValue(item, "currentMinor", "current")) })),
+      budgets: normalizeBudgets(input.finances?.budgets),
+      incomeForecasts: normalizeIncomeForecasts(input.finances?.incomeForecasts),
+      savingsGoals: normalizeSavingsGoals(input.finances?.savingsGoals)
     },
     maintenance: normalizeMaintenance(input.maintenance),
     daily,
     reflection: { ...base.reflection, ...(input.reflection || {}), ratings: Array.isArray(input.reflection?.ratings) ? input.reflection.ratings : base.reflection.ratings },
     life: normalizeLife(input.life, base.life),
     monthly: input.monthly && typeof input.monthly === "object" ? input.monthly : {},
-    preferences: { reminders: { ...base.preferences.reminders, ...(input.preferences?.reminders || {}), lastFired: input.preferences?.reminders?.lastFired || {} } },
+    assistant: { recommendations: Array.isArray(input.assistant?.recommendations) ? input.assistant.recommendations : [], approvedChanges: Array.isArray(input.assistant?.approvedChanges) ? input.assistant.approvedChanges : [] },
+    preferences: { ...base.preferences, ...(input.preferences || {}), reminders: { ...base.preferences.reminders, ...(input.preferences?.reminders || {}), lastFired: input.preferences?.reminders?.lastFired || {} }, assistant: { ...base.preferences.assistant, ...(input.preferences?.assistant || {}) } },
     sync: { ...base.sync, ...(input.sync || {}) }
   };
   return validateState(normalized) ? normalized : base;
@@ -378,7 +517,7 @@ function todayState() {
 
 function monthlyState() {
   const key = monthKey();
-  state.monthly[key] = { financial: "", growth: "", business: "", lifestyle: "", adjustment: "", ...(state.monthly[key] || {}) };
+  state.monthly[key] = { financial: "", growth: "", business: "", lifestyle: "", adjustment: "", decisions: "", snapshot: null, ...(state.monthly[key] || {}) };
   return state.monthly[key];
 }
 
@@ -402,6 +541,15 @@ function greeting() {
 
 function escapeHTML(value = "") {
   return String(value).replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
+}
+
+function safeExternalURL(value) {
+  try {
+    const url = new URL(String(value));
+    return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+  } catch {
+    return "";
+  }
 }
 
 function currency(value) {
@@ -431,21 +579,34 @@ function smartTaskScore(task, daily = todayState()) {
   const due = taskDueDays(task);
   const urgency = due === null ? 0 : due < 0 ? 22 : due === 0 ? 18 : due <= 3 ? 12 : due <= 7 ? 7 : 0;
   const alignment = ({ primary: 8, supporting: 4, maintenance: 1 })[task.alignment] || 0;
+  const project = state.projects.find(item => item.id === task.projectId && item.status === "active");
+  const projectPriority = project ? Number(project.priority || 2) * 2 : 0;
   const timeFit = Number(task.duration) <= Number(daily.availableMinutes || 120) ? 4 : -6;
-  return taskScore(task, daily.energy || 3) + urgency + alignment + timeFit;
+  return taskScore(task, daily.energy || 3) + urgency + alignment + projectPriority + timeFit;
 }
 
-function rankedTasks(daily = todayState()) {
-  return state.tasks.filter(task => !task.done).sort((a, b) => smartTaskScore(b, daily) - smartTaskScore(a, daily));
+function taskBlocker(task) {
+  return (task.dependencyIds || []).map(id => state.tasks.find(item => item.id === id)).find(item => item && !item.done) || null;
+}
+
+function rankedTasks(daily = todayState(), includeBlocked = false) {
+  return state.tasks.filter(task => !task.done && (includeBlocked || !taskBlocker(task))).sort((a, b) => {
+    const blockedDifference = Number(Boolean(taskBlocker(a))) - Number(Boolean(taskBlocker(b)));
+    return blockedDifference || smartTaskScore(b, daily) - smartTaskScore(a, daily);
+  });
 }
 
 function taskReason(task, daily = todayState()) {
   if (task.done) return "Completed this week";
+  const blocker = taskBlocker(task);
+  if (blocker) return `Waiting for ${blocker.name}`;
   const due = taskDueDays(task);
   if (due !== null && due < 0) return `${Math.abs(due)} day${Math.abs(due) === 1 ? "" : "s"} overdue`;
   if (due === 0) return "Due today";
   if (due !== null && due <= 3) return `Due in ${due} days`;
   if (task.alignment === "primary") return "Moves the main outcome";
+  const project = state.projects.find(item => item.id === task.projectId);
+  if (project) return `Next output for ${project.name}`;
   if (Number(task.duration) <= Number(daily.availableMinutes || 120)) return "Fits today's time and energy";
   return "High-value next action";
 }
@@ -607,8 +768,13 @@ function billScheduleEntry(bill, reference = new Date()) {
 }
 
 function monthlyBillEquivalent(bill) {
-  if (bill.frequency === "monthly") return Number(bill.amount || 0);
-  if (bill.frequency === "annual") return Number(bill.amount || 0) / 12;
+  return fromMinor(monthlyBillEquivalentMinor(bill));
+}
+
+function monthlyBillEquivalentMinor(bill) {
+  const amountMinor = minorValue(bill, "amountMinor", "amount");
+  if (bill.frequency === "monthly") return amountMinor;
+  if (bill.frequency === "annual") return Math.round(amountMinor / 12);
   return 0;
 }
 
@@ -668,30 +834,57 @@ function experienceOpportunity(totals = moneyTotals(), reference = new Date()) {
 }
 
 function moneyTotals() {
-  const totals = { ...state.finances.balances };
+  const totalsMinor = { ...state.finances.balancesMinor };
   state.finances.transactions.forEach(item => {
     const sign = item.type === "income" ? 1 : -1;
-    totals[item.account] = (Number(totals[item.account]) || 0) + sign * Number(item.amount || 0);
+    totalsMinor[item.account] = (Number(totalsMinor[item.account]) || 0) + sign * minorValue(item, "amountMinor", "amount");
   });
   const reference = new Date();
   const billSchedule = state.finances.bills.map(bill => billScheduleEntry(bill, reference)).sort((a, b) => a.due - b.due);
   const protectedBillCycles = state.finances.bills.flatMap(bill => outstandingBillCycles(bill, reference).map(cycle => ({ bill, ...cycle })));
-  const monthlyBills = state.finances.bills.reduce((sum, item) => sum + monthlyBillEquivalent(item), 0);
-  const overdueBills = protectedBillCycles.filter(item => item.days < 0).reduce((sum, item) => sum + Number(item.bill.amount || 0), 0);
-  const dueSoon = protectedBillCycles.filter(item => item.days >= 0 && item.days <= 7).reduce((sum, item) => sum + Number(item.bill.amount || 0), 0);
-  const dueThirty = protectedBillCycles.filter(item => item.days >= 0 && item.days <= 30).reduce((sum, item) => sum + Number(item.bill.amount || 0), 0);
-  const obligations = state.finances.obligations.reduce((sum, item) => sum + Math.max(0, Number(item.target || 0) - Number(item.paid || 0)), 0);
-  const obligationPlan = state.finances.obligations.reduce((sum, item) => sum + Number(item.monthlyPayment || 0), 0);
-  const investments = state.finances.investments.reduce((sum, item) => sum + Number(item.current || 0), 0);
-  const available = Number(totals.personal || 0) + Number(totals.business || 0);
-  const reserveTarget = Math.max(0, Number(state.finances.settings?.reserveTarget) || 0);
-  const protectedCash = dueThirty + overdueBills + obligationPlan + reserveTarget;
-  const safeToSpend = Math.max(0, available - protectedCash);
-  const configuredEnjoyment = Math.max(0, Number(state.finances.settings?.enjoymentAllowance) || 0);
-  const enjoymentAvailable = Math.min(safeToSpend, configuredEnjoyment || safeToSpend);
+  const monthlyBillsMinor = state.finances.bills.reduce((sum, item) => sum + monthlyBillEquivalentMinor(item), 0);
+  const personalMonthlyBillsMinor = state.finances.bills.filter(item => item.account !== "business").reduce((sum, item) => sum + monthlyBillEquivalentMinor(item), 0);
+  const businessMonthlyBillsMinor = state.finances.bills.filter(item => item.account === "business").reduce((sum, item) => sum + monthlyBillEquivalentMinor(item), 0);
+  const overdueBillsMinor = protectedBillCycles.filter(item => item.days < 0).reduce((sum, item) => sum + minorValue(item.bill, "amountMinor", "amount"), 0);
+  const dueSoonMinor = protectedBillCycles.filter(item => item.days >= 0 && item.days <= 7).reduce((sum, item) => sum + minorValue(item.bill, "amountMinor", "amount"), 0);
+  const dueThirtyMinor = protectedBillCycles.filter(item => item.days >= 0 && item.days <= 30).reduce((sum, item) => sum + minorValue(item.bill, "amountMinor", "amount"), 0);
+  const personalBillsMinor = protectedBillCycles.filter(item => item.days <= 30 && item.bill.account !== "business").reduce((sum, item) => sum + minorValue(item.bill, "amountMinor", "amount"), 0);
+  const businessBillsMinor = protectedBillCycles.filter(item => item.days <= 30 && item.bill.account === "business").reduce((sum, item) => sum + minorValue(item.bill, "amountMinor", "amount"), 0);
+  const obligationsMinor = state.finances.obligations.reduce((sum, item) => sum + Math.max(0, minorValue(item, "targetMinor", "target") - minorValue(item, "paidMinor", "paid")), 0);
+  const obligationPlanMinor = state.finances.obligations.reduce((sum, item) => sum + minorValue(item, "monthlyPaymentMinor", "monthlyPayment"), 0);
+  const investmentsMinor = state.finances.investments.reduce((sum, item) => sum + minorValue(item, "currentMinor", "current"), 0);
+  const reserveTargetMinor = Math.max(0, Number(state.finances.settings?.reserveTargetMinor) || toMinor(state.finances.settings?.reserveTarget));
+  const personalProtectedMinor = personalBillsMinor + obligationPlanMinor + reserveTargetMinor;
+  const businessProtectedMinor = businessBillsMinor;
+  const protectedCashMinor = personalProtectedMinor + businessProtectedMinor;
+  const personalSafeMinor = Math.max(0, Number(totalsMinor.personal || 0) - personalProtectedMinor);
+  const businessFreeMinor = Math.max(0, Number(totalsMinor.business || 0) - businessProtectedMinor);
+  const availableMinor = Number(totalsMinor.personal || 0) + Number(totalsMinor.business || 0);
+  const configuredEnjoymentMinor = Math.max(0, Number(state.finances.settings?.enjoymentAllowanceMinor) || toMinor(state.finances.settings?.enjoymentAllowance));
+  const enjoymentAvailableMinor = Math.min(personalSafeMinor, configuredEnjoymentMinor);
   const subscriptions = state.finances.bills.filter(item => item.kind === "subscription");
-  const subscriptionAnnual = subscriptions.reduce((sum, item) => sum + (item.frequency === "monthly" ? Number(item.amount) * 12 : item.frequency === "annual" ? Number(item.amount) : 0), 0);
-  return { ...totals, available, safeToSpend, enjoymentAvailable, configuredEnjoyment, protectedCash, reserveTarget, monthlyBills, overdueBills, dueSoon, dueThirty, billSchedule, coverMonths: monthlyBills ? available / monthlyBills : null, obligations, obligationPlan, investments, subscriptions, subscriptionAnnual };
+  const subscriptionAnnualMinor = subscriptions.reduce((sum, item) => sum + (item.frequency === "monthly" ? minorValue(item, "amountMinor", "amount") * 12 : item.frequency === "annual" ? minorValue(item, "amountMinor", "amount") : 0), 0);
+  const expectedIncomeMinor = state.finances.incomeForecasts.filter(item => item.status === "expected").reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
+  const confirmedIncomeMinor = state.finances.incomeForecasts.filter(item => item.status === "confirmed").reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
+  const currentBudget = state.finances.budgets.filter(item => item.month === monthKey());
+  const budgetedMinor = currentBudget.reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
+  const spentThisMonthMinor = state.finances.transactions.filter(item => item.type === "expense" && String(item.date).startsWith(monthKey())).reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
+  const savingsTargetMinor = state.finances.savingsGoals.filter(item => item.status === "active").reduce((sum, item) => sum + minorValue(item, "targetMinor", "target"), 0);
+  const savingsCurrentMinor = state.finances.savingsGoals.filter(item => item.status === "active").reduce((sum, item) => sum + minorValue(item, "savedMinor", "saved"), 0);
+  const totals = Object.fromEntries(Object.entries(totalsMinor).map(([key, value]) => [key, fromMinor(value)]));
+  return {
+    ...totals,
+    available: fromMinor(availableMinor), safeToSpend: fromMinor(personalSafeMinor), businessFree: fromMinor(businessFreeMinor),
+    enjoymentAvailable: fromMinor(enjoymentAvailableMinor), configuredEnjoyment: fromMinor(configuredEnjoymentMinor), protectedCash: fromMinor(protectedCashMinor), personalProtected: fromMinor(personalProtectedMinor), businessProtected: fromMinor(businessProtectedMinor), reserveTarget: fromMinor(reserveTargetMinor),
+    monthlyBills: fromMinor(monthlyBillsMinor), overdueBills: fromMinor(overdueBillsMinor), dueSoon: fromMinor(dueSoonMinor), dueThirty: fromMinor(dueThirtyMinor),
+    obligations: fromMinor(obligationsMinor), obligationPlan: fromMinor(obligationPlanMinor), investments: fromMinor(investmentsMinor), subscriptionAnnual: fromMinor(subscriptionAnnualMinor),
+    expectedIncome: fromMinor(expectedIncomeMinor), confirmedIncome: fromMinor(confirmedIncomeMinor), budgeted: fromMinor(budgetedMinor), spentThisMonth: fromMinor(spentThisMonthMinor),
+    savingsTarget: fromMinor(savingsTargetMinor), savingsCurrent: fromMinor(savingsCurrentMinor), billSchedule, subscriptions,
+    coverMonths: monthlyBillsMinor ? availableMinor / monthlyBillsMinor : null,
+    personalCoverMonths: personalMonthlyBillsMinor ? Number(totalsMinor.personal || 0) / personalMonthlyBillsMinor : null,
+    businessCoverMonths: businessMonthlyBillsMinor ? Number(totalsMinor.business || 0) / businessMonthlyBillsMinor : null,
+    minor: { ...totalsMinor, available: availableMinor, safeToSpend: personalSafeMinor, businessFree: businessFreeMinor, protectedCash: protectedCashMinor, expectedIncome: expectedIncomeMinor, confirmedIncome: confirmedIncomeMinor }
+  };
 }
 
 function buildDailyPlan(daily = todayState()) {
@@ -721,17 +914,181 @@ function weeklyCoach() {
   const routine = routineSignal();
   const recent = recentDailyRecords(7).map(([, day]) => day);
   const friction = [...recent].reverse().find(day => day.friction)?.friction || state.reflection.friction;
+  const totals = moneyTotals();
+  const activeProjects = state.projects.filter(item => item.status === "active");
+  const openBlockers = state.projectBlockers.filter(item => item.status !== "resolved");
   const title = metrics.daysChecked < 2 ? "Build the signal" : metrics.energy && metrics.energy < 3 ? "Reduce load, preserve momentum" : metrics.routine >= 75 ? "The foundations are supporting execution" : "Simplify the system before adding effort";
   const insights = [];
   insights.push(metrics.tasksDone ? `${metrics.tasksDone} action${metrics.tasksDone === 1 ? "" : "s"} completed; protect the work that directly moved the weekly outcome.` : "No completed action is recorded yet; choose one finish line small enough to close.");
   insights.push(friction ? `Repeated friction to design around: ${friction}` : "Record friction in the evening check-in so the system can distinguish effort problems from design problems.");
   insights.push(routine.ready ? `${routine.step} is at ${routine.rate}% across ${routine.attempts} attempts. ${routine.message}` : routine.message);
   insights.push(metrics.connectionDays || metrics.restDays ? `Human connection was protected on ${metrics.connectionDays} day${metrics.connectionDays === 1 ? "" : "s"}; deliberate rest on ${metrics.restDays}. Keep both visible before adding more work.` : "No connection or protected rest is recorded yet. A sustainable week needs contact with people and time with no performance demand.");
+  insights.push(`${activeProjects.length} active project${activeProjects.length === 1 ? "" : "s"} and ${openBlockers.length} open blocker${openBlockers.length === 1 ? "" : "s"}. ${openBlockers.length ? "Resolve or deliberately defer blockers before expanding scope." : "Keep the next output visible in Today."}`);
+  insights.push(`Personal safe-to-spend is ${currency(totals.safeToSpend)} after recorded protection; ${currency(totals.expectedIncome + totals.confirmedIncome)} forecast income remains outside available cash.`);
   return { title, summary: recovery.note, insights };
 }
 
+function currentMonthlyEvidence() {
+  const totals = moneyTotals();
+  const month = monthKey();
+  const transactions = state.finances.transactions.filter(item => String(item.date).startsWith(month));
+  const incomeMinor = transactions.filter(item => item.type === "income").reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
+  const expenseMinor = transactions.filter(item => item.type === "expense").reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
+  return {
+    capturedAt: new Date().toISOString(),
+    personalCashMinor: totals.minor.personal,
+    businessCashMinor: totals.minor.business,
+    safeToSpendMinor: totals.minor.safeToSpend,
+    expectedIncomeMinor: totals.minor.expectedIncome,
+    confirmedIncomeMinor: totals.minor.confirmedIncome,
+    incomeMinor,
+    expenseMinor,
+    obligationsMinor: toMinor(totals.obligations),
+    reserveMinor: toMinor(totals.reserveTarget),
+    activeProjects: state.projects.filter(item => item.status === "active").length,
+    completedTasks: state.tasks.filter(item => item.done).length,
+    openBlockers: state.projectBlockers.filter(item => item.status !== "resolved").length,
+    connectionDays: Object.entries(state.daily).filter(([key, value]) => key.startsWith(month) && value.connection?.completed).length,
+    restDays: Object.entries(state.daily).filter(([key, value]) => key.startsWith(month) && value.connection?.restCompleted).length,
+    completedExperiences: state.life.experiences.filter(item => item.status === "completed" && String(item.completedAt).startsWith(month)).length
+  };
+}
+
+function captureMonthlyEvidence() {
+  monthlyState().snapshot = currentMonthlyEvidence();
+  saveState("Monthly evidence captured");
+  render();
+}
+
+function monthlyEvidenceCard() {
+  const snapshot = monthlyState().snapshot;
+  const evidence = snapshot || currentMonthlyEvidence();
+  const netMinor = evidence.incomeMinor - evidence.expenseMinor;
+  return `<article class="card monthly-evidence-card"><div class="card-head"><div><p class="eyebrow">Monthly evidence</p><h2>${snapshot ? `Captured ${formatSyncTime(snapshot.capturedAt)}` : "Live position"}</h2><p>Auditable records before interpretation.</p></div><button class="button button-secondary button-small" data-capture-month>${snapshot ? "Refresh" : "Capture"}</button></div><div class="monthly-evidence-grid"><div><span>Cash movement</span><strong class="${netMinor < 0 ? "negative" : ""}">${netMinor >= 0 ? "+" : "−"}${currency(fromMinor(Math.abs(netMinor)))}</strong><small>${currency(fromMinor(evidence.incomeMinor))} in · ${currency(fromMinor(evidence.expenseMinor))} out</small></div><div><span>Safe personal cash</span><strong>${currency(fromMinor(evidence.safeToSpendMinor))}</strong><small>Expected income excluded</small></div><div><span>Project movement</span><strong>${evidence.completedTasks} actions</strong><small>${evidence.activeProjects} active · ${evidence.openBlockers} blocked</small></div><div><span>Life participation</span><strong>${evidence.connectionDays} connections</strong><small>${evidence.restDays} rest days · ${evidence.completedExperiences} experiences</small></div></div></article>`;
+}
+
+function assistantRecommendation(kind) {
+  const daily = todayState();
+  const permissions = state.preferences.assistant;
+  const totals = permissions.shareFinancial ? moneyTotals() : null;
+  const openProjects = state.projects.filter(item => item.status === "active");
+  const blockers = state.projectBlockers.filter(item => item.status !== "resolved");
+  const maintenanceDue = maintenanceSchedule().filter(item => !item.actionDone && item.days <= 7);
+  const nextBill = totals?.billSchedule.find(item => item.hasOutstanding);
+  const topTask = rankedTasks(daily)[0];
+  const relationship = permissions.shareLife ? relationshipOpportunity() : null;
+  const facts = [
+    `${state.modes[daily.mode]?.label || "Standard"} mode is manually selected${daily.energy ? ` with energy ${daily.energy}/5` : " without an energy check-in"}.`,
+    topTask ? `The highest-ranked open action is “${topTask.name}” (${topTask.duration} minutes).` : "There are no open actions.",
+    totals ? `Personal safe-to-spend is ${currency(totals.safeToSpend)}; business cash remains separate.` : "Financial records were not read because financial assistant access is off.",
+    totals ? (nextBill ? `${nextBill.bill.name} is the next outstanding bill (${currency(nextBill.bill.amount)}, ${billDueLabel(nextBill).toLowerCase()}).` : "No outstanding bill cycle is visible.") : "Bill records were not read because financial assistant access is off.",
+    `${openProjects.length} active project${openProjects.length === 1 ? "" : "s"}, ${blockers.length} open blocker${blockers.length === 1 ? "" : "s"}, and ${maintenanceDue.length} maintenance item${maintenanceDue.length === 1 ? "" : "s"} due within seven days.`,
+    permissions.shareLife ? (relationship ? `${relationship.contact.name} is the clearest voluntary reconnection opportunity.` : "No relationship reminder is currently due.") : "Relationship reminders were not read because Life assistant access is off."
+  ];
+  const base = { id: crypto.randomUUID(), kind, createdAt: new Date().toISOString(), facts, assumptions: [], suggestions: [], proposal: null };
+  if (kind === "day") {
+    base.title = "A balanced plan for today";
+    base.assumptions = ["Your available-time and energy check-ins are current.", "Deadlines and balances recorded in the app reflect reality."];
+    base.suggestions = [topTask ? `Build: finish the smallest complete version of “${topTask.name}”.` : "Build: define one next visible action before adding more plans.", nextBill ? `Maintain: address ${nextBill.bill.name} before it becomes avoidable friction.` : maintenanceDue[0] ? `Maintain: handle ${maintenanceDue[0].item.name}.` : "Maintain: keep the selected routine foundations.", relationship ? `Experience: make one genuine point of contact with ${relationship.contact.name}.` : "Experience: protect rest, enjoyment, or one human interaction."];
+    if (topTask && daily.primaryOutcome !== topTask.name) base.proposal = { type: "dailyPrimary", value: topTask.name, label: "Use this as today’s outcome" };
+  } else if (kind === "finances") {
+    if (!totals) {
+      base.title = "Financial access is off";
+      base.assumptions = ["No financial record was read for this review."];
+      base.suggestions = ["Enable financial summaries in Assistant privacy if you want a local review.", "You can still use the Money module without the assistant."];
+      state.assistant.recommendations.unshift(base);
+      state.assistant.recommendations = state.assistant.recommendations.slice(0, 20);
+      saveState("Assistant review created");
+      return base;
+    }
+    const protectionGap = Math.max(0, totals.personalProtected - totals.personal);
+    base.title = protectionGap ? "Personal cash needs protection" : "Your financial categories are clear";
+    base.assumptions = ["All recent cash movements have been entered in the ledger.", "Expected income and investments are not available cash until recorded as received."];
+    base.suggestions = [protectionGap ? `Close a ${currency(protectionGap)} personal protection gap before increasing flexible spending.` : `${currency(totals.safeToSpend)} is currently flexible after recorded personal protection.`, `${currency(totals.expectedIncome)} expected and ${currency(totals.confirmedIncome)} confirmed income remain outside available cash.`, totals.obligationPlan ? `${currency(totals.obligationPlan)} is planned toward liabilities this month.` : "Set a realistic repayment amount when the cash-flow evidence is clear."];
+  } else if (kind === "week") {
+    const leadingProject = [...openProjects].sort((a, b) => b.priority - a.priority)[0];
+    base.title = "Protect one weekly output";
+    base.assumptions = ["Active project priorities are current.", "A completed output matters more than filling the week with activity."];
+    base.suggestions = [leadingProject ? `Make “${leadingProject.outcome || leadingProject.name}” the clearest project output.` : "Create a project only if the weekly outcome needs several coordinated actions.", blockers.length ? `Resolve or explicitly defer ${blockers.length} blocker${blockers.length === 1 ? "" : "s"} before expanding scope.` : "No recorded blocker needs escalation.", "Keep supporting actions to the minimum needed to move the output."];
+    if (!state.week.outcome.trim() && leadingProject) base.proposal = { type: "weekOutcome", value: leadingProject.outcome || leadingProject.name, label: "Use as weekly outcome" };
+  } else if (kind === "balance") {
+    const suggested = suggestedMode(daily.energy || 3);
+    base.title = "Build without sacrificing the human day";
+    base.assumptions = ["Energy is a self-report, not a diagnosis.", "Connection and rest remain valid even when work is incomplete."];
+    base.suggestions = [`Keep ${state.modes[suggested].label} mode as an option, not an automatic decision.`, relationship ? `A short contact with ${relationship.contact.name} can satisfy today’s connection intention.` : "Choose one low-friction human interaction today.", "Protect a period with no work, optimisation, admin, or guilt."];
+    if (daily.energy && daily.mode !== suggested) base.proposal = { type: "mode", value: suggested, label: `Switch to ${state.modes[suggested].label} mode` };
+  } else if (kind === "responsibilities") {
+    base.title = maintenanceDue.length || nextBill || blockers.length ? "A few responsibilities need visibility" : "No urgent responsibility is hidden";
+    base.assumptions = ["Only responsibilities recorded here can be checked.", "An absence of records is not proof that no external obligation exists."];
+    base.suggestions = [nextBill ? `Check ${nextBill.bill.name}: ${billDueLabel(nextBill)}.` : "Bill calendar shows no outstanding cycle.", maintenanceDue.length ? `${maintenanceDue.length} life-maintenance item${maintenanceDue.length === 1 ? " is" : "s are"} due within seven days.` : "No life-maintenance date is due within seven days.", blockers.length ? `${blockers.length} project blocker${blockers.length === 1 ? " needs" : "s need"} a decision.` : "No project blocker is open."];
+  } else {
+    const signal = routineSignal();
+    base.title = "Make the system easier to operate";
+    base.assumptions = ["Repeated misses are design evidence, not a character judgement.", "Removing a step can be more intelligent than adding effort."];
+    base.suggestions = [signal.ready ? `${signal.step} is the clearest routine signal: ${signal.message}` : signal.message, "Keep one cue, one visible response, and one prepared environment for the behaviour that matters most.", "Archive goals, projects, and tasks that no longer change a real decision."];
+  }
+  state.assistant.recommendations.unshift(base);
+  state.assistant.recommendations = state.assistant.recommendations.slice(0, 20);
+  saveState("Assistant review created");
+  return base;
+}
+
+function assistantRecommendationCard(item) {
+  const change = state.assistant.approvedChanges.find(entry => entry.recommendationId === item.id && !entry.reversedAt);
+  return `<article class="assistant-result"><div class="assistant-result-head"><div><small>${escapeHTML(item.kind)} review · ${formatSyncTime(item.createdAt)}</small><h3>${escapeHTML(item.title)}</h3></div><span>Local</span></div><div class="assistant-evidence"><section><strong>Facts used</strong>${item.facts.map(value => `<p>${escapeHTML(value)}</p>`).join("")}</section><section><strong>Assumptions</strong>${item.assumptions.map(value => `<p>${escapeHTML(value)}</p>`).join("")}</section><section><strong>Suggestions</strong>${item.suggestions.map(value => `<p>${escapeHTML(value)}</p>`).join("")}</section></div>${item.proposal ? `<div class="assistant-proposal"><span><small>Proposed change</small><strong>${escapeHTML(item.proposal.label)}</strong></span>${change ? '<b>Approved ✓</b>' : `<button class="button button-primary button-small" data-approve-recommendation="${item.id}">Review + apply</button>`}</div>` : ""}</article>`;
+}
+
+function renderAssistant() {
+  const latest = state.assistant.recommendations[0];
+  const changes = state.assistant.approvedChanges.slice(0, 6);
+  document.getElementById("assistant-content").innerHTML = `<div class="assistant-intro"><span class="assistant-orb">✦</span><div><strong>Private structured guidance</strong><p>Uses records on this device. No external AI provider receives your data, and no important record changes without approval.</p></div></div><div class="assistant-prompts">${[["day","Plan my day"],["week","Prioritise my week"],["finances","Review finances"],["balance","Balance my week"],["responsibilities","Check responsibilities"],["simplify","Simplify my system"]].map(([kind,label]) => `<button data-assistant-kind="${kind}"><span>${escapeHTML(label)}</span><b>→</b></button>`).join("")}</div>${latest ? assistantRecommendationCard(latest) : '<div class="assistant-empty"><strong>Ask one useful question.</strong><p>The answer will separate recorded facts, assumptions, and suggestions.</p></div>'}${changes.length ? `<div class="change-history"><div class="section-mini-head"><span>Approved change history</span><small>Reversible</small></div>${changes.map(item => `<div class="change-row"><span><strong>${escapeHTML(item.label)}</strong><small>${formatSyncTime(item.createdAt)}${item.reversedAt ? " · reversed" : ""}</small></span>${item.reversedAt ? "" : `<button class="text-button" data-reverse-change="${item.id}">Undo</button>`}</div>`).join("")}</div>` : ""}`;
+}
+
+function openAssistant() {
+  renderAssistant();
+  document.getElementById("assistant-dialog").showModal();
+}
+
+function applyAssistantRecommendation(id) {
+  const recommendation = state.assistant.recommendations.find(item => item.id === id);
+  if (!recommendation?.proposal) return;
+  if (state.assistant.approvedChanges.some(item => item.recommendationId === id && !item.reversedAt)) return showToast("That change is already applied");
+  const proposal = recommendation.proposal;
+  let before;
+  if (proposal.type === "dailyPrimary") {
+    before = todayState().primaryOutcome;
+    todayState().primaryOutcome = proposal.value;
+  } else if (proposal.type === "weekOutcome") {
+    before = state.week.outcome;
+    state.week.outcome = proposal.value;
+  } else if (proposal.type === "mode") {
+    before = todayState().mode;
+    todayState().mode = proposal.value;
+    todayState().routine = [];
+  } else return;
+  state.assistant.approvedChanges.unshift({ id: crypto.randomUUID(), recommendationId: id, type: proposal.type, label: proposal.label, before, after: proposal.value, createdAt: new Date().toISOString(), reversedAt: "" });
+  saveState("Approved assistant change applied");
+  render();
+  renderAssistant();
+}
+
+function reverseAssistantChange(id) {
+  const change = state.assistant.approvedChanges.find(item => item.id === id);
+  if (!change || change.reversedAt) return;
+  if (change.type === "dailyPrimary") todayState().primaryOutcome = change.before;
+  if (change.type === "weekOutcome") state.week.outcome = change.before;
+  if (change.type === "mode") {
+    todayState().mode = change.before;
+    todayState().routine = [];
+  }
+  change.reversedAt = new Date().toISOString();
+  saveState("Assistant change reversed");
+  render();
+  renderAssistant();
+}
+
 function spentToday() {
-  return state.finances.transactions.filter(item => item.date === dayKey() && item.type === "expense").reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  return fromMinor(state.finances.transactions.filter(item => item.date === dayKey() && item.type === "expense").reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0));
 }
 
 function weekMetrics(startKey = state.week.startedAt, tasks = state.tasks, ratings = state.reflection.ratings) {
@@ -860,8 +1217,10 @@ function dailyField(key, label, placeholder) {
 
 function taskTemplate(task) {
   const due = taskDueDays(task);
+  const project = state.projects.find(item => item.id === task.projectId);
+  const blocker = taskBlocker(task);
   const dueTag = task.done || due === null ? "" : `<span class="tag ${due < 0 ? "tag-danger" : due <= 3 ? "tag-warm" : ""}">${due < 0 ? `${Math.abs(due)}d overdue` : due === 0 ? "Due today" : `Due ${formatCompactDate(task.dueDate)}`}</span>`;
-  return `<div class="task-card ${task.done ? "done" : ""}"><button class="check-button ${task.done ? "done" : ""}" data-task-toggle="${task.id}" aria-label="Toggle task"></button><div class="task-copy"><p class="task-name">${escapeHTML(task.name)}</p><small class="smart-reason">${escapeHTML(taskReason(task))}</small><div class="task-meta"><span class="tag tag-impact">${escapeHTML(task.alignment)}</span><span class="tag">Impact ${task.impact}</span><span class="tag">${escapeHTML(energyLabel(task.energy))}</span><span class="tag">${task.duration} min</span>${dueTag}</div></div><button class="edit-button" data-edit-task="${task.id}" aria-label="Edit task">•••</button></div>`;
+  return `<div class="task-card ${task.done ? "done" : ""}"><button class="check-button ${task.done ? "done" : ""}" data-task-toggle="${task.id}" aria-label="Toggle task"></button><div class="task-copy"><p class="task-name">${escapeHTML(task.name)}</p><small class="smart-reason">${escapeHTML(taskReason(task))}</small><div class="task-meta">${project ? `<span class="tag tag-project">${escapeHTML(project.name)}</span>` : ""}${blocker ? '<span class="tag tag-danger">Blocked</span>' : ""}<span class="tag tag-impact">${escapeHTML(task.alignment)}</span><span class="tag">Impact ${task.impact}</span><span class="tag">${escapeHTML(energyLabel(task.energy))}</span><span class="tag">${task.duration} min</span>${dueTag}</div></div><button class="edit-button" data-edit-task="${task.id}" aria-label="Edit task">•••</button></div>`;
 }
 
 function renderLife() {
@@ -923,16 +1282,82 @@ function renderMoney() {
   const transactions = [...state.finances.transactions].sort((a, b) => b.date.localeCompare(a.date));
   document.getElementById("view-money").innerHTML = `
     <div class="page-head"><p class="eyebrow">Financial OS</p><h1 id="money-heading">Know your position.</h1><p>Every pound has a purpose. Expected investment money does not count until it actually arrives.</p></div>
-    <div class="money-summary">${moneyStat("Safe to spend", currency(totals.safeToSpend), "After bills, reserve + plans")}${moneyStat("Available cash", currency(totals.available), "Personal + business")}${moneyStat("Protected", currency(totals.protectedCash), "Next 30 days + reserve")}${moneyStat("Overdue", currency(totals.overdueBills), totals.overdueBills ? "Needs a decision" : "All clear")}</div>
+    <div class="money-summary">${moneyStat("Personal safe", currency(totals.safeToSpend), "After personal protection")}${moneyStat("Personal cash", currency(totals.personal), "Business excluded")}${moneyStat("Business free", currency(totals.businessFree), "After business bills")}${moneyStat("Protected", currency(totals.protectedCash), totals.overdueBills ? `${currency(totals.overdueBills)} overdue` : "Bills, reserve + plans")}</div>
     <div class="grid two-column">
       <div class="stack">
+        ${financialTruthCard(totals)}
         <article class="card bills-card"><div class="card-head"><div><p class="eyebrow">Bill calendar</p><h2>Due dates, without surprises</h2><p>Recurring bills, one-offs, autopay, and what is actually paid.</p></div><button class="button button-secondary button-small" data-add="bill">+ Bill</button></div>${billInsight(totals)}<div class="bills-list">${totals.billSchedule.length ? totals.billSchedule.map(billTemplate).join("") : '<div class="empty">No bills yet. Add the first due date you want the system to watch.</div>'}</div></article>
+        ${incomeForecastCard(totals)}
+        ${cashFlowForecastCard(totals)}
+        ${budgetCard(totals)}
         ${subscriptionAuditCard(totals)}
         <article class="card"><div class="card-head"><div><p class="eyebrow">Cash ledger</p><h2>Transactions</h2><p>Record reality, not forecasts.</p></div><button class="button button-secondary button-small" data-add="transaction">+ Transaction</button></div><div class="ledger-list">${transactions.length ? transactions.slice(0, 20).map(transactionTemplate).join("") : '<div class="empty">No transactions recorded yet.</div>'}</div></article>
         <article class="card"><div class="card-head"><div><p class="eyebrow">Starting position</p><h2>Opening balances</h2></div></div><div class="balance-grid">${balanceField("personal", "Personal cash")}${balanceField("business", "Business cash")}${balanceField("held", "Money held for others")}</div><p class="privacy-note">Use opening balances once, then keep the ledger current.</p></article>
       </div>
-      <aside class="stack">${spendingGuardrailCard(totals)}${cashCoverCard(totals)}${moneyCollectionCard("obligation", "Liabilities + obligations", "What must be restored or repaid", state.finances.obligations, item => `${escapeHTML(item.name)} · ${currency(Math.max(0, item.target - item.paid))} left${item.monthlyPayment ? ` · ${currency(item.monthlyPayment)}/mo` : ""}`)}${moneyCollectionCard("investment", "Investments", "Visible, but unavailable until realised", state.finances.investments, item => `${escapeHTML(item.name)} · ${currency(item.current)} current value`)}</aside>
+      <aside class="stack">${spendingGuardrailCard(totals)}${cashCoverCard(totals)}${savingsCard(totals)}${moneyCollectionCard("obligation", "Liabilities + obligations", "What must be restored or repaid", state.finances.obligations, item => `${escapeHTML(item.name)} · ${currency(Math.max(0, item.target - item.paid))} left${item.monthlyPayment ? ` · ${currency(item.monthlyPayment)}/mo` : ""}`)}${moneyCollectionCard("investment", "Investments", "Visible, but unavailable until realised", state.finances.investments, item => `${escapeHTML(item.name)} · ${currency(item.current)} current value`)}</aside>
     </div>`;
+}
+
+function financialTruthCard(totals) {
+  const gap = Math.max(0, totals.protectedCash - totals.available);
+  return `<article class="card financial-truth-card ${gap ? "urgent" : ""}"><div class="card-head"><div><p class="eyebrow">Financial truth</p><h2>${gap ? `${currency(gap)} protection gap` : "Current cash is classified"}</h2><p>Available cash, business cash, expected income, investments, liabilities, and money held for others remain separate.</p></div><span class="tag">Exact pence</span></div><div class="truth-grid"><div><span>Expected</span><strong>${currency(totals.expectedIncome)}</strong><small>Not available</small></div><div><span>Confirmed</span><strong>${currency(totals.confirmedIncome)}</strong><small>Still not received</small></div><div><span>Investments</span><strong>${currency(totals.investments)}</strong><small>Not cash</small></div><div><span>Held for others</span><strong>${currency(totals.held)}</strong><small>Restricted</small></div><div><span>Liabilities</span><strong>${currency(totals.obligations)}</strong><small>Outstanding</small></div><div><span>Savings</span><strong>${currency(totals.savingsCurrent)}</strong><small>Protected goals</small></div></div></article>`;
+}
+
+function incomeForecastCard(totals) {
+  const forecasts = [...state.finances.incomeForecasts].sort((a, b) => String(a.expectedDate || "9999").localeCompare(String(b.expectedDate || "9999")));
+  return `<article class="card forecast-card"><div class="card-head"><div><p class="eyebrow">Expected income</p><h2>Forecast without pretending it arrived</h2><p>Student Finance, invoices, investments, and other income remain expected until received.</p></div><button class="button button-secondary button-small" data-add="income">+ Income</button></div><div class="forecast-summary"><span>Expected <strong>${currency(totals.expectedIncome)}</strong></span><span>Confirmed <strong>${currency(totals.confirmedIncome)}</strong></span></div><div class="forecast-list">${forecasts.length ? forecasts.map(incomeTemplate).join("") : '<div class="empty">No expected income recorded.</div>'}</div></article>`;
+}
+
+function incomeTemplate(item) {
+  const date = item.expectedDate ? formatCompactDate(item.expectedDate) : "No date";
+  return `<button class="forecast-row ${item.status}" data-edit-income="${item.id}"><span><strong>${escapeHTML(item.source)}</strong><small>${escapeHTML(date)} · ${escapeHTML(item.account)}</small></span><span><b>${currency(item.amount)}</b><small>${escapeHTML(item.status)}</small></span></button>`;
+}
+
+function forecastBillPeriod(bill, date) {
+  if (bill.frequency === "monthly") return monthKey(date);
+  if (bill.frequency === "annual") return String(date.getFullYear());
+  return bill.dueDate;
+}
+
+function billFallsInMonth(bill, date) {
+  if (bill.frequency === "monthly") return true;
+  if (bill.frequency === "annual") return Number(bill.dueMonth) === date.getMonth() + 1;
+  return String(bill.dueDate || "").startsWith(monthKey(date));
+}
+
+function threeMonthCashFlow(totals = moneyTotals()) {
+  let personalMinor = totals.minor.personal;
+  let businessMinor = totals.minor.business;
+  const obligationMinor = state.finances.obligations.reduce((sum, item) => sum + minorValue(item, "monthlyPaymentMinor", "monthlyPayment"), 0);
+  return Array.from({ length: 3 }, (_, offset) => {
+    const date = new Date(new Date().getFullYear(), new Date().getMonth() + offset + 1, 1);
+    const key = monthKey(date);
+    const bills = state.finances.bills.filter(bill => billFallsInMonth(bill, date) && !bill.paidPeriods.includes(forecastBillPeriod(bill, date)));
+    const personalBillsMinor = bills.filter(bill => bill.account !== "business").reduce((sum, bill) => sum + minorValue(bill, "amountMinor", "amount"), 0) + obligationMinor;
+    const businessBillsMinor = bills.filter(bill => bill.account === "business").reduce((sum, bill) => sum + minorValue(bill, "amountMinor", "amount"), 0);
+    const forecasts = state.finances.incomeForecasts.filter(item => item.status !== "cancelled" && item.status !== "received" && (item.expectedDate ? item.expectedDate.startsWith(key) : offset === 0));
+    const confirmedPersonalMinor = forecasts.filter(item => item.status === "confirmed" && item.account !== "business").reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
+    const confirmedBusinessMinor = forecasts.filter(item => item.status === "confirmed" && item.account === "business").reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
+    const expectedMinor = forecasts.filter(item => item.status === "expected").reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
+    personalMinor += confirmedPersonalMinor - personalBillsMinor;
+    businessMinor += confirmedBusinessMinor - businessBillsMinor;
+    return { key, label: new Intl.DateTimeFormat("en-GB", { month: "short" }).format(date), personalMinor, businessMinor, personalBillsMinor, businessBillsMinor, confirmedMinor: confirmedPersonalMinor + confirmedBusinessMinor, expectedMinor };
+  });
+}
+
+function cashFlowForecastCard(totals) {
+  const forecast = threeMonthCashFlow(totals);
+  return `<article class="card cash-flow-card"><div class="card-head"><div><p class="eyebrow">Three-month cash flow</p><h2>Conservative planning view</h2><p>Only confirmed income enters the projection. Expected income stays visible but excluded.</p></div><span class="tag">Planning estimate</span></div><div class="cash-flow-list">${forecast.map(item => `<div class="cash-flow-row"><span><strong>${item.label}</strong><small>${currency(fromMinor(item.personalBillsMinor + item.businessBillsMinor))} planned out</small></span><span><small>Personal</small><strong class="${item.personalMinor < 0 ? "negative" : ""}">${currency(fromMinor(item.personalMinor))}</strong></span><span><small>Business</small><strong class="${item.businessMinor < 0 ? "negative" : ""}">${currency(fromMinor(item.businessMinor))}</strong></span><span><small>Expected outside cash</small><strong>${currency(fromMinor(item.expectedMinor))}</strong></span></div>`).join("")}</div><p class="dialog-note">This is a forward plan, not a bank balance. Reconcile the ledger and mark bills paid to keep it useful.</p></article>`;
+}
+
+function budgetCard(totals) {
+  const items = state.finances.budgets.filter(item => item.month === monthKey());
+  const variance = totals.budgeted - totals.spentThisMonth;
+  return `<article class="card budget-card"><div class="card-head"><div><p class="eyebrow">Monthly budget</p><h2>${variance >= 0 ? `${currency(variance)} remaining` : `${currency(Math.abs(variance))} over plan`}</h2><p>Budget evidence, not punishment. Adjust the plan when reality changes.</p></div><button class="button button-secondary button-small" data-add="budget">+ Line</button></div><div class="budget-meter"><i style="width:${totals.budgeted ? Math.min(100, Math.round((totals.spentThisMonth / totals.budgeted) * 100)) : 0}%"></i></div><div class="budget-summary"><span>Planned <strong>${currency(totals.budgeted)}</strong></span><span>Recorded expenses <strong>${currency(totals.spentThisMonth)}</strong></span></div><div class="simple-list">${items.length ? items.map(item => `<button data-edit-budget="${item.id}"><span>${escapeHTML(item.name)} · ${escapeHTML(item.account)}</span><strong>${currency(item.amount)}</strong></button>`).join("") : '<div class="empty">Add only the lines that help you make decisions.</div>'}</div></article>`;
+}
+
+function savingsCard(totals) {
+  return `<article class="card savings-card"><div class="card-head"><div><p class="eyebrow">Savings + reserves</p><h2>${currency(totals.savingsCurrent)} protected</h2><p>Progress toward specific goals without counting it as spendable cash.</p></div><button class="button button-secondary button-small" data-add="savings">+ Goal</button></div><div class="simple-list">${state.finances.savingsGoals.length ? state.finances.savingsGoals.map(item => `<button data-edit-savings="${item.id}"><span>${escapeHTML(item.name)} · ${item.deadline ? formatCompactDate(item.deadline) : "No deadline"}</span><strong>${currency(item.saved)} / ${currency(item.target)}</strong></button>`).join("") : '<div class="empty">No savings goals recorded.</div>'}</div></article>`;
 }
 
 function billInsight(totals) {
@@ -944,13 +1369,13 @@ function billInsight(totals) {
 
 function cashCoverCard(totals) {
   const autopay = state.finances.bills.filter(item => item.autopay).length;
-  const cover = totals.coverMonths === null ? "No monthly bills" : totals.coverMonths < 0 ? "Cash is below zero" : `${totals.coverMonths.toFixed(1)} months`;
-  return `<article class="card cash-cover-card"><div class="card-head"><div><p class="eyebrow">Cash cover</p><h2>${escapeHTML(cover)}</h2><p>How long available cash covers your recurring bill baseline.</p></div></div><div class="cover-metrics"><div><span>Next 30 days</span><strong>${currency(totals.dueThirty)}</strong></div><div><span>Autopay bills</span><strong>${autopay}</strong></div><div><span>Held separately</span><strong>${currency(totals.held)}</strong></div></div></article>`;
+  const coverLabel = value => value === null ? "No bills" : value < 0 ? "Below zero" : `${value.toFixed(1)} mo`;
+  return `<article class="card cash-cover-card"><div class="card-head"><div><p class="eyebrow">Cash cover</p><h2>Separated by account</h2><p>Personal and business cash never conceal a gap in the other account.</p></div></div><div class="cover-metrics"><div><span>Personal cover</span><strong>${escapeHTML(coverLabel(totals.personalCoverMonths))}</strong></div><div><span>Business cover</span><strong>${escapeHTML(coverLabel(totals.businessCoverMonths))}</strong></div><div><span>Next 30 days</span><strong>${currency(totals.dueThirty)}</strong></div><div><span>Autopay bills</span><strong>${autopay}</strong></div><div><span>Held separately</span><strong>${currency(totals.held)}</strong></div></div></article>`;
 }
 
 function spendingGuardrailCard(totals) {
-  const gap = Math.max(0, totals.protectedCash - totals.available);
-  return `<article class="card guardrail-card ${gap ? "urgent" : ""}"><div class="card-head"><div><p class="eyebrow">Safe-to-spend engine</p><h2>${gap ? `${currency(gap)} protection gap` : `${currency(totals.safeToSpend)} flexible`}</h2><p>${gap ? "Current cash does not fully cover the protected plan." : "This is the money left after the next 30 days, your reserve floor, and planned obligation payments."}</p></div><button class="edit-button" data-add="moneySettings" aria-label="Edit spending guardrails">•••</button></div><div class="guardrail-formula"><span>Cash <b>${currency(totals.available)}</b></span><i>−</i><span>Bills <b>${currency(totals.dueThirty + totals.overdueBills)}</b></span><i>−</i><span>Reserve <b>${currency(totals.reserveTarget)}</b></span><i>−</i><span>Plans <b>${currency(totals.obligationPlan)}</b></span></div></article>`;
+  const gap = Math.max(0, totals.personalProtected - totals.personal);
+  return `<article class="card guardrail-card ${gap ? "urgent" : ""}"><div class="card-head"><div><p class="eyebrow">Personal safe-to-spend</p><h2>${gap ? `${currency(gap)} protection gap` : `${currency(totals.safeToSpend)} flexible`}</h2><p>${gap ? "Personal cash does not fully cover the protected plan." : "Business funds, expected income, investments, and money held for others are excluded."}</p></div><button class="edit-button" data-add="moneySettings" aria-label="Edit spending guardrails">•••</button></div><div class="guardrail-formula"><span>Personal cash <b>${currency(totals.personal)}</b></span><i>−</i><span>Protection <b>${currency(totals.personalProtected)}</b></span><i>=</i><span>Safe <b>${currency(totals.safeToSpend)}</b></span></div></article>`;
 }
 
 function subscriptionAuditCard(totals) {
@@ -999,18 +1424,47 @@ function moneyCollectionCard(type, title, note, items, formatter) {
 }
 
 function renderWeek() {
-  const open = rankedTasks();
+  const open = rankedTasks(todayState(), true);
   const done = state.tasks.filter(task => task.done);
+  const activeGoals = state.goals.filter(item => item.status === "active");
+  const activeProjects = state.projects.filter(item => item.status === "active");
+  const openMilestones = state.milestones.filter(item => item.status !== "completed");
+  const openBlockers = state.projectBlockers.filter(item => item.status !== "resolved");
   document.getElementById("view-week").innerHTML = `
-    <div class="page-head"><p class="eyebrow">Direction + Execution OS</p><h1 id="week-heading">Define the win.</h1><p>Choose no more than two meaningful outcomes. Everything else is maintenance, exploration, or deliberately deferred.</p></div>
+    <div class="page-head"><p class="eyebrow">Focus OS · Build</p><h1 id="week-heading">Move meaningful work.</h1><p>Goals set direction. Projects create outputs. Today only needs the next visible action.</p></div>
+    <div class="focus-summary">${reviewMetric("Active goals", String(activeGoals.length), "Longer direction")}${reviewMetric("Projects", String(activeProjects.length), "Current workspaces")}${reviewMetric("Milestones", String(openMilestones.length), "Open deliverables")}${reviewMetric("Blockers", String(openBlockers.length), openBlockers.length ? "Needs a decision" : "Nothing stuck")}</div>
     <article class="week-outcome"><div class="field"><label for="week-outcome">Primary weekly outcome</label><textarea class="outcome-input" id="week-outcome" data-week-field="outcome" data-auto-resize rows="2" placeholder="One measurable result">${escapeHTML(state.week.outcome)}</textarea></div><div class="field"><label for="week-evidence">Evidence of completion</label><textarea id="week-evidence" data-week-field="evidence" placeholder="What proves this is finished?">${escapeHTML(state.week.evidence)}</textarea></div><div class="inline-fields week-details"><div class="field"><label for="week-secondary">Secondary outcome</label><textarea class="week-compact-input" id="week-secondary" data-week-field="secondary" data-auto-resize rows="2">${escapeHTML(state.week.secondary)}</textarea></div><div class="field"><label for="week-why">Why now?</label><textarea class="week-compact-input" id="week-why" data-week-field="why" data-auto-resize rows="2">${escapeHTML(state.week.why)}</textarea></div></div></article>
     <div class="grid two-column focus-grid">
       <div class="stack">
+        ${projectsCard(activeProjects)}
         <article class="card"><div class="card-head"><div><p class="eyebrow">Flow-matched actions</p><h2>Open work, ranked for your state</h2></div><button class="button button-secondary button-small" data-add="task">+ Action</button></div><div class="task-list">${open.length ? open.map(taskTemplate).join("") : '<div class="empty">No open actions. Add the first visible step.</div>'}</div></article>
         <article class="card"><div class="card-head"><div><p class="eyebrow">Completed</p><h2>${done.length} actions moved</h2></div></div><div class="task-list">${done.length ? done.map(taskTemplate).join("") : '<div class="empty">Completed actions collect here until the weekly close.</div>'}</div></article>
       </div>
-      <aside class="stack">${inboxCard()}<article class="card card-muted"><div class="card-head"><div><p class="eyebrow">Decision hierarchy</p><h2>Protect what matters</h2></div></div><div class="priority-rule"><strong>1</strong><span><b>Main outcome</b>One meaningful deliverable.</span></div><div class="priority-rule"><strong>2</strong><span><b>Supporting work</b>Up to two useful actions.</span></div><div class="priority-rule"><strong>3</strong><span><b>Maintenance</b>Only essential responsibilities.</span></div></article></aside>
+      <aside class="stack">${goalsCard(activeGoals)}${inboxCard()}<article class="card card-muted"><div class="card-head"><div><p class="eyebrow">Decision hierarchy</p><h2>Protect what matters</h2></div></div><div class="priority-rule"><strong>1</strong><span><b>Project output</b>One meaningful deliverable.</span></div><div class="priority-rule"><strong>2</strong><span><b>Next action</b>The smallest visible movement.</span></div><div class="priority-rule"><strong>3</strong><span><b>Maintenance</b>Only essential responsibilities.</span></div></article></aside>
     </div>`;
+}
+
+function goalsCard(goals = state.goals.filter(item => item.status === "active")) {
+  return `<article class="card goals-card"><div class="card-head"><div><p class="eyebrow">Goals</p><h2>Direction without task inflation</h2><p>Keep only goals that change current decisions.</p></div><button class="button button-secondary button-small" data-add="goal">+ Goal</button></div><div class="goal-list">${goals.length ? goals.map(goalTemplate).join("") : '<div class="empty">No active goals. Add one only when it clarifies what deserves focus.</div>'}</div></article>`;
+}
+
+function goalTemplate(goal) {
+  const projectCount = state.projects.filter(item => item.goalId === goal.id && item.status !== "archived").length;
+  return `<button class="goal-row" data-edit-goal="${goal.id}"><span><small>${escapeHTML(goal.area)} · ${escapeHTML(goal.horizon)}</small><strong>${escapeHTML(goal.name)}</strong><em>${escapeHTML(goal.evidence || goal.why || "Define the evidence that proves progress.")}</em></span><b>${projectCount} project${projectCount === 1 ? "" : "s"}</b></button>`;
+}
+
+function projectsCard(projects = state.projects.filter(item => item.status === "active")) {
+  return `<article class="card projects-card"><div class="card-head"><div><p class="eyebrow">Project workspaces</p><h2>Outputs, blockers, decisions</h2><p>Keep the project small enough to reveal its next move.</p></div><div class="card-actions"><button class="button button-secondary button-small" data-add="milestone">+ Milestone</button><button class="button button-primary button-small" data-add="project">+ Project</button></div></div><div class="project-list">${projects.length ? projects.sort((a, b) => b.priority - a.priority).map(projectTemplate).join("") : '<div class="empty">Create a project when a goal needs more than one action to complete.</div>'}</div></article>`;
+}
+
+function projectTemplate(project) {
+  const tasks = state.tasks.filter(item => item.projectId === project.id);
+  const milestones = state.milestones.filter(item => item.projectId === project.id);
+  const blockers = state.projectBlockers.filter(item => item.projectId === project.id && item.status !== "resolved");
+  const decisions = state.projectDecisions.filter(item => item.projectId === project.id).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  const completedMilestones = milestones.filter(item => item.status === "completed").length;
+  const links = project.links.map(link => ({ ...link, safeUrl: safeExternalURL(link.url) })).filter(link => link.safeUrl);
+  return `<details class="project-card" ${blockers.length ? "open" : ""}><summary><span><small>${escapeHTML(project.category)} · Priority ${project.priority}</small><strong>${escapeHTML(project.name)}</strong><em>${escapeHTML(project.outcome || "Define the output this project exists to create.")}</em></span><div><b>${completedMilestones}/${milestones.length} milestones</b><i>›</i></div></summary><div class="project-body"><div class="project-progress"><span style="width:${milestones.length ? Math.round((completedMilestones / milestones.length) * 100) : 0}%"></span></div><div class="project-stats"><span>${tasks.filter(item => !item.done).length} open actions</span><span>${blockers.length} blockers</span><span>${decisions.length} decisions</span></div>${blockers.length ? `<div class="project-alerts">${blockers.map(item => `<button data-edit-blocker="${item.id}"><strong>Blocked</strong><span>${escapeHTML(item.text)}</span></button>`).join("")}</div>` : ""}${milestones.length ? `<div class="milestone-list">${milestones.map(item => `<div class="milestone-row ${item.status === "completed" ? "done" : ""}"><button class="check-button ${item.status === "completed" ? "done" : ""}" data-milestone-toggle="${item.id}" aria-label="Toggle milestone"></button><button data-edit-milestone="${item.id}"><strong>${escapeHTML(item.name)}</strong><small>${item.dueDate ? formatCompactDate(item.dueDate) : "No date pressure"}</small></button></div>`).join("")}</div>` : ""}${links.length ? `<div class="project-links">${links.map(link => `<a href="${escapeHTML(link.safeUrl)}" target="_blank" rel="noopener noreferrer">${escapeHTML(link.label)} ↗</a>`).join("")}</div>` : ""}<div class="project-actions"><button class="text-button" data-edit-project="${project.id}">Edit project</button><button class="text-button" data-add="blocker" data-project-id="${project.id}">+ Blocker</button><button class="text-button" data-add="decision" data-project-id="${project.id}">+ Decision</button><button class="text-button" data-add="task" data-project-id="${project.id}">+ Next action</button></div>${decisions.length ? `<div class="decision-log"><small>Latest decision</small><strong>${escapeHTML(decisions[0].text)}</strong><span>${escapeHTML(decisions[0].reason || "Decision recorded")}</span></div>` : ""}</div></details>`;
 }
 
 function inboxCard() {
@@ -1068,7 +1522,7 @@ function renderReview() {
     <div class="page-head"><p class="eyebrow">Life OS + feedback loop</p><h1 id="review-heading">Learn, then adjust.</h1><p>Review the quality of the system—not your worth. Look for patterns across weeks and months.</p></div>
     <div class="review-metrics">${reviewMetric("Evidence", `${metrics.daysChecked} days`, "Check-ins recorded")}${reviewMetric("Energy", metrics.energy ? `${metrics.energy.toFixed(1)}/5` : "—", "Self-reported average")}${reviewMetric("Foundations", `${metrics.routine}%`, "Routine steps kept")}${reviewMetric("Outputs", String(metrics.tasksDone), "Actions completed")}</div>
     ${weeklyCoachCard(coach)}
-    <div class="grid two-column"><div class="stack"><article class="card"><div class="card-head"><div><p class="eyebrow">Weekly evidence by area</p><h2>Notice patterns without grading your life</h2><p>These are self-reports for context, not a combined score.</p></div></div><div class="rating-list">${DIMENSIONS.map((item, index) => ratingTemplate(item, index)).join("")}</div></article><article class="card"><div class="card-head"><div><p class="eyebrow">Weekly reflection</p><h2>Close the loop</h2></div></div><div class="reflection-prompts">${reflectionField("win", "What moved forward?", "Name the real win.")}${reflectionField("friction", "Where did friction appear?", "Notice the system, not a character flaw.")}${reflectionField("lesson", "What cue or design will change?", "One environmental or behavioural adjustment.")}${reflectionField("next", "What may matter next week?", "Capture it without overcommitting.")}</div></article><article class="card week-close-card"><div><p class="eyebrow">Weekly rollover</p><h2>Archive the learning. Keep the momentum.</h2><p>Completed work moves into history. Open actions carry forward and the next week starts clean.</p></div><button class="button button-primary" data-close-week>Close this week</button></article></div><aside class="stack"><article class="card card-muted"><div class="card-head"><div><p class="eyebrow">Life stays visible</p><h2>Protect what work is for</h2></div></div>${lifeField("relationships", "Relationships", "Who needs intentional time?")}${lifeField("enjoyment", "Enjoyment", "Padel, music, socialising, creativity, freedom.")}${lifeField("health", "Health", "Sleep, food, movement, recovery.")}${lifeField("growth", "Growth", "What knowledge will you apply?")}</article><article class="card"><div class="card-head"><div><p class="eyebrow">Monthly strategic review</p><h2>${new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" }).format(new Date())}</h2></div></div>${monthlyField("financial", "Financial position", "What changed in cash, commitments, investments, or liabilities?")}${monthlyField("growth", "Personal development", "What changed in capability or character?")}${monthlyField("business", "Business progress", "What value, systems, or revenue moved?")}${monthlyField("lifestyle", "Lifestyle quality", "Is life actually becoming calmer, freer, and fuller?")}${monthlyField("adjustment", "One strategic adjustment", "What single change matters next month?")}</article><article class="card card-muted"><div class="card-head"><div><p class="eyebrow">Recovery decision</p><h2>What does next week need?</h2></div></div><div class="recovery-grid">${[["restore","Restore","Lower load"],["maintain","Maintain","Stay steady"],["expand","Expand","Add stretch"]].map(([key,label,note]) => `<button class="recovery-option ${state.reflection.recovery === key ? "selected" : ""}" data-recovery="${key}"><strong>${label}</strong><small>${note}</small></button>`).join("")}</div></article></aside></div>
+    <div class="grid two-column"><div class="stack"><article class="card"><div class="card-head"><div><p class="eyebrow">Weekly evidence by area</p><h2>Notice patterns without grading your life</h2><p>These are self-reports for context, not a combined score.</p></div></div><div class="rating-list">${DIMENSIONS.map((item, index) => ratingTemplate(item, index)).join("")}</div></article><article class="card"><div class="card-head"><div><p class="eyebrow">Weekly reflection</p><h2>Close the loop</h2></div></div><div class="reflection-prompts">${reflectionField("win", "What moved forward?", "Name the real win.")}${reflectionField("friction", "Where did friction appear?", "Notice the system, not a character flaw.")}${reflectionField("lesson", "What cue or design will change?", "One environmental or behavioural adjustment.")}${reflectionField("next", "What may matter next week?", "Capture it without overcommitting.")}</div></article><article class="card week-close-card"><div><p class="eyebrow">Weekly rollover</p><h2>Archive the learning. Keep the momentum.</h2><p>Completed work moves into history. Open actions carry forward and the next week starts clean.</p></div><button class="button button-primary" data-close-week>Close this week</button></article></div><aside class="stack"><article class="card card-muted"><div class="card-head"><div><p class="eyebrow">Life stays visible</p><h2>Protect what work is for</h2></div></div>${lifeField("relationships", "Relationships", "Who needs intentional time?")}${lifeField("enjoyment", "Enjoyment", "Padel, music, socialising, creativity, freedom.")}${lifeField("health", "Health", "Sleep, food, movement, recovery.")}${lifeField("growth", "Growth", "What knowledge will you apply?")}</article>${monthlyEvidenceCard()}<article class="card"><div class="card-head"><div><p class="eyebrow">Monthly strategic review</p><h2>${new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" }).format(new Date())}</h2></div></div>${monthlyField("financial", "Financial position", "What changed in cash, commitments, investments, or liabilities?")}${monthlyField("growth", "Personal development", "What changed in capability or character?")}${monthlyField("business", "Business progress", "What value, systems, or revenue moved?")}${monthlyField("lifestyle", "Lifestyle quality", "Is life actually becoming calmer, freer, and fuller?")}${monthlyField("adjustment", "One strategic adjustment", "What single change matters next month?")}${monthlyField("decisions", "Decisions for next month", "What will you start, stop, continue, or deliberately defer?")}</article><article class="card card-muted"><div class="card-head"><div><p class="eyebrow">Recovery decision</p><h2>What does next week need?</h2></div></div><div class="recovery-grid">${[["restore","Restore","Lower load"],["maintain","Maintain","Stay steady"],["expand","Expand","Add stretch"]].map(([key,label,note]) => `<button class="recovery-option ${state.reflection.recovery === key ? "selected" : ""}" data-recovery="${key}"><strong>${label}</strong><small>${note}</small></button>`).join("")}</div></article></aside></div>
     <article class="card history-card"><div class="card-head"><div><p class="eyebrow">System memory</p><h2>Previous weeks</h2><p>Patterns become visible when the system remembers.</p></div><span class="tag">${state.history.length} archived</span></div>${historyView()}</article>`;
 }
 
@@ -1140,21 +1594,29 @@ function editorCollection(type) {
   if (type === "contact") return state.life.contacts;
   if (type === "experience") return state.life.experiences;
   if (type === "journal") return state.life.journal;
+  if (type === "goal") return state.goals;
+  if (type === "project") return state.projects;
+  if (type === "milestone") return state.milestones;
+  if (type === "blocker") return state.projectBlockers;
+  if (type === "decision") return state.projectDecisions;
+  if (type === "budget") return state.finances.budgets;
+  if (type === "income") return state.finances.incomeForecasts;
+  if (type === "savings") return state.finances.savingsGoals;
   return [];
 }
 
-function openEditor(type, id = null) {
+function openEditor(type, id = null, preset = {}) {
   const dialog = document.getElementById("editor-dialog");
   const fields = document.getElementById("dialog-fields");
-  const collectionTypes = ["task", "inbox", "maintenance", "cue", "script", "transaction", "bill", "obligation", "investment", "contact", "experience", "journal"];
+  const collectionTypes = ["task", "inbox", "maintenance", "cue", "script", "transaction", "bill", "obligation", "investment", "contact", "experience", "journal", "goal", "project", "milestone", "blocker", "decision", "budget", "income", "savings"];
   const item = collectionTypes.includes(type) && id ? editorCollection(type).find(entry => entry.id === id) : null;
-  editor = ["handoffImport", "syncPair"].includes(type) ? { type, payload: id } : { type, id };
-  const titles = { task: "Smart action", inbox: "Quick capture", maintenance: "Life maintenance date", cue: "Cue architecture", script: "If–then script", transaction: "Transaction", bill: "Bill + due date", obligation: "Obligation", investment: "Investment", contact: "Relationship intention", experience: "Experience", journal: "Private reflection", moneySettings: "Spending guardrails", routine: `${state.modes[id]?.label || "Routine"} mode`, reminders: "Gentle reminders", security: "App lock", sync: "Device sync", syncPair: "Connect this device", handoff: "Secure phone handoff", handoffImport: "Import secure handoff" };
+  editor = ["handoffImport", "syncPair"].includes(type) ? { type, payload: id } : { type, id, preset };
+  const titles = { task: "Smart action", inbox: "Quick capture", maintenance: "Life maintenance date", cue: "Cue architecture", script: "If–then script", transaction: "Transaction", bill: "Bill + due date", obligation: "Obligation", investment: "Investment", contact: "Relationship intention", experience: "Experience", journal: "Private reflection", goal: "Goal", project: "Project workspace", milestone: "Milestone", blocker: "Project blocker", decision: "Project decision", budget: "Budget line", income: "Income forecast", savings: "Savings goal", moneySettings: "Spending guardrails", assistantSettings: "Assistant privacy", routine: `${state.modes[id]?.label || "Routine"} mode`, reminders: "Gentle reminders", security: "App lock", sync: "Device sync", syncPair: "Connect this device", handoff: "Secure phone handoff", handoffImport: "Import secure handoff" };
   document.getElementById("dialog-eyebrow").textContent = ({ routine: "Personalise your system", reminders: "Stay gently connected", security: "Local privacy", sync: "Encrypted private relay", syncPair: "Encrypted private relay", handoff: "Encrypted device transfer", handoffImport: "Encrypted device transfer" })[type] || (id ? "Update your system" : "Add to your system");
   document.getElementById("dialog-title").textContent = titles[type] || "Item";
   document.getElementById("delete-item").classList.toggle("hidden", !(id && collectionTypes.includes(type)));
   document.getElementById("save-item").textContent = ({ sync: cloudSync.namespace ? "Done" : "Start sync + share", syncPair: "Connect this device", handoff: "Create secure link", handoffImport: "Import", security: "Save lock", reminders: "Save reminders", routine: "Save routine" })[type] || "Save";
-  if (type === "task") fields.innerHTML = taskEditor(item);
+  if (type === "task") fields.innerHTML = taskEditor(item || preset);
   if (type === "inbox") fields.innerHTML = inboxEditor(item);
   if (type === "maintenance") fields.innerHTML = maintenanceEditor(item);
   if (type === "cue") fields.innerHTML = cueEditor(item);
@@ -1166,7 +1628,15 @@ function openEditor(type, id = null) {
   if (type === "contact") fields.innerHTML = contactEditor(item);
   if (type === "experience") fields.innerHTML = experienceEditor(item);
   if (type === "journal") fields.innerHTML = journalEditor(item);
+  if (type === "goal") fields.innerHTML = goalEditor(item);
+  if (type === "project") fields.innerHTML = projectEditor(item);
+  if (type === "milestone") fields.innerHTML = milestoneEditor(item || preset);
+  if (type === "blocker" || type === "decision") fields.innerHTML = projectRecordEditor(type, item || preset);
+  if (type === "budget") fields.innerHTML = budgetEditor(item);
+  if (type === "income") fields.innerHTML = incomeEditor(item);
+  if (type === "savings") fields.innerHTML = savingsEditor(item);
   if (type === "moneySettings") fields.innerHTML = moneySettingsEditor();
+  if (type === "assistantSettings") fields.innerHTML = assistantSettingsEditor();
   if (type === "routine") fields.innerHTML = routineEditor(id);
   if (type === "reminders") fields.innerHTML = remindersEditor();
   if (type === "security") fields.innerHTML = securityEditor();
@@ -1191,7 +1661,42 @@ function connectEditorLabels(fields, type) {
 }
 
 function taskEditor(item) {
-  return `<div class="field"><label>Action</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Weekly role</label><select name="alignment">${[["primary","Main outcome"],["supporting","Supporting"],["maintenance","Maintenance"]].map(([value,label]) => `<option value="${value}" ${item?.alignment === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Deadline</label><input name="dueDate" type="date" value="${item?.dueDate || ""}" /></div></div><div class="inline-fields"><div class="field"><label>Impact</label><select name="impact">${[1,2,3].map(value => `<option value="${value}" ${Number(item?.impact || 2) === value ? "selected" : ""}>${value}</option>`).join("")}</select></div><div class="field"><label>Complexity</label><select name="complexity">${[1,2,3].map(value => `<option value="${value}" ${Number(item?.complexity || 1) === value ? "selected" : ""}>${value}</option>`).join("")}</select></div><div class="field"><label>Energy</label><select name="energy">${["low","medium","high"].map(value => `<option value="${value}" ${(item?.energy || "medium") === value ? "selected" : ""}>${energyLabel(value)}</option>`).join("")}</select></div></div><div class="field"><label>Minutes</label><input name="duration" type="number" min="5" max="300" step="5" value="${item?.duration || 30}" /></div><div class="task-setup-editor"><div><p class="eyebrow">Automatic start architecture</p><strong>Prepare → place → launch → fallback</strong></div><div class="field"><label>Prepare beforehand</label><textarea name="preparation" placeholder="Pack the bag, open the file, gather the documents…">${escapeHTML(item?.preparation || "")}</textarea></div><div class="field"><label>Put it here</label><textarea name="placement" placeholder="By the door, on the desk, beside breakfast…">${escapeHTML(item?.placement || "")}</textarea></div><div class="field"><label>Start when</label><textarea name="launchCue" placeholder="After meditation, when work ends, after breakfast…">${escapeHTML(item?.launchCue || "")}</textarea></div><div class="field"><label>If the plan breaks</label><textarea name="fallback" placeholder="The minimum version that still keeps momentum.">${escapeHTML(item?.fallback || "")}</textarea></div></div><p class="dialog-note">The scheduler chooses the task. This setup removes the decisions and friction that normally delay starting.</p>`;
+  const dependencyId = item?.dependencyIds?.[0] || "";
+  return `<div class="field"><label>Action</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Project</label><select name="projectId"><option value="">No project</option>${state.projects.filter(project => project.status !== "archived").map(project => `<option value="${project.id}" ${item?.projectId === project.id ? "selected" : ""}>${escapeHTML(project.name)}</option>`).join("")}</select></div><div class="field"><label>Goal</label><select name="goalId"><option value="">No direct goal</option>${state.goals.filter(goal => goal.status !== "archived").map(goal => `<option value="${goal.id}" ${item?.goalId === goal.id ? "selected" : ""}>${escapeHTML(goal.name)}</option>`).join("")}</select></div><div class="field"><label>Blocked by</label><select name="dependencyId"><option value="">Nothing</option>${state.tasks.filter(task => !task.done && task.id !== item?.id).map(task => `<option value="${task.id}" ${dependencyId === task.id ? "selected" : ""}>${escapeHTML(task.name)}</option>`).join("")}</select></div></div><div class="inline-fields"><div class="field"><label>Weekly role</label><select name="alignment">${[["primary","Main outcome"],["supporting","Supporting"],["maintenance","Maintenance"]].map(([value,label]) => `<option value="${value}" ${item?.alignment === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Deadline</label><input name="dueDate" type="date" value="${item?.dueDate || ""}" /></div></div><div class="inline-fields"><div class="field"><label>Impact</label><select name="impact">${[1,2,3].map(value => `<option value="${value}" ${Number(item?.impact || 2) === value ? "selected" : ""}>${value}</option>`).join("")}</select></div><div class="field"><label>Complexity</label><select name="complexity">${[1,2,3].map(value => `<option value="${value}" ${Number(item?.complexity || 1) === value ? "selected" : ""}>${value}</option>`).join("")}</select></div><div class="field"><label>Energy</label><select name="energy">${["low","medium","high"].map(value => `<option value="${value}" ${(item?.energy || "medium") === value ? "selected" : ""}>${energyLabel(value)}</option>`).join("")}</select></div></div><div class="field"><label>Minutes</label><input name="duration" type="number" min="5" max="300" step="5" value="${item?.duration || 30}" /></div><div class="task-setup-editor"><div><p class="eyebrow">Automatic start architecture</p><strong>Prepare → place → launch → fallback</strong></div><div class="field"><label>Prepare beforehand</label><textarea name="preparation" placeholder="Pack the bag, open the file, gather the documents…">${escapeHTML(item?.preparation || "")}</textarea></div><div class="field"><label>Put it here</label><textarea name="placement" placeholder="By the door, on the desk, beside breakfast…">${escapeHTML(item?.placement || "")}</textarea></div><div class="field"><label>Start when</label><textarea name="launchCue" placeholder="After meditation, when work ends, after breakfast…">${escapeHTML(item?.launchCue || "")}</textarea></div><div class="field"><label>If the plan breaks</label><textarea name="fallback" placeholder="The minimum version that still keeps momentum.">${escapeHTML(item?.fallback || "")}</textarea></div></div><p class="dialog-note">The scheduler chooses the task. This setup removes the decisions and friction that normally delay starting.</p>`;
+}
+
+function goalEditor(item) {
+  return `<div class="field"><label>Goal</label><input name="name" required value="${escapeHTML(item?.name || "")}" placeholder="A result that changes meaningful decisions" /></div><div class="inline-fields"><div class="field"><label>Life area</label><select name="area">${["business","money","education","life","health","faith","creative"].map(value => `<option value="${value}" ${(item?.area || "life") === value ? "selected" : ""}>${value[0].toUpperCase() + value.slice(1)}</option>`).join("")}</select></div><div class="field"><label>Horizon</label><select name="horizon">${[["month","Month"],["quarter","Quarter"],["year","Year"],["longterm","Long term"]].map(([value,label]) => `<option value="${value}" ${(item?.horizon || "quarter") === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Target date</label><input name="targetDate" type="date" value="${item?.targetDate || ""}" /></div></div><div class="field"><label>Why this matters</label><textarea name="why">${escapeHTML(item?.why || "")}</textarea></div><div class="field"><label>Evidence of completion</label><textarea name="evidence" required>${escapeHTML(item?.evidence || "")}</textarea></div><div class="field"><label>Status</label><select name="status">${["active","paused","completed","archived"].map(value => `<option value="${value}" ${(item?.status || "active") === value ? "selected" : ""}>${value[0].toUpperCase() + value.slice(1)}</option>`).join("")}</select></div>`;
+}
+
+function projectEditor(item) {
+  const links = (item?.links || []).map(link => `${link.label} | ${link.url}`).join("\n");
+  return `<div class="field"><label>Project name</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Category</label><select name="category">${["business","software","education","creative","personal"].map(value => `<option value="${value}" ${(item?.category || "personal") === value ? "selected" : ""}>${value[0].toUpperCase() + value.slice(1)}</option>`).join("")}</select></div><div class="field"><label>Goal</label><select name="goalId"><option value="">No parent goal</option>${state.goals.filter(goal => goal.status !== "archived").map(goal => `<option value="${goal.id}" ${item?.goalId === goal.id ? "selected" : ""}>${escapeHTML(goal.name)}</option>`).join("")}</select></div><div class="field"><label>Priority</label><select name="priority">${[1,2,3].map(value => `<option value="${value}" ${Number(item?.priority || 2) === value ? "selected" : ""}>${value}</option>`).join("")}</select></div></div><div class="field"><label>Project output</label><textarea name="outcome" required placeholder="What tangible result must this project create?">${escapeHTML(item?.outcome || "")}</textarea></div><div class="inline-fields"><div class="field"><label>Next review</label><input name="nextReviewDate" type="date" value="${item?.nextReviewDate || ""}" /></div><div class="field"><label>Status</label><select name="status">${["active","paused","completed","archived"].map(value => `<option value="${value}" ${(item?.status || "active") === value ? "selected" : ""}>${value[0].toUpperCase() + value.slice(1)}</option>`).join("")}</select></div></div><div class="field"><label>Working notes</label><textarea name="notes">${escapeHTML(item?.notes || "")}</textarea></div><div class="field"><label>Links (one per line)</label><textarea name="links" placeholder="Repository | https://github.com/…">${escapeHTML(links)}</textarea></div>`;
+}
+
+function projectSelect(name, selected = "") {
+  return `<div class="field"><label>Project</label><select name="${name}" required><option value="">Choose a project</option>${state.projects.filter(project => project.status !== "archived").map(project => `<option value="${project.id}" ${selected === project.id ? "selected" : ""}>${escapeHTML(project.name)}</option>`).join("")}</select></div>`;
+}
+
+function milestoneEditor(item) {
+  return `${projectSelect("projectId", item?.projectId)}<div class="field"><label>Milestone</label><input name="name" required value="${escapeHTML(item?.name || "")}" placeholder="A verifiable deliverable" /></div><div class="inline-fields"><div class="field"><label>Target date</label><input name="dueDate" type="date" value="${item?.dueDate || ""}" /></div><div class="field"><label>Status</label><select name="status"><option value="open" ${item?.status !== "completed" ? "selected" : ""}>Open</option><option value="completed" ${item?.status === "completed" ? "selected" : ""}>Completed</option></select></div></div>`;
+}
+
+function projectRecordEditor(type, item) {
+  const isBlocker = type === "blocker";
+  return `${projectSelect("projectId", item?.projectId)}<div class="field"><label>${isBlocker ? "What is blocking movement?" : "Decision"}</label><textarea name="text" required>${escapeHTML(item?.text || "")}</textarea></div><div class="field"><label>${isBlocker ? "Resolution note" : "Reason or trade-off"}</label><textarea name="reason">${escapeHTML(item?.reason || "")}</textarea></div>${isBlocker ? `<div class="field"><label>Status</label><select name="status"><option value="open" ${item?.status !== "resolved" ? "selected" : ""}>Open</option><option value="resolved" ${item?.status === "resolved" ? "selected" : ""}>Resolved</option></select></div>` : ""}`;
+}
+
+function budgetEditor(item) {
+  return `<div class="field"><label>Budget line</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Category</label><input name="category" value="${escapeHTML(item?.category || "Other")}" /></div><div class="field"><label>Account</label><select name="account"><option value="personal" ${item?.account !== "business" ? "selected" : ""}>Personal</option><option value="business" ${item?.account === "business" ? "selected" : ""}>Business</option></select></div><div class="field"><label>Month</label><input name="month" type="month" value="${item?.month || monthKey()}" /></div></div><div class="field"><label>Planned amount (£)</label><input name="amount" type="number" min="0" step="0.01" required value="${item?.amount ?? ""}" /></div>`;
+}
+
+function incomeEditor(item) {
+  return `<div class="field"><label>Income source</label><input name="source" required value="${escapeHTML(item?.source || "")}" placeholder="Student Finance, invoice, salary…" /></div><div class="inline-fields"><div class="field"><label>Amount (£)</label><input name="amount" type="number" min="0" step="0.01" required value="${item?.amount ?? ""}" /></div><div class="field"><label>Expected date</label><input name="expectedDate" type="date" value="${item?.expectedDate || ""}" /></div></div><div class="inline-fields"><div class="field"><label>Status</label><select name="status">${[["expected","Expected"],["confirmed","Confirmed"],["received","Received"],["cancelled","Cancelled"]].map(([value,label]) => `<option value="${value}" ${(item?.status || "expected") === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Account</label><select name="account"><option value="personal" ${item?.account !== "business" ? "selected" : ""}>Personal</option><option value="business" ${item?.account === "business" ? "selected" : ""}>Business</option></select></div></div><div class="field"><label>Notes</label><textarea name="notes">${escapeHTML(item?.notes || "")}</textarea></div><p class="dialog-note">Even “received” income stays separate from cash balances until you record the matching transaction. This prevents silent balance changes.</p>`;
+}
+
+function savingsEditor(item) {
+  return `<div class="field"><label>Savings goal</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Target (£)</label><input name="target" type="number" min="0" step="0.01" required value="${item?.target ?? ""}" /></div><div class="field"><label>Already protected (£)</label><input name="saved" type="number" min="0" step="0.01" value="${item?.saved ?? 0}" /></div><div class="field"><label>Optional deadline</label><input name="deadline" type="date" value="${item?.deadline || ""}" /></div></div><div class="field"><label>Status</label><select name="status">${["active","completed","paused"].map(value => `<option value="${value}" ${(item?.status || "active") === value ? "selected" : ""}>${value[0].toUpperCase() + value.slice(1)}</option>`).join("")}</select></div>`;
 }
 
 function inboxEditor(item) {
@@ -1234,6 +1739,11 @@ function billEditor(item) {
 
 function moneySettingsEditor() {
   return `<div class="field"><label>Cash reserve floor (£)</label><input name="reserveTarget" type="number" min="0" step="10" required value="${Number(state.finances.settings.reserveTarget) || 0}" /></div><div class="field"><label>Monthly enjoyment allowance (£)</label><input name="enjoymentAllowance" type="number" min="0" step="5" value="${Number(state.finances.settings.enjoymentAllowance) || 0}" /></div><p class="dialog-note">Safe to spend = available cash − unpaid bills in the next 30 days − overdue bills − this reserve − planned obligation payments. Enjoyment is capped by the allowance only when one is set.</p>`;
+}
+
+function assistantSettingsEditor() {
+  const settings = state.preferences.assistant;
+  return `<div class="assistant-privacy-panel"><strong>Current provider: Private local analysis</strong><p>The built-in assistant works without sending records to an external AI model.</p></div><label class="toggle-row"><span><strong>Financial summaries</strong><small>Allow the local assistant to use classified money totals</small></span><input name="shareFinancial" type="checkbox" ${settings.shareFinancial ? "checked" : ""} /><i></i></label><label class="toggle-row"><span><strong>Life + relationship reminders</strong><small>Allow local suggestions to mention voluntary connection intentions</small></span><input name="shareLife" type="checkbox" ${settings.shareLife ? "checked" : ""} /><i></i></label><label class="toggle-row"><span><strong>Private journal content</strong><small>Off by default and not used by the current assistant</small></span><input name="shareJournal" type="checkbox" ${settings.shareJournal ? "checked" : ""} /><i></i></label><p class="dialog-note">If an external model provider is added later, it must use these permissions and show exactly what will be shared before sending anything.</p>`;
 }
 
 function updateBillEditorFields() {
@@ -1300,6 +1810,11 @@ async function saveEditor() {
   }
   if (editor.type === "reminders") return saveReminders(form, data);
   if (editor.type === "security") return saveLockSettings(form, data);
+  if (editor.type === "assistantSettings") {
+    state.preferences.assistant = { provider: "local", shareFinancial: form.elements.shareFinancial.checked, shareLife: form.elements.shareLife.checked, shareJournal: form.elements.shareJournal.checked };
+    saveState("Assistant privacy updated");
+    return true;
+  }
   if (editor.type === "sync") {
     if (!cloudSync.namespace) await startCloudSync();
     return true;
@@ -1311,7 +1826,9 @@ async function saveEditor() {
   }
   if (editor.type === "moneySettings") {
     state.finances.settings.reserveTarget = Math.max(0, Number(data.reserveTarget) || 0);
+    state.finances.settings.reserveTargetMinor = toMinor(state.finances.settings.reserveTarget);
     state.finances.settings.enjoymentAllowance = Math.max(0, Number(data.enjoymentAllowance) || 0);
+    state.finances.settings.enjoymentAllowanceMinor = toMinor(state.finances.settings.enjoymentAllowance);
     saveState("Spending guardrails updated");
     render();
     return true;
@@ -1345,7 +1862,7 @@ async function saveEditor() {
   if (editor.type === "task") {
     const nextSetup = { preparation: data.preparation.trim(), placement: data.placement.trim(), launchCue: data.launchCue.trim(), fallback: data.fallback.trim() };
     const setupChanged = Object.entries(nextSetup).some(([key, value]) => item[key] !== value);
-    Object.assign(item, { name: data.name.trim(), impact: Number(data.impact), complexity: Number(data.complexity), energy: data.energy, duration: Number(data.duration), dueDate: data.dueDate || "", alignment: data.alignment, ...nextSetup, createdAt: item.createdAt || new Date().toISOString(), done: item.done || false });
+    Object.assign(item, { name: data.name.trim(), impact: Number(data.impact), complexity: Number(data.complexity), energy: data.energy, duration: Number(data.duration), dueDate: data.dueDate || "", alignment: data.alignment, projectId: data.projectId || "", goalId: data.goalId || "", dependencyIds: data.dependencyId ? [data.dependencyId] : [], ...nextSetup, createdAt: item.createdAt || new Date().toISOString(), done: item.done || false });
     const daily = todayState();
     if (setupChanged && daily.tomorrowTaskId === item.id) daily.tomorrowReady = false;
   }
@@ -1353,7 +1870,7 @@ async function saveEditor() {
   if (editor.type === "maintenance") Object.assign(item, { name: data.name.trim(), category: data.category, dueDate: data.dueDate, recurrence: data.recurrence, remindDays: Number(data.remindDays), notes: data.notes.trim(), createdAt: item.createdAt || new Date().toISOString(), completedPeriods: item.completedPeriods || [] });
   if (editor.type === "cue") Object.assign(item, { name: data.name.trim(), cue: data.cue.trim(), response: data.response.trim(), setup: data.setup.trim(), remove: data.remove.trim() });
   if (editor.type === "script") Object.assign(item, { trigger: data.trigger.trim(), response: data.response.trim() });
-  if (editor.type === "transaction") Object.assign(item, { type: data.type, account: data.account, date: data.date, amount: Number(data.amount), category: data.category, note: data.note.trim() });
+  if (editor.type === "transaction") Object.assign(item, { type: data.type, account: data.account, date: data.date, amount: fromMinor(toMinor(data.amount)), amountMinor: toMinor(data.amount), category: data.category, note: data.note.trim(), createdAt: item.createdAt || new Date().toISOString() });
   if (editor.type === "bill") {
     if (data.frequency === "oneoff" && !data.dueDate) return showToast("Choose the one-off due date"), false;
     const frequencyChanged = item.frequency && item.frequency !== data.frequency;
@@ -1361,13 +1878,29 @@ async function saveEditor() {
     const nextAmount = Number(data.amount);
     const priceChanged = Number(item.amount) > 0 && Number(item.amount) !== nextAmount;
     const becomingSubscription = item.kind !== "subscription" && data.billKind === "subscription";
-    Object.assign(item, { name: data.name.trim(), amount: nextAmount, frequency: data.frequency, dueDay, dueMonth: Number(data.dueMonth || 1), dueDate: data.dueDate || "", kind: data.billKind, account: data.account, remindDays: Number(data.remindDays), autopay: Boolean(data.autopay), createdAt: item.createdAt || new Date().toISOString(), paidPeriods: frequencyChanged ? [] : (item.paidPeriods || []), previousAmount: priceChanged ? Number(item.amount) : Number(item.previousAmount || 0), amountChangedAt: priceChanged ? new Date().toISOString() : (item.amountChangedAt || ""), lastReviewed: becomingSubscription ? new Date().toISOString() : (item.lastReviewed || "") });
+    const previousAmount = priceChanged ? Number(item.amount) : Number(item.previousAmount || 0);
+    Object.assign(item, { name: data.name.trim(), amount: fromMinor(toMinor(nextAmount)), amountMinor: toMinor(nextAmount), frequency: data.frequency, dueDay, dueMonth: Number(data.dueMonth || 1), dueDate: data.dueDate || "", kind: data.billKind, account: data.account, remindDays: Number(data.remindDays), autopay: Boolean(data.autopay), createdAt: item.createdAt || new Date().toISOString(), paidPeriods: frequencyChanged ? [] : (item.paidPeriods || []), previousAmount, previousAmountMinor: toMinor(previousAmount), amountChangedAt: priceChanged ? new Date().toISOString() : (item.amountChangedAt || ""), lastReviewed: becomingSubscription ? new Date().toISOString() : (item.lastReviewed || "") });
   }
-  if (editor.type === "obligation") Object.assign(item, { name: data.name.trim(), target: Number(data.target), paid: Number(data.paid), monthlyPayment: Number(data.monthlyPayment) });
-  if (editor.type === "investment") Object.assign(item, { name: data.name.trim(), contributed: Number(data.contributed), current: Number(data.current) });
+  if (editor.type === "obligation") Object.assign(item, { name: data.name.trim(), target: fromMinor(toMinor(data.target)), targetMinor: toMinor(data.target), paid: fromMinor(toMinor(data.paid)), paidMinor: toMinor(data.paid), monthlyPayment: fromMinor(toMinor(data.monthlyPayment)), monthlyPaymentMinor: toMinor(data.monthlyPayment) });
+  if (editor.type === "investment") Object.assign(item, { name: data.name.trim(), contributed: fromMinor(toMinor(data.contributed)), contributedMinor: toMinor(data.contributed), current: fromMinor(toMinor(data.current)), currentMinor: toMinor(data.current) });
   if (editor.type === "contact") Object.assign(item, { name: data.name.trim(), relationship: data.relationship.trim(), intention: data.intention.trim(), nextContactDate: data.nextContactDate || "", notes: data.notes.trim(), status: data.status, lastConnected: item.lastConnected || "", createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
-  if (editor.type === "experience") Object.assign(item, { name: data.name.trim(), category: data.category, targetDate: data.targetDate || "", costEstimate: Math.max(0, Number(data.costEstimate) || 0), status: data.status, notes: data.notes.trim(), completedAt: data.status === "completed" ? (item.completedAt || new Date().toISOString()) : "", createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
+  if (editor.type === "experience") Object.assign(item, { name: data.name.trim(), category: data.category, targetDate: data.targetDate || "", costEstimate: fromMinor(Math.max(0, toMinor(data.costEstimate))), costEstimateMinor: Math.max(0, toMinor(data.costEstimate)), status: data.status, notes: data.notes.trim(), completedAt: data.status === "completed" ? (item.completedAt || new Date().toISOString()) : "", createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
   if (editor.type === "journal") Object.assign(item, { date: data.date, type: data.type, content: data.content.trim(), private: Boolean(data.private), createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
+  if (editor.type === "goal") Object.assign(item, { name: data.name.trim(), area: data.area, horizon: data.horizon, targetDate: data.targetDate || "", why: data.why.trim(), evidence: data.evidence.trim(), status: data.status, createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
+  if (editor.type === "project") {
+    const links = data.links.split(/\r?\n/).map(line => {
+      const [label, ...urlParts] = line.split("|");
+      const url = urlParts.join("|").trim() || label.trim();
+      return { label: urlParts.length ? label.trim() || "Link" : "Link", url };
+    }).filter(link => safeExternalURL(link.url));
+    Object.assign(item, { name: data.name.trim(), category: data.category, goalId: data.goalId || "", outcome: data.outcome.trim(), nextReviewDate: data.nextReviewDate || "", priority: Number(data.priority), status: data.status, notes: data.notes.trim(), links, createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
+  }
+  if (editor.type === "milestone") Object.assign(item, { projectId: data.projectId, name: data.name.trim(), dueDate: data.dueDate || "", status: data.status, createdAt: item.createdAt || new Date().toISOString(), completedAt: data.status === "completed" ? (item.completedAt || new Date().toISOString()) : "" });
+  if (editor.type === "blocker") Object.assign(item, { projectId: data.projectId, text: data.text.trim(), reason: data.reason.trim(), status: data.status, createdAt: item.createdAt || new Date().toISOString(), resolvedAt: data.status === "resolved" ? (item.resolvedAt || new Date().toISOString()) : "" });
+  if (editor.type === "decision") Object.assign(item, { projectId: data.projectId, text: data.text.trim(), reason: data.reason.trim(), status: "recorded", createdAt: item.createdAt || new Date().toISOString() });
+  if (editor.type === "budget") Object.assign(item, { name: data.name.trim(), category: data.category.trim() || "Other", account: data.account, month: data.month || monthKey(), amount: fromMinor(toMinor(data.amount)), amountMinor: toMinor(data.amount), createdAt: item.createdAt || new Date().toISOString() });
+  if (editor.type === "income") Object.assign(item, { source: data.source.trim(), amount: fromMinor(toMinor(data.amount)), amountMinor: toMinor(data.amount), expectedDate: data.expectedDate || "", status: data.status, account: data.account, notes: data.notes.trim(), createdAt: item.createdAt || new Date().toISOString(), receivedAt: data.status === "received" ? (item.receivedAt || new Date().toISOString()) : "" });
+  if (editor.type === "savings") Object.assign(item, { name: data.name.trim(), target: fromMinor(toMinor(data.target)), targetMinor: toMinor(data.target), saved: fromMinor(toMinor(data.saved)), savedMinor: toMinor(data.saved), deadline: data.deadline || "", status: data.status, createdAt: item.createdAt || new Date().toISOString() });
   saveState(editor.type === "inbox" ? "Captured without changing direction" : "System updated");
   render();
   return true;
@@ -2106,6 +2639,19 @@ document.addEventListener("click", async event => {
     document.getElementById(target.dataset.scrollTarget)?.scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
+  if (target.dataset.assistantKind) {
+    assistantRecommendation(target.dataset.assistantKind);
+    renderAssistant();
+    return;
+  }
+  if (target.dataset.approveRecommendation) {
+    applyAssistantRecommendation(target.dataset.approveRecommendation);
+    return;
+  }
+  if (target.dataset.reverseChange) {
+    reverseAssistantChange(target.dataset.reverseChange);
+    return;
+  }
   if (target.hasAttribute("data-sync-now")) {
     await syncNow();
     if (editor?.type === "sync") document.getElementById("dialog-fields").innerHTML = syncEditor();
@@ -2221,6 +2767,15 @@ document.addEventListener("click", async event => {
     saveState(task.done ? "Action complete" : "Action reopened");
     return render();
   }
+  if (target.dataset.milestoneToggle) {
+    const milestone = state.milestones.find(item => item.id === target.dataset.milestoneToggle);
+    if (!milestone) return;
+    const completed = milestone.status === "completed";
+    milestone.status = completed ? "open" : "completed";
+    milestone.completedAt = completed ? "" : new Date().toISOString();
+    saveState(completed ? "Milestone reopened" : "Milestone completed");
+    return render();
+  }
   if (target.dataset.tomorrowReady) {
     const daily = todayState();
     const sameTask = daily.tomorrowTaskId === target.dataset.tomorrowReady;
@@ -2275,12 +2830,14 @@ document.addEventListener("click", async event => {
     if (!bill) return;
     bill.lastReviewed = new Date().toISOString();
     bill.previousAmount = Number(bill.amount);
+    bill.previousAmountMinor = minorValue(bill, "amountMinor", "amount");
     saveState("Subscription review recorded");
     return render();
   }
-  if (target.dataset.add) return openEditor(target.dataset.add);
+  if (target.dataset.add) return openEditor(target.dataset.add, null, { projectId: target.dataset.projectId || "" });
   if (target.dataset.editRoutine) return openEditor("routine", target.dataset.editRoutine);
   if (target.dataset.inboxTask) return promoteInboxItem(target.dataset.inboxTask);
+  if (target.hasAttribute("data-capture-month")) return captureMonthlyEvidence();
   if (target.hasAttribute("data-close-week")) return closeWeek();
   if (target.hasAttribute("data-add-routine-step")) {
     document.querySelector(".routine-step-list").insertAdjacentHTML("beforeend", routineStepEditor(["", "", 5], document.querySelectorAll(".routine-step-editor").length));
@@ -2299,7 +2856,7 @@ document.addEventListener("click", async event => {
     return renumberRoutineSteps();
   }
   if (target.hasAttribute("data-disable-lock")) return disableLock();
-  ["task", "inbox", "maintenance", "cue", "script", "transaction", "bill", "obligation", "investment", "contact", "experience", "journal"].forEach(type => {
+  ["task", "inbox", "maintenance", "cue", "script", "transaction", "bill", "obligation", "investment", "contact", "experience", "journal", "goal", "project", "milestone", "blocker", "decision", "budget", "income", "savings"].forEach(type => {
     const key = `edit${type[0].toUpperCase()}${type.slice(1)}`;
     if (target.dataset[key]) openEditor(type, target.dataset[key]);
   });
@@ -2333,7 +2890,11 @@ document.addEventListener("change", event => {
   }
   if (target.dataset.weekField) state.week[target.dataset.weekField] = target.value.trim();
   if (target.dataset.dailyField) todayState()[target.dataset.dailyField] = target.value.trim();
-  if (target.dataset.balance) state.finances.balances[target.dataset.balance] = Number(target.value);
+  if (target.dataset.balance) {
+    const amountMinor = toMinor(target.value);
+    state.finances.balances[target.dataset.balance] = fromMinor(amountMinor);
+    state.finances.balancesMinor[target.dataset.balance] = amountMinor;
+  }
   if (target.dataset.reflection) state.reflection[target.dataset.reflection] = target.value.trim();
   if (target.dataset.lifeField) state.life[target.dataset.lifeField] = target.value.trim();
   if (target.dataset.lifeGroup && target.dataset.lifeKey) state.life[target.dataset.lifeGroup][target.dataset.lifeKey] = target.value.trim();
@@ -2348,6 +2909,12 @@ document.addEventListener("change", event => {
 document.addEventListener("input", event => {
   const target = event.target;
   if (target.matches("[data-auto-resize]")) resizeOutcomeInput(target);
+  if (target.dataset.balance) {
+    const amountMinor = toMinor(target.value);
+    state.finances.balances[target.dataset.balance] = fromMinor(amountMinor);
+    state.finances.balancesMinor[target.dataset.balance] = amountMinor;
+    saveState();
+  }
   if (target.dataset.weekField) state.week[target.dataset.weekField] = target.value;
   if (target.dataset.dailyField) todayState()[target.dataset.dailyField] = target.value;
   if (target.dataset.reflection) state.reflection[target.dataset.reflection] = target.value;
@@ -2373,10 +2940,12 @@ document.getElementById("editor-form").addEventListener("submit", async event =>
 });
 
 document.getElementById("delete-item").addEventListener("click", deleteEditor);
+document.getElementById("open-assistant").addEventListener("click", openAssistant);
 document.getElementById("quick-capture").addEventListener("click", () => openEditor("inbox"));
 document.getElementById("open-settings").addEventListener("click", openSettings);
 document.getElementById("edit-routines").addEventListener("click", () => { document.getElementById("settings-dialog").close(); goToView("architecture"); });
 document.getElementById("reminder-settings").addEventListener("click", () => { document.getElementById("settings-dialog").close(); openEditor("reminders"); });
+document.getElementById("assistant-settings").addEventListener("click", () => { document.getElementById("settings-dialog").close(); openEditor("assistantSettings"); });
 document.getElementById("security-settings").addEventListener("click", () => { document.getElementById("settings-dialog").close(); openEditor("security"); });
 document.getElementById("device-sync").addEventListener("click", () => { document.getElementById("settings-dialog").close(); openEditor("sync"); });
 document.getElementById("create-handoff").addEventListener("click", () => { document.getElementById("settings-dialog").close(); openEditor("handoff"); });

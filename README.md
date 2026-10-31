@@ -9,17 +9,22 @@ A dependency-free, mobile-first personal command centre organised around six mod
 - Build/Maintain/Experience daily planning with explicit user-controlled operating modes
 - Daily human-connection and protected-rest foundations with seven-day consistency feedback
 - Deadline-aware task scheduling with weekly-outcome alignment and nightly Tomorrow Setup
+- Goal and project workspaces with milestones, dependencies, blockers, decisions, links, and linked next actions
 - Editable Minimum, Standard, and Peak routine modes
 - Cue-response architecture with task preparation, placement, launch, fallback, and if-then scripts
-- Routine and recovery intelligence plus an automatic weekly coach
-- Weekly rollover, eight-week trends, and archived reflections
-- Safe-to-spend engine, smart bill calendar, recurring due dates, cash-cover insight, and reminders
+- Routine and recovery intelligence plus an evidence-based weekly coach
+- Weekly rollover, monthly evidence snapshots, eight-week trends, and archived reflections
+- Exact-pence safe-to-spend engine with personal, business, restricted, expected, invested, and held money kept separate
+- Monthly budgets, savings goals, expected-versus-confirmed income, a conservative three-month cash-flow view, repayment planning, bill calendar, cash-cover insight, and reminders
 - Subscription audit with renewals, remembered price changes, and review tracking
 - Life-maintenance calendar for appointments, birthdays, renewals, car, documents, health, and home
-- Financial ledger, obligations, and investments
+- Financial ledger, obligations, investments, and auditable forecast states that never silently change cash
+- Private local assistant with fact/assumption separation, explicit data permissions, approval before changes, and reversible change history
 - Optional reminders and a local PIN or device-authenticator lock
 - End-to-end encrypted phone/desktop sync, one-time device handoffs, and portable backup files
-- Backed-up version-8 migration with a pre-2.0 recovery snapshot
+- Backed-up version-9 migration with a pre-2.0 recovery snapshot
+
+The current assistant is deliberately local and rule-based. It does not send records to an external model. A future model provider can be added behind the existing permissions and approval controls without making the core app dependent on AI.
 
 The verified 2.0 audit, architecture, data model, migration strategy, and roadmap are documented in `docs/50X-LIFE-OS-2.0-AUDIT.md`.
 

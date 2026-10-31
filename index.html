@@ -8,7 +8,7 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="icon-180.png" />
-    <link rel="stylesheet" href="styles.css?v=15" />
+    <link rel="stylesheet" href="styles.css?v=16" />
     <title>50X Life OS</title>
   </head>
   <body>
@@ -20,6 +20,9 @@
         </button>
         <div class="top-actions">
           <span class="local-status" id="cloud-status"><i></i><span>Private</span></span>
+          <button class="icon-button assistant-button" id="open-assistant" aria-label="Open 50X assistant">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.4 5.6L19 10l-5.6 1.4L12 17l-1.4-5.6L5 10l5.6-1.4L12 3Z"/><path d="m18.5 15 .7 2.8 2.8.7-2.8.7-.7 2.8-.7-2.8-2.8-.7 2.8-.7.7-2.8Z"/></svg>
+          </button>
           <button class="icon-button capture-button" id="quick-capture" aria-label="Quick capture">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
           </button>
@@ -83,6 +86,16 @@
       </form>
     </dialog>
 
+    <dialog id="assistant-dialog" class="editor-dialog assistant-dialog">
+      <div class="assistant-shell">
+        <div class="dialog-head">
+          <div><p class="eyebrow">50X Assistant</p><h2>Think with your system</h2></div>
+          <button class="icon-button" type="button" data-close-dialog="assistant-dialog" aria-label="Close">×</button>
+        </div>
+        <div id="assistant-content" class="assistant-content"></div>
+      </div>
+    </dialog>
+
     <dialog id="settings-dialog" class="editor-dialog">
       <form method="dialog">
         <div class="dialog-head">
@@ -93,6 +106,7 @@
           <p class="settings-section-label">Personalise</p>
           <button type="button" class="settings-row" id="edit-routines"><span><strong>Routine modes</strong><small>Customise Minimum, Standard and Peak</small></span><span>›</span></button>
           <button type="button" class="settings-row" id="reminder-settings"><span><strong>Gentle reminders</strong><small id="reminder-status">Off</small></span><span>›</span></button>
+          <button type="button" class="settings-row" id="assistant-settings"><span><strong>Assistant privacy</strong><small>Local analysis · no external provider</small></span><span>›</span></button>
           <button type="button" class="settings-row" id="security-settings"><span><strong>App lock</strong><small id="security-status">Off</small></span><span>›</span></button>
           <p class="settings-section-label">Data + devices</p>
           <button type="button" class="settings-row sync-settings-row" id="device-sync"><span><strong>Encrypted device sync</strong><small id="sync-status">Not connected · this device only</small></span><span id="sync-action">›</span></button>
@@ -124,6 +138,6 @@
     </section>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="app.js?v=15"></script>
+    <script src="app.js?v=16"></script>
   </body>
 </html>
