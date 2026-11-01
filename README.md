@@ -23,7 +23,9 @@ A dependency-free, mobile-first personal command centre organised around six mod
 - Private local assistant with fact/assumption separation, explicit data permissions, approval before changes, and reversible change history
 - Optional reminders and a local PIN or device-authenticator lock
 - End-to-end encrypted phone/desktop sync with automatic Inbox merging, one-time device handoffs, and portable backup files
-- Backed-up version-10 migration with recoverable upgrade snapshots
+- Backed-up version-11 migration with recoverable upgrade snapshots
+- Account-safe transfers, confirmed bill dates, protected spending budgets, weekly balance reconciliation, and received-income allocation
+- Compact mobile Today command surface with event-based routine cues and explicit fallback actions
 
 The current assistant is deliberately local and rule-based. It does not send records to an external model. A future model provider can be added behind the existing permissions and approval controls without making the core app dependent on AI.
 
@@ -57,3 +59,7 @@ Deploy this folder as a static site using Netlify Drop, Cloudflare Pages, GitHub
 - Android: open the URL in Chrome, open the menu, then tap **Install app** or **Add to Home screen**.
 
 HTTPS is required for offline installation and the service worker on a deployed site.
+
+## Verification
+
+`tests/smoke.cjs` verifies version-11 migration and rollback data, account-safe money calculations, expected-income exclusion, linked transfers, dialog closing, and all six modules at 320px, 375px, and 430px widths. It requires Node.js plus Playwright.

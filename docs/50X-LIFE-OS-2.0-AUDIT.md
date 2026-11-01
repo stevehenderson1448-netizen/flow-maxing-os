@@ -1,15 +1,15 @@
 # 50X Life OS 2.0 — Audit and Architecture
 
-Status: initial audit verified against commit `791c990` on 31 October 2026; implementation status updated after the version-10 purchase-planning pass.
+Status: initial audit verified against commit `791c990` on 31 October 2026; implementation status updated after the version-11 financial-truth and compact-Today pass.
 
-Implementation note: The current version-10 PWA includes the sixth Life module, Build/Maintain/Experience daily planning, explicit mode control, removal of the aggregate Life score, exact-pence financial records, budgets, forecasts, savings, account-aware purchase planning, goals, project workspaces, milestones, blockers, decisions, monthly evidence, and a permissioned local assistant with approval and reversal history. Upgrade recovery snapshots and the existing storage key remain preserved.
+Implementation note: The current version-11 PWA includes the sixth Life module, Build/Maintain/Experience daily planning, explicit mode control, compact Today orchestration, exact-pence financial records, account-safe transfers, protected budgets, reconciliation, received-income allocation, forecasts, savings, purchase planning, goals, project workspaces, milestones, blockers, decisions, monthly evidence, and a permissioned local assistant with approval and reversal history. Upgrade recovery snapshots and the existing storage key remain preserved.
 
 ### Completion status
 
-- **Implemented and verified locally:** Milestones 1–3 at the current buildless PWA layer, plus the approval-based local assistant foundation from Milestone 5.
-- **Mobile verified:** all six modules fit at 320px without horizontal overflow; new editors, dialog close controls, assistant approval/undo, and monthly evidence capture were exercised in-browser.
-- **Migration verified:** older fixtures upgrade through version 10 while preserving the weekly outcome, tasks, inbox, Life text, balances, exact transaction totals, and purchase records.
-- **Money verified:** £0.10 plus £0.20 is stored and calculated as 30 pence; expected income does not increase available cash.
+- **Implemented and verified locally:** Milestones 1–3 at the current buildless PWA layer, plus the approval-based local assistant foundation from Milestone 5 and the version-11 financial-truth workflows.
+- **Mobile verified:** an automated Playwright smoke suite checks all six modules at 320px, 375px, and 430px without horizontal overflow, plus compact Today and dialog close controls.
+- **Migration verified:** a version-10 fixture upgrades through version 11, writes a rollback snapshot, converts Food and Transport bills into protected recurring budgets, and archives the source records.
+- **Money verified:** expected income remains outside available cash; personal, business and held money stay separate; a linked business-to-personal transfer changes both account positions exactly once.
 - **Not yet implemented:** external model calls, Supabase authentication/PostgreSQL, IndexedDB, record-level cloud sync, React/TypeScript modularisation, and push notifications. The core app does not depend on these platform upgrades.
 
 ## Executive recommendation
@@ -23,24 +23,24 @@ The first milestone should preserve the current storage key and all existing rec
 ### Architecture and stack
 
 - Buildless static PWA: `index.html`, one JavaScript application file, one CSS file, a web manifest and a service worker.
-- No framework, package manager, compiler, server application or automated test suite.
+- No framework, package manager, compiler or server application. A focused Playwright smoke suite now covers migration, critical money rules, dialogs and narrow mobile layouts.
 - UI uses template strings and delegated DOM events.
 - Production is hosted on GitHub Pages.
 - The application is installable and works offline after a successful online load.
 
 ### Navigation and current modules
 
-- **Today:** energy and clarity check-in, manual modes, adaptive plan, routines, tasks, connection, rest, tomorrow setup and evening reflection.
+- **Today:** compact most-important-outcome surface, energy check-in, manual modes, Build/Maintain/Experience plan, essential routines and optional expanded planning details.
+- **Life:** identity, relationships, experiences, personal care, faith and private reflection.
 - **Money:** balances, ledger, bills, subscriptions, liabilities, investments and a safe-to-spend calculation.
 - **Focus:** one weekly outcome, evidence, ranked actions, completed work and a capture inbox.
 - **System:** life-maintenance dates, three routine modes, cue architecture, routine diagnostics and if–then scripts.
 - **Review:** deterministic weekly coaching, ratings, weekly/monthly reflections, recovery choice and archived weeks.
-- There is no dedicated **Life** module. Life is represented by a few free-text review fields and a daily connection card.
 
 ### Persistence and data protection
 
 - Main records use browser `localStorage` under `flow-maxing-os-v1`.
-- A normalisation function upgrades old shapes to schema version 7.
+- A normalisation function upgrades old shapes to schema version 11 and preserves a pre-upgrade rollback snapshot.
 - JSON backup import/export and password-encrypted one-time handoff are implemented.
 - Continuous device sync encrypts the full state with AES-GCM before sending ciphertext to a relay.
 - Sync is local-first, supports offline changes and stops on a detected whole-state conflict.
@@ -52,7 +52,7 @@ The first milestone should preserve the current storage key and all existing rec
 
 - Task recommendations are deterministic: impact, energy fit, complexity, deadline, weekly alignment and time fit.
 - Recovery, routine and weekly-coach messages are deterministic rules over recent records.
-- There is no external AI model integration, provider adapter, permission layer, proposal workflow or AI change history.
+- There is no external AI model integration yet. The local assistant already has permission controls, fact/assumption separation, proposal approval and reversible change history.
 
 ### Mobile and reliability
 
@@ -104,15 +104,15 @@ The first milestone should preserve the current storage key and all existing rec
 
 | Area | Current coverage | Gap |
 | --- | --- | --- |
-| Today | Strong routines, tasks, state check-in and alerts | No explicit daily intention; mode is silently changed by energy; command surface is dense |
-| Life | Daily connection and four review text boxes | No identity records, contacts, experiences, personal care, faith or private journal |
-| Money | Useful bills, ledger, liabilities and safe-to-spend | No budgets, savings goals, expected-versus-received income, account ledger reconciliation or exact money arithmetic |
-| Focus | Weekly outcome and ranked actions | No goals, projects, milestones, dependencies, decisions, blockers or linked resources |
-| System | Strongest current module | Notifications are browser-limited; no approved automation history |
-| Review | Weekly/monthly prompts and archives | Aggregate life score is arbitrary; no financial reconciliation or monthly snapshots |
-| AI | Rule-based recommendations | No model-backed assistant, permissions, proposals or provider abstraction |
+| Today | Compact command centre, explicit mode, routines, tasks and life participation | No calendar-provider integration or background push planning |
+| Life | Structured identity, contacts, experiences, care, faith and journal records | Private fields are not encrypted at rest in localStorage |
+| Money | Exact-pence ledger, separated accounts, transfers, budgets, reconciliation, allocations and forecasts | No bank feed, multi-currency ledger or server-side audit database |
+| Focus | Goals, projects, milestones, dependencies, decisions, blockers and links | No collaborative workspaces or repository-provider integration |
+| System | Routines, cues, fallbacks, scripts, maintenance and local reminders | Browser notifications remain platform-limited |
+| Review | Daily, weekly and monthly evidence with financial reconciliation | Long-range analytics remain intentionally lightweight |
+| AI | Permissioned local recommendations, proposals and reversal history | No interchangeable external model provider has been connected |
 | Privacy | Encryption in transit/sync and local app lock | No encrypted local database, user authentication or server access controls |
-| Reliability | Local-first, backups, service worker | No automated tests, migration rollback UI or structured logging |
+| Reliability | Local-first, backups, service worker, rollback UI and focused smoke suite | No full unit, accessibility, security or performance suite yet |
 
 ## 4. Proposed 2.0 architecture
 
@@ -210,7 +210,7 @@ Every entity receives `id`, `user_id`, `created_at`, `updated_at`, `status` and 
 
 ## 7. Migration, backup and rollback
 
-1. Read the existing version-7 record without modifying it.
+1. Read the existing legacy record without modifying it.
 2. Save a timestamped pre-migration snapshot under a separate local key.
 3. Transform a cloned record into the current schema version.
 4. Validate required collections, IDs, record counts and key financial totals.
@@ -269,4 +269,4 @@ Rollback restores the untouched pre-migration snapshot and reloads the previous 
 
 ## 10. First development milestone recommendation
 
-Implement Milestone 1 in the existing PWA now. It creates immediate user value and corrects product-control issues while avoiding premature framework and database migration. The release is successful when existing records survive automatically, Life has useful structured records, Today presents a small Build/Maintain/Experience plan, mode changes are always explicit, and a pre-migration snapshot can be restored.
+The original Milestone 1 is complete. The next justified milestone is modular reliability: split the monolithic client behind the stable version-11 schema, add broader calculation and accessibility coverage, and only then introduce authenticated cloud persistence or an external AI provider. The existing PWA should remain the production fallback until migration parity and rollback are verified.
