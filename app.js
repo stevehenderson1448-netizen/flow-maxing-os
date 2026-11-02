@@ -2,13 +2,16 @@ const STORAGE_KEY = "flow-maxing-os-v1";
 const SECURITY_KEY = "50x-life-os-security-v1";
 const CLOUD_SYNC_KEY = "50x-life-os-cloud-sync-v1";
 const MIGRATION_BACKUP_KEY = "50x-life-os-pre-v8-backup";
-const LATEST_MIGRATION_BACKUP_KEY = "50x-life-os-pre-v12-backup";
+const LATEST_MIGRATION_BACKUP_KEY = "50x-life-os-pre-v13-backup";
 const PRE_RESTORE_BACKUP_KEY = "50x-life-os-before-snapshot-restore";
-const CURRENT_STATE_VERSION = 12;
+const PRE_REPLACEMENT_BACKUP_KEY = "50x-life-os-before-data-replacement";
+const CORRUPT_STATE_QUARANTINE_KEY = "50x-life-os-corrupt-state";
+const CURRENT_STATE_VERSION = 13;
 const LIVE_URL = "https://stevehenderson1448-netizen.github.io/flow-maxing-os/";
 const SYNC_RELAY = "https://mantledb.sh/v2";
 const SYNC_PATH = "life-os";
 const FINANCIAL_ACCOUNTS = ["personal", "business", "held", "physical", "trading"];
+let recoveryIssue = "";
 
 const DEFAULT_MODES = {
   minimum: { label: "Minimum", note: "An intentionally smaller day. Preserve the foundations and one essential action.", routine: [["Water + daylight", "When I leave the bed, I open the curtains.", 2, "Stand by the window and take three slow breaths."], ["Breathe or meditate", "After drinking water, I sit in the prepared space.", 2, "Take three deliberate breaths where I am."], ["Eat properly", "When I enter the kitchen, I prepare something simple.", 10, "Eat the easiest available nourishing option."], ["One essential action", "After the foundations, I open the prepared next action.", 25, "Work on the first visible step for five minutes."], ["Prepare for sleep", "When I plug in my phone, I begin shutting down.", 10, "Dim the room and put the phone away."]] },
@@ -61,6 +64,26 @@ function minorValue(item, minorKey, majorKey) {
   return Number.isInteger(item?.[minorKey]) ? item[minorKey] : toMinor(item?.[majorKey]);
 }
 
+function isSafeRecordId(value, allowEmpty = false) {
+  if (allowEmpty && !value) return true;
+  return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value);
+}
+
+function assertTrustedStatePayload(value) {
+  const visit = (node, path = "state") => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) return node.forEach((item, index) => visit(item, `${path}[${index}]`));
+    Object.entries(node).forEach(([key, item]) => {
+      if (key === "id" && !isSafeRecordId(item)) throw new Error(`Unsafe record identifier at ${path}.${key}`);
+      if (key.endsWith("Id") && key !== "credentialId" && !isSafeRecordId(item, true)) throw new Error(`Unsafe record link at ${path}.${key}`);
+      if (key.endsWith("Ids") && Array.isArray(item) && item.some(id => !isSafeRecordId(id))) throw new Error(`Unsafe record links at ${path}.${key}`);
+      visit(item, `${path}.${key}`);
+    });
+  };
+  visit(value);
+  return value;
+}
+
 function weekStartKey(date = new Date()) {
   const result = new Date(date);
   const day = result.getDay() || 7;
@@ -82,6 +105,7 @@ const defaultState = () => ({
   milestones: [],
   projectDecisions: [],
   projectBlockers: [],
+  scheduleEvents: [],
   inbox: [],
   history: [],
   modes: clone(DEFAULT_MODES),
@@ -128,7 +152,7 @@ const defaultState = () => ({
       { id: crypto.randomUUID(), name: "Digital Business / Client Work", category: "client", ventureId: "", status: "active", notes: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
       { id: crypto.randomUUID(), name: "Other Income", category: "other", ventureId: "", status: "active", notes: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
     ],
-    incomeEntries: [], allocationRules: [], financialCueDismissals: {}, monthlyMoneyReports: []
+    incomeEntries: [], allocationRules: [], financialCueDismissals: {}, monthlyMoneyReports: [], billPayments: []
   },
   ventures: [],
   maintenance: [],
@@ -233,6 +257,23 @@ function normalizeMaintenance(items) {
     notes: String(item.notes || ""),
     createdAt: item.createdAt || new Date().toISOString(),
     completedPeriods: Array.isArray(item.completedPeriods) ? [...new Set(item.completedPeriods.map(String))] : []
+  }));
+}
+
+function normalizeScheduleEvents(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map(item => ({
+    id: item.id || crypto.randomUUID(),
+    title: String(item.title || "Scheduled block"),
+    date: String(item.date || dayKey()),
+    startTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(item.startTime || "") ? item.startTime : "09:00",
+    endTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(item.endTime || "") ? item.endTime : "",
+    type: ["focus", "appointment", "routine", "social", "personal", "travel", "other"].includes(item.type) ? item.type : "other",
+    taskId: String(item.taskId || ""),
+    notes: String(item.notes || ""),
+    status: item.status === "completed" ? "completed" : "planned",
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
   }));
 }
 
@@ -361,6 +402,24 @@ function normalizeTransactions(items) {
   }));
 }
 
+function normalizeBillPayments(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map(item => ({
+    id: item.id || crypto.randomUUID(),
+    billId: String(item.billId || ""),
+    period: String(item.period || ""),
+    account: FINANCIAL_ACCOUNTS.includes(item.account) ? item.account : "personal",
+    amountMinor: Math.max(0, Number(item.amountMinor) || 0),
+    date: String(item.date || dayKey()),
+    transactionId: String(item.transactionId || ""),
+    reversalTransactionId: String(item.reversalTransactionId || ""),
+    paidOutside: Boolean(item.paidOutside),
+    note: String(item.note || ""),
+    createdAt: item.createdAt || new Date().toISOString(),
+    reversedAt: String(item.reversedAt || "")
+  })).filter(item => item.billId && item.period && item.amountMinor > 0);
+}
+
 function normalizeBudgets(items) {
   if (!Array.isArray(items)) return [];
   return items.map(item => ({ id: item.id || crypto.randomUUID(), name: String(item.name || "Budget line"), category: String(item.category || "Other"), account: ["personal", "business"].includes(item.account) ? item.account : "personal", amount: Math.max(0, Number(item.amount) || fromMinor(item.amountMinor)), amountMinor: Math.max(0, minorValue(item, "amountMinor", "amount")), month: String(item.month || monthKey()), recurring: Boolean(item.recurring), protect: Boolean(item.protect), migratedFromBillId: String(item.migratedFromBillId || ""), createdAt: item.createdAt || new Date().toISOString(), updatedAt: item.updatedAt || item.createdAt || new Date().toISOString() }));
@@ -380,6 +439,9 @@ function normalizeTransfers(items) {
     stackEntryId: String(item.stackEntryId || ""),
     empireEntryId: String(item.empireEntryId || ""),
     reversalOf: String(item.reversalOf || ""),
+    correctsId: String(item.correctsId || ""),
+    reversedAt: String(item.reversedAt || ""),
+    correctedAt: String(item.correctedAt || ""),
     createdAt: item.createdAt || new Date().toISOString()
   })).filter(item => item.fromAccount !== item.toAccount && item.amountMinor > 0);
 }
@@ -645,13 +707,13 @@ function migrateWealthCollections(finances, inputVersion, fallback) {
 function validateState(candidate) {
   if (!candidate || typeof candidate !== "object") return false;
   if (candidate.version !== CURRENT_STATE_VERSION) return false;
-  if (!candidate.week || !Array.isArray(candidate.tasks) || !Array.isArray(candidate.inbox)) return false;
+  if (!candidate.week || !Array.isArray(candidate.tasks) || !Array.isArray(candidate.inbox) || !Array.isArray(candidate.scheduleEvents)) return false;
   if (!candidate.finances || !Array.isArray(candidate.finances.transactions) || !Array.isArray(candidate.finances.bills)) return false;
   if (!Array.isArray(candidate.goals) || !Array.isArray(candidate.projects) || !Array.isArray(candidate.milestones)) return false;
   if (!Array.isArray(candidate.finances.budgets) || !Array.isArray(candidate.finances.incomeForecasts) || !Array.isArray(candidate.finances.savingsGoals) || !Array.isArray(candidate.finances.plannedPurchases)) return false;
   if (!Array.isArray(candidate.finances.transfers) || !Array.isArray(candidate.finances.reconciliations) || !Array.isArray(candidate.finances.incomeAllocations) || !Array.isArray(candidate.finances.archivedBills)) return false;
   if (!Array.isArray(candidate.finances.stacks) || !Array.isArray(candidate.finances.stackEntries) || !Array.isArray(candidate.finances.incomeStreams) || !Array.isArray(candidate.finances.incomeEntries)) return false;
-  if (!Array.isArray(candidate.finances.allocationRules) || !Array.isArray(candidate.finances.monthlyMoneyReports) || !Array.isArray(candidate.ventures)) return false;
+  if (!Array.isArray(candidate.finances.allocationRules) || !Array.isArray(candidate.finances.monthlyMoneyReports) || !Array.isArray(candidate.finances.billPayments) || !Array.isArray(candidate.ventures)) return false;
   if (!candidate.life || !Array.isArray(candidate.life.contacts) || !Array.isArray(candidate.life.experiences) || !Array.isArray(candidate.life.journal)) return false;
   return true;
 }
@@ -694,6 +756,7 @@ function normalizeState(input) {
     milestones: normalizeMilestones(input.milestones),
     projectDecisions: normalizeProjectRecords(input.projectDecisions, "decision"),
     projectBlockers: normalizeProjectRecords(input.projectBlockers, "blocker"),
+    scheduleEvents: normalizeScheduleEvents(input.scheduleEvents),
     inbox: normalizeInbox(input.inbox),
     history: Array.isArray(input.history) ? input.history : [],
     modes: normalizeModes(input.modes),
@@ -724,7 +787,8 @@ function normalizeState(input) {
       incomeEntries: normalizeIncomeEntries(input.finances?.incomeEntries),
       allocationRules: normalizeAllocationRules(input.finances?.allocationRules),
       financialCueDismissals: input.finances?.financialCueDismissals && typeof input.finances.financialCueDismissals === "object" && !Array.isArray(input.finances.financialCueDismissals) ? input.finances.financialCueDismissals : {},
-      monthlyMoneyReports: normalizeMonthlyMoneyReports(input.finances?.monthlyMoneyReports)
+      monthlyMoneyReports: normalizeMonthlyMoneyReports(input.finances?.monthlyMoneyReports),
+      billPayments: normalizeBillPayments(input.finances?.billPayments)
     },
     maintenance: normalizeMaintenance(input.maintenance),
     daily,
@@ -739,8 +803,10 @@ function normalizeState(input) {
 }
 
 function loadState() {
+  const raw = localStorage.getItem(STORAGE_KEY);
   try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    const stored = JSON.parse(raw);
+    if (stored) assertTrustedStatePayload(stored);
     const normalized = normalizeState(stored);
     const storedVersion = Number(stored?.version || 0);
     if (stored && storedVersion < CURRENT_STATE_VERSION && !localStorage.getItem(LATEST_MIGRATION_BACKUP_KEY)) {
@@ -752,7 +818,11 @@ function loadState() {
     if (!validateState(normalized)) throw new Error("State validation failed");
     if (stored?.version !== normalized.version) localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
     return normalized;
-  } catch {
+  } catch (error) {
+    recoveryIssue = error.message || "Stored data could not be read";
+    if (raw) {
+      try { localStorage.setItem(CORRUPT_STATE_QUARANTINE_KEY, JSON.stringify({ createdAt: new Date().toISOString(), raw })); } catch {}
+    }
     return defaultState();
   }
 }
@@ -778,7 +848,12 @@ let state = loadState();
 let security = loadSecurity();
 let cloudSync = loadCloudSync();
 let activeView = "home";
+let homeSection = "command";
+let scheduleDate = dayKey();
+let scheduleView = "day";
 let moneySection = "overview";
+let stacksSection = "overview";
+let incomeSection = "overview";
 let incomePeriod = "month";
 let incomeCustomStart = `${monthKey()}-01`;
 let incomeCustomEnd = dayKey();
@@ -815,6 +890,24 @@ function saveState(message, options = {}) {
   }
   if (message) showToast(message);
   refreshSyncUI();
+}
+
+function snapshotBeforeReplacement(reason) {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return;
+  let data = null;
+  try { data = JSON.parse(raw); } catch {}
+  localStorage.setItem(PRE_REPLACEMENT_BACKUP_KEY, JSON.stringify({ createdAt: new Date().toISOString(), reason, data, raw: data ? "" : raw }));
+}
+
+function replaceStateSafely(imported, reason) {
+  assertTrustedStatePayload(imported);
+  const normalized = normalizeState(imported);
+  if (!validateState(normalized)) throw new Error("Replacement data failed validation");
+  snapshotBeforeReplacement(reason);
+  state = normalized;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  return state;
 }
 
 function saveSecurity() {
@@ -1247,18 +1340,17 @@ function incomeEmpireMetrics(period = "month", customRange = null) {
   return { range, entries, revenueMinor, expensesMinor, profitMinor: revenueMinor - expensesMinor, cashReceivedMinor, pendingMinor, capitalDeployedMinor, unrealizedMinor, streams };
 }
 
-function moneyTotals() {
+function moneyTotals(reference = new Date(), cutoffDate = "") {
   const totalsMinor = { ...state.finances.balancesMinor };
-  state.finances.transactions.forEach(item => {
+  state.finances.transactions.filter(item => !cutoffDate || item.date <= cutoffDate).forEach(item => {
     const sign = item.type === "income" ? 1 : -1;
     totalsMinor[item.account] = (Number(totalsMinor[item.account]) || 0) + sign * minorValue(item, "amountMinor", "amount");
   });
-  state.finances.transfers.forEach(item => {
+  state.finances.transfers.filter(item => !cutoffDate || item.date <= cutoffDate).forEach(item => {
     const amountMinor = minorValue(item, "amountMinor", "amount");
     totalsMinor[item.fromAccount] = (Number(totalsMinor[item.fromAccount]) || 0) - amountMinor;
     totalsMinor[item.toAccount] = (Number(totalsMinor[item.toAccount]) || 0) + amountMinor;
   });
-  const reference = new Date();
   const billSchedule = state.finances.bills.map(bill => billScheduleEntry(bill, reference)).sort((a, b) => a.due - b.due);
   const protectedBillCycles = state.finances.bills.filter(bill => bill.dueConfirmed).flatMap(bill => outstandingBillCycles(bill, reference).map(cycle => ({ bill, ...cycle })));
   const unconfirmedPersonalBillsMinor = state.finances.bills.filter(item => !item.dueConfirmed && item.account !== "business").reduce((sum, item) => sum + monthlyBillEquivalentMinor(item), 0);
@@ -1278,7 +1370,7 @@ function moneyTotals() {
   const obligationsMinor = state.finances.obligations.reduce((sum, item) => sum + Math.max(0, minorValue(item, "targetMinor", "target") - minorValue(item, "paidMinor", "paid")), 0);
   const obligationPlanMinor = state.finances.obligations.reduce((sum, item) => sum + minorValue(item, "monthlyPaymentMinor", "monthlyPayment"), 0);
   const investmentsMinor = state.finances.investments.reduce((sum, item) => sum + minorValue(item, "currentMinor", "current"), 0);
-  const stackLedger = stackLedgerTotals();
+  const stackLedger = stackLedgerTotals(cutoffDate);
   const currentBudgets = currentBudgetItems(reference);
   const personalBudgetProtectionMinor = currentBudgets.filter(item => item.protect && item.account !== "business").reduce((sum, item) => sum + budgetRemainingMinor(item, reference), 0);
   const businessBudgetProtectionMinor = currentBudgets.filter(item => item.protect && item.account === "business").reduce((sum, item) => sum + budgetRemainingMinor(item, reference), 0);
@@ -1286,6 +1378,7 @@ function moneyTotals() {
   const allocatedEssentialsMinor = activeAllocations.reduce((sum, item) => sum + Number(item.essentialsMinor || 0), 0);
   const allocatedReserveMinor = activeAllocations.reduce((sum, item) => sum + Number(item.reserveMinor || 0), 0);
   const allocatedRepaymentsMinor = activeAllocations.reduce((sum, item) => sum + Number(item.repaymentsMinor || 0), 0);
+  const allocatedBusinessMinor = activeAllocations.reduce((sum, item) => sum + Number(item.businessMinor || 0), 0);
   const reserveTargetMinor = Math.max(0, Number(state.finances.settings?.reserveTargetMinor) || toMinor(state.finances.settings?.reserveTarget));
   const plannedPurchases = state.finances.plannedPurchases.filter(item => item.status === "planned" && item.reserved);
   const personalPurchaseReserveMinor = plannedPurchases.filter(item => item.account !== "business").reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
@@ -1300,7 +1393,7 @@ function moneyTotals() {
   const physicalStackProtectionMinor = Number(stackLedger.accountAllocatedMinor.physical || 0);
   const tradingStackProtectionMinor = Number(stackLedger.accountAllocatedMinor.trading || 0);
   const personalProtectedMinor = personalEssentialProtectionMinor + reserveProtectionMinor + repaymentProtectionMinor + personalPurchaseReserveMinor + personalStackProtectionMinor;
-  const businessProtectedMinor = businessBillsMinor + businessBudgetProtectionMinor + businessPurchaseReserveMinor + businessStackProtectionMinor;
+  const businessProtectedMinor = businessBillsMinor + businessBudgetProtectionMinor + businessPurchaseReserveMinor + businessStackProtectionMinor + allocatedBusinessMinor;
   const protectedCashMinor = personalProtectedMinor + businessProtectedMinor + physicalStackProtectionMinor + tradingStackProtectionMinor;
   const personalSafeMinor = Math.max(0, Number(totalsMinor.personal || 0) - personalProtectedMinor);
   const businessFreeMinor = Math.max(0, Number(totalsMinor.business || 0) - businessProtectedMinor);
@@ -1595,18 +1688,16 @@ function renderHome() {
   const mode = state.modes[daily.mode] || state.modes.standard;
   const totals = moneyTotals();
   const plan = buildDailyPlan(daily);
-  const cues = homeSmartCues(totals, plan).slice(0, 2);
+  const tabs = `<nav class="section-tabs home-tabs" role="tablist" aria-label="Home sections">${[["command","Command"],["schedule","Schedule"],["cues","Smart cues"]].map(([key,label]) => `<button role="tab" aria-selected="${homeSection === key}" tabindex="${homeSection === key ? "0" : "-1"}" class="${homeSection === key ? "active" : ""}" data-home-section="${key}">${label}</button>`).join("")}</nav>`;
+  const recovery = recoveryIssue ? `<button class="recovery-alert" data-open-recovery><strong>Data recovery copy available</strong><span>${escapeHTML(recoveryIssue)} · Open Settings before syncing.</span></button>` : "";
+  const content = homeSection === "schedule" ? homeScheduleWorkspace() : homeSection === "cues" ? homeSmartCuesWorkspace(totals, plan) : homeCommandWorkspace(daily, plan, mode, totals);
   document.getElementById("view-home").innerHTML = `
     <div class="home-hero"><div><p class="eyebrow">${escapeHTML(formatDate())}</p><h1 id="home-heading">${escapeHTML(homeGreeting())}</h1><p>Let’s see what’s moving.</p></div><span>Everything patterned.</span></div>
-    <div class="home-command-grid">
-      ${homeFocusCard(daily, plan, mode)}
-      ${homeQuickActions()}
-    </div>
-    ${homeSnapshot(totals)}
-    <div class="home-lower-grid">
-      ${homeCuesCard(cues)}
-      ${homeComingUp(plan, totals)}
-    </div>`;
+    ${tabs}${recovery}${content}`;
+}
+
+function homeCommandWorkspace(daily, plan, mode, totals) {
+  return `<div class="home-command-grid">${homeFocusCard(daily, plan, mode)}${homeQuickActions()}</div>${homeSnapshot(totals)}<div class="home-command-coming">${homeComingUp(plan, totals)}</div>`;
 }
 
 function homeGreeting() {
@@ -1643,6 +1734,43 @@ function homeSmartCues(totals, plan) {
 
 function homeCuesCard(cues) {
   return `<article class="command-surface home-cues-card"><div class="surface-head"><div><p class="eyebrow">Smart cues</p><h2>${cues.length ? "Worth knowing." : "All clear."}</h2></div></div><div class="home-cue-list">${cues.length ? cues.map(cue => `<button data-destination="${cue.destination}" data-section="${cue.section}"><span><strong>${escapeHTML(cue.title)}</strong><small>${escapeHTML(cue.message)}</small></span><i>↗</i></button>`).join("") : '<div class="premium-empty compact"><span>Nothing needs your attention right now.</span></div>'}</div></article>`;
+}
+
+function homeSmartCuesWorkspace(totals, plan) {
+  const cues = homeSmartCues(totals, plan);
+  const nextActions = cues.map(cue => `<article class="smart-cue-detail"><div><span>${escapeHTML(cue.title)}</span><strong>${escapeHTML(cue.message)}</strong></div><button data-destination="${cue.destination}" data-section="${cue.section}">Open ↗</button></article>`).join("");
+  return `<section class="home-workspace"><div class="workspace-heading"><div><p class="eyebrow">Smart cues</p><h2>Useful signals, not noise.</h2><p>Only information supported by your records appears here.</p></div></div><div class="smart-cue-workspace">${nextActions || '<div class="premium-empty"><strong>Everything is clear.</strong><span>No payment, plan, deadline or savings cue needs attention.</span></div>'}</div></section>`;
+}
+
+function scheduleDayKeys(startKey = scheduleDate, count = 7) {
+  const start = dateFromKey(startKey);
+  return Array.from({ length: count }, (_, index) => dayKey(addDays(start, index)));
+}
+
+function scheduleItemsForDate(dateKey) {
+  const custom = state.scheduleEvents.filter(item => item.date === dateKey).map(item => ({ id: item.id, kind: "custom", time: item.startTime, endTime: item.endTime, title: item.title, meta: `${item.type}${item.taskId ? " · linked action" : ""}`, status: item.status, editor: true }));
+  const scheduledTaskIds = new Set(custom.map(item => state.scheduleEvents.find(event => event.id === item.id)?.taskId).filter(Boolean));
+  const tasks = state.tasks.filter(item => !item.done && item.dueDate === dateKey && !scheduledTaskIds.has(item.id)).map(item => ({ id: item.id, kind: "task", time: "", title: item.name, meta: `${item.duration} min · deadline`, destination: "build", section: "actions" }));
+  const experiences = state.life.experiences.filter(item => item.status === "planned" && item.targetDate === dateKey).map(item => ({ id: item.id, kind: "life", time: "", title: item.name, meta: "Life plan", destination: "life", section: "plans" }));
+  const maintenance = maintenanceSchedule(dateFromKey(dateKey)).filter(item => item.due && dayKey(item.due) === dateKey && !item.actionDone).map(item => ({ id: item.item.id, kind: "maintenance", time: "", title: item.item.name, meta: item.item.category, destination: "more", section: "calendar" }));
+  const bills = state.finances.bills.map(bill => billScheduleEntry(bill, dateFromKey(dateKey))).filter(item => item.hasOutstanding && item.due && dayKey(item.due) === dateKey).map(item => ({ id: item.bill.id, kind: "bill", time: "", title: item.bill.name, meta: `${currency(item.bill.amount)} · payment`, destination: "wealth", section: "money" }));
+  return [...custom, ...tasks, ...experiences, ...maintenance, ...bills].sort((a, b) => (a.time || "99:99").localeCompare(b.time || "99:99") || a.title.localeCompare(b.title));
+}
+
+function scheduleItemTemplate(item) {
+  const action = item.editor ? `data-edit-schedule="${item.id}"` : `data-destination="${item.destination}" data-section="${item.section}"`;
+  return `<button class="schedule-item ${item.status === "completed" ? "completed" : ""}" ${action}><time>${item.time ? `${item.time}${item.endTime ? `–${item.endTime}` : ""}` : "Any time"}</time><span><strong>${escapeHTML(item.title)}</strong><small>${escapeHTML(item.meta)}</small></span><i>${item.editor ? "•••" : "↗"}</i></button>`;
+}
+
+function homeScheduleWorkspace() {
+  const weekStart = weekStartKey(dateFromKey(scheduleDate));
+  const days = scheduleView === "week" ? scheduleDayKeys(weekStart, 7) : [scheduleDate];
+  const navigatorDays = scheduleDayKeys(weekStart, 7);
+  const body = days.map(date => {
+    const items = scheduleItemsForDate(date);
+    return `<section class="schedule-day"><header><span>${new Intl.DateTimeFormat("en-GB", { weekday: "long" }).format(dateFromKey(date))}</span><strong>${formatCompactDate(date)}</strong></header><div>${items.length ? items.map(scheduleItemTemplate).join("") : '<div class="premium-empty compact"><span>The day is open.</span></div>'}</div></section>`;
+  }).join("");
+  return `<section class="home-workspace schedule-workspace"><div class="workspace-heading"><div><p class="eyebrow">Schedule</p><h2>Your time, properly placed.</h2><p>Work blocks, plans, deadlines, payments and life dates in one view.</p></div><button class="button button-primary button-small" data-add="schedule">+ Add block</button></div><div class="schedule-controls"><div class="schedule-view-toggle" role="tablist" aria-label="Schedule view"><button role="tab" aria-selected="${scheduleView === "day"}" class="${scheduleView === "day" ? "active" : ""}" data-schedule-view="day">Day</button><button role="tab" aria-selected="${scheduleView === "week"}" class="${scheduleView === "week" ? "active" : ""}" data-schedule-view="week">Week</button></div><label>Jump to <input type="date" data-schedule-date value="${scheduleDate}" /></label></div><div class="schedule-date-strip">${navigatorDays.map(date => `<button class="${scheduleDate === date ? "active" : ""}" data-schedule-date-button="${date}"><small>${new Intl.DateTimeFormat("en-GB", { weekday: "short" }).format(dateFromKey(date))}</small><strong>${dateFromKey(date).getDate()}</strong></button>`).join("")}</div><div class="schedule-agenda">${body}</div></section>`;
 }
 
 function homeComingUp(plan, totals) {
@@ -1738,7 +1866,7 @@ function renderLife() {
   const content = lifeSection === "people" ? lifePeopleWorkspace(upcomingContacts, contactOpportunity) : lifeSection === "plans" ? lifePlansWorkspace(openExperiences, experience, totals) : lifeSection === "personal" ? lifePersonalWorkspace(recentJournal) : lifeOverviewWorkspace(upcomingContacts, openExperiences, totals);
   document.getElementById("view-life").innerHTML = `
     <div class="page-head compact-page-head"><p class="eyebrow">Life</p><h1 id="life-heading">Make plans worth looking forward to.</h1><p>People, experiences, style, faith and the life around the work.</p></div>
-    <nav class="section-tabs" aria-label="Life sections">${[["overview","Overview"],["people","People"],["plans","Plans"],["personal","Personal"]].map(([key,label]) => `<button class="${lifeSection === key ? "active" : ""}" data-life-section="${key}">${label}</button>`).join("")}</nav>
+    <nav class="section-tabs" role="tablist" aria-label="Life sections">${[["overview","Overview"],["people","People"],["plans","Plans"],["personal","Personal"]].map(([key,label]) => `<button role="tab" aria-selected="${lifeSection === key}" tabindex="${lifeSection === key ? "0" : "-1"}" class="${lifeSection === key ? "active" : ""}" data-life-section="${key}">${label}</button>`).join("")}</nav>
     ${content}`;
 }
 
@@ -1767,7 +1895,7 @@ function lifePersonalWorkspace(journal) {
     faith: `<article class="card faith-card"><div class="card-head"><div><p class="eyebrow">Faith</p><h2>Private grounding.</h2><p>Optional and private by default.</p></div></div>${lifeObjectField("faith", "prayer", "Prayer", "Current intention")}${lifeObjectField("faith", "reading", "Reading", "Scripture or spiritual reading")}${lifeObjectField("faith", "reflection", "Reflection", "Anything worth sitting with")}</article>`,
     journal: `<article class="card journal-card"><div class="card-head"><div><p class="eyebrow">Notes</p><h2>Private reflections.</h2><p>Encrypted during device sync and secure handoff.</p></div><button class="button button-primary button-small" data-add="journal">+ Write</button></div><div class="journal-list">${journal.length ? journal.map(journalTemplate).join("") : '<div class="premium-empty"><strong>Your private notes will appear here.</strong><span>Write only when there is something worth keeping.</span><button data-add="journal">Write note</button></div>'}</div></article>`
   };
-  return `<nav class="subsection-tabs" aria-label="Personal sections">${[["identity","Identity"],["care","Style & Care"],["faith","Faith"],["journal","Notes"]].map(([key,label]) => `<button class="${lifePersonalSection === key ? "active" : ""}" data-life-personal-section="${key}">${label}</button>`).join("")}</nav>${sections[lifePersonalSection] || sections.identity}`;
+  return `<nav class="subsection-tabs" role="tablist" aria-label="Personal sections">${[["identity","Identity"],["care","Style & Care"],["faith","Faith"],["journal","Notes"]].map(([key,label]) => `<button role="tab" aria-selected="${lifePersonalSection === key}" tabindex="${lifePersonalSection === key ? "0" : "-1"}" class="${lifePersonalSection === key ? "active" : ""}" data-life-personal-section="${key}">${label}</button>`).join("")}</nav>${sections[lifePersonalSection] || sections.identity}`;
 }
 
 function lifeObjectField(group, key, label, placeholder) {
@@ -1813,7 +1941,7 @@ function renderMoney() {
   const content = moneySection === "stacks" ? stacksWorkspace(totals) : moneySection === "empire" ? incomeEmpireWorkspace(totals) : moneySection === "money" ? moneyManagementWorkspace(totals) : moneySection === "report" ? moneyReportWorkspace(totals) : moneyOverviewWorkspace(totals);
   document.getElementById("view-wealth").innerHTML = `
     <div class="page-head compact-page-head"><p class="eyebrow">${eyebrow}</p><h1 id="wealth-heading">${heading}</h1><p>${note}</p></div>
-    <nav class="section-tabs wealth-tabs" aria-label="Wealth sections">${[["overview","Overview"],["empire","Income"],["stacks","Stacks"],["money","Money"],["report","Reports"]].map(([key,label]) => `<button class="${moneySection === key ? "active" : ""}" data-money-section="${key}">${label}</button>`).join("")}</nav>
+    <nav class="section-tabs wealth-tabs" role="tablist" aria-label="Wealth sections">${[["overview","Overview"],["empire","Income"],["stacks","Stacks"],["money","Money"],["report","Reports"]].map(([key,label]) => `<button role="tab" aria-selected="${moneySection === key}" tabindex="${moneySection === key ? "0" : "-1"}" class="${moneySection === key ? "active" : ""}" data-money-section="${key}">${label}</button>`).join("")}</nav>
     ${content}`;
 }
 
@@ -1832,11 +1960,11 @@ function moneyManagementWorkspace(totals = moneyTotals()) {
   const transfers = [...state.finances.transfers].sort((a, b) => b.date.localeCompare(a.date));
   const sections = {
     accounts: `${financialTruthCard(totals)}<div class="grid two-column"><div class="stack">${reconciliationCard(totals)}<article class="card"><div class="card-head"><div><p class="eyebrow">Balances</p><h2>Recorded cash locations</h2></div></div><div class="balance-grid">${balanceField("personal", "Personal cash")}${balanceField("business", "Business cash")}${balanceField("physical", "Physical cash")}${balanceField("trading", "Trading wallets")}${balanceField("held", "Money held for others")}</div><p class="privacy-note">Set the opening position once, then use the ledger.</p></article></div><aside class="stack">${cashCoverCard(totals)}${moneyCollectionCard("investment", "Investments", "Tracked separately from available cash", state.finances.investments, item => `${escapeHTML(item.name)} · ${currency(item.current)} current value`)}</aside></div>`,
-    commitments: `<div class="grid two-column"><div class="stack"><article class="card bills-card"><div class="card-head"><div><p class="eyebrow">Payment calendar</p><h2>Bills and due dates</h2><p>Recurring payments, one-offs and what is already covered.</p></div><button class="button button-primary button-small" data-add="bill">+ Bill</button></div>${billInsight(totals)}<div class="bills-list">${totals.billSchedule.length ? totals.billSchedule.map(billTemplate).join("") : '<div class="premium-empty"><strong>Your payment calendar is open.</strong><span>Add a bill when you want its date kept in view.</span><button data-add="bill">Add bill</button></div>'}</div></article>${subscriptionAuditCard(totals)}</div><aside class="stack">${moneyCollectionCard("obligation", "Obligations", "Repayments and money owed", state.finances.obligations, item => `${escapeHTML(item.name)} · ${currency(Math.max(0, item.target - item.paid))} remaining${item.monthlyPayment ? ` · ${currency(item.monthlyPayment)}/mo` : ""}`)}${spendingGuardrailCard(totals)}</aside></div>`,
+    commitments: `<div class="grid two-column"><div class="stack"><article class="card bills-card"><div class="card-head"><div><p class="eyebrow">Payment calendar</p><h2>Bills and due dates</h2><p>Recurring payments, one-offs and what is already covered.</p></div><button class="button button-primary button-small" data-add="bill">+ Bill</button></div>${billInsight(totals)}<div class="bills-list">${totals.billSchedule.length ? totals.billSchedule.map(billTemplate).join("") : '<div class="premium-empty"><strong>Your payment calendar is open.</strong><span>Add a bill when you want its date kept in view.</span><button data-add="bill">Add bill</button></div>'}</div></article>${billPaymentHistoryCard()}${subscriptionAuditCard(totals)}</div><aside class="stack">${moneyCollectionCard("obligation", "Obligations", "Repayments and money owed", state.finances.obligations, item => `${escapeHTML(item.name)} · ${currency(Math.max(0, item.target - item.paid))} remaining${item.monthlyPayment ? ` · ${currency(item.monthlyPayment)}/mo` : ""}`)}${spendingGuardrailCard(totals)}</aside></div>`,
     planning: `<div class="grid two-column"><div class="stack">${incomeForecastCard(totals)}${incomeAllocationCard()}${cashFlowForecastCard(totals)}</div><aside class="stack">${budgetCard(totals)}${plannedPurchasesCard(totals)}${stackPreviewCard(totals)}</aside></div>`,
     ledger: `<article class="card"><div class="card-head"><div><p class="eyebrow">Source records</p><h2>Transactions and transfers</h2><p>A transfer moves existing money. It never becomes income.</p></div><div class="card-actions"><button class="button button-secondary button-small" data-add="transfer">+ Transfer</button><button class="button button-primary button-small" data-add="transaction">+ Transaction</button></div></div><div class="ledger-list">${[...transactions.map(item => ({ ...item, ledgerKind: "transaction" })), ...transfers.map(item => ({ ...item, ledgerKind: "transfer" }))].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 40).map(item => item.ledgerKind === "transfer" ? transferTemplate(item) : transactionTemplate(item)).join("") || '<div class="premium-empty"><strong>Your ledger is ready.</strong><span>Cash movement will appear here.</span><button data-add="transaction">Add transaction</button></div>'}</div></article>`
   };
-  return `<nav class="subsection-tabs" aria-label="Money record sections">${[["accounts","Accounts"],["commitments","Commitments"],["planning","Planning"],["ledger","Ledger"]].map(([key,label]) => `<button class="${wealthMoneySection === key ? "active" : ""}" data-wealth-money-section="${key}">${label}</button>`).join("")}</nav>${sections[wealthMoneySection] || sections.accounts}`;
+  return `<nav class="subsection-tabs" role="tablist" aria-label="Money record sections">${[["accounts","Accounts"],["commitments","Commitments"],["planning","Planning"],["ledger","Ledger"]].map(([key,label]) => `<button role="tab" aria-selected="${wealthMoneySection === key}" tabindex="${wealthMoneySection === key ? "0" : "-1"}" class="${wealthMoneySection === key ? "active" : ""}" data-wealth-money-section="${key}">${label}</button>`).join("")}</nav>${sections[wealthMoneySection] || sections.accounts}`;
 }
 
 function financialTruthCard(totals) {
@@ -2002,11 +2130,11 @@ function stacksWorkspace(totals = moneyTotals()) {
   const stacks = state.finances.stacks.filter(item => item.status !== "archived").sort((a, b) => a.order - b.order);
   const history = [...state.finances.stackEntries].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   const availableMinor = totals.minor.safeToSpend + totals.minor.businessFree + totals.minor.physicalFree + totals.minor.tradingFree;
-  return `<div class="wealth-summary">${moneyStat("Total stacked", currency(totals.savingsCurrent), "Allocated, not extra cash")}${moneyStat("Available to allocate", currency(fromMinor(availableMinor)), "Across eligible locations")}${moneyStat("Stack gap", currency(totals.stackGap), totals.stackGap ? "Needs reconciliation" : "Fully backed")}${moneyStat("Active stacks", String(stacks.filter(item => item.status === "active").length), "Editable and reorderable")}</div>
-    <div class="bread-actions"><button data-add="stackAdd"><span>＋</span><strong>Add Bread</strong><small>Allocate money</small></button><button data-add="stackMove"><span>↔</span><strong>Move Bread</strong><small>Between stacks</small></button><button data-add="stackWithdraw"><span>−</span><strong>Take Bread Out</strong><small>Release or spend</small></button></div>
-    ${totals.stackGap ? `<div class="stack-warning"><strong>Allocations exceed available backing by ${currency(totals.stackGap)}.</strong><span>Nothing fictional is counted as savings. Reconcile account balances or reverse an allocation.</span></div>` : ""}
-    <div class="stack-grid">${stacks.map((stack, index) => stackCard(stack, totals, index, stacks.length)).join("")}</div>
-    <article class="card stack-history-card"><div class="card-head"><div><p class="eyebrow">Stack ledger</p><h2>Every allocation stays traceable</h2></div><button class="button button-secondary button-small" data-add="stack">+ Stack</button></div><div class="stack-history-tools"><input type="search" data-stack-history-search placeholder="Search history" aria-label="Search stack history" /><select data-stack-history-filter aria-label="Filter stack history"><option value="all">All activity</option><option value="add">Added</option><option value="move">Moved</option><option value="withdraw">Taken out</option><option value="reversed">Reversed</option></select></div><div class="stack-entry-list">${history.length ? history.map(stackEntryTemplate).join("") : '<div class="empty">Your first stack allocation will appear here.</div>'}</div></article>`;
+  const sections = {
+    overview: `<div class="wealth-summary">${moneyStat("Total stacked", currency(totals.savingsCurrent), "Allocated, not extra cash")}${moneyStat("Available to allocate", currency(fromMinor(availableMinor)), "Across eligible locations")}${moneyStat("Stack gap", currency(totals.stackGap), totals.stackGap ? "Needs reconciliation" : "Fully backed")}${moneyStat("Active stacks", String(stacks.filter(item => item.status === "active").length), "Editable and reorderable")}</div><div class="bread-actions"><button data-add="stackAdd"><span>＋</span><strong>Add Bread</strong><small>Allocate money</small></button><button data-add="stackMove"><span>↔</span><strong>Move Bread</strong><small>Between stacks</small></button><button data-add="stackWithdraw"><span>−</span><strong>Take Bread Out</strong><small>Release or spend</small></button></div>${totals.stackGap ? `<div class="stack-warning"><strong>Allocations exceed available backing by ${currency(totals.stackGap)}.</strong><span>Nothing fictional is counted as savings. Reconcile account balances or reverse an allocation.</span></div>` : ""}<div class="stack-grid">${stacks.map((stack, index) => stackCard(stack, totals, index, stacks.length)).join("")}</div>`,
+    history: `<article class="card stack-history-card"><div class="card-head"><div><p class="eyebrow">Stack ledger</p><h2>Every allocation stays traceable</h2></div><button class="button button-secondary button-small" data-add="stack">+ Stack</button></div><div class="stack-history-tools"><input type="search" data-stack-history-search placeholder="Search history" aria-label="Search stack history" /><select data-stack-history-filter aria-label="Filter stack history"><option value="all">All activity</option><option value="add">Added</option><option value="move">Moved</option><option value="withdraw">Taken out</option><option value="reversed">Reversed</option></select></div><div class="stack-entry-list">${history.length ? history.slice(0, 100).map(stackEntryTemplate).join("") : '<div class="empty">Your first stack allocation will appear here.</div>'}</div>${history.length > 100 ? `<p class="privacy-note">Showing the latest 100 of ${history.length} records. Use search after exporting older history.</p>` : ""}</article>`
+  };
+  return `<nav class="subsection-tabs" role="tablist" aria-label="STACKS sections">${[["overview","Stacks"],["history","History"]].map(([key,label]) => `<button role="tab" aria-selected="${stacksSection === key}" tabindex="${stacksSection === key ? "0" : "-1"}" class="${stacksSection === key ? "active" : ""}" data-stacks-section="${key}">${label}</button>`).join("")}</nav>${sections[stacksSection] || sections.overview}`;
 }
 
 function stackCard(stack, totals, index, count) {
@@ -2031,10 +2159,13 @@ function incomeEmpireWorkspace() {
   const metrics = incomeEmpireMetrics("custom", activeRange);
   const year = incomeEmpireMetrics("year");
   const entries = [...metrics.entries].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-  return `<div class="empire-periods">${[["today","Today"],["week","This week"],["month","This month"],["lastMonth","Last month"],["year","This year"],["custom","Custom"]].map(([key,label]) => `<button class="${incomePeriod === key ? "active" : ""}" data-income-period="${key}">${label}</button>`).join("")}</div>
-    ${incomePeriod === "custom" ? `<div class="empire-custom-range"><label>From<input type="date" data-income-range="start" value="${incomeCustomStart}" max="${incomeCustomEnd}" /></label><label>To<input type="date" data-income-range="end" value="${incomeCustomEnd}" min="${incomeCustomStart}" /></label></div>` : ""}
-    <div class="wealth-summary">${moneyStat("Revenue", currency(fromMinor(metrics.revenueMinor)), "Earned before costs")}${moneyStat("Net profit", currency(fromMinor(metrics.profitMinor)), "Revenue less costs")}${moneyStat("Cash received", currency(fromMinor(metrics.cashReceivedMinor)), "Actually collected")}${moneyStat("Year to date", currency(fromMinor(year.profitMinor)), "Net recognized profit")}</div>
-    <div class="grid two-column empire-grid"><div class="stack">${incomeTrendCard()}${incomeStreamsCard(metrics)}${incomeEntriesCard(entries)}</div><aside class="stack">${empireTruthCard(metrics)}${allocationSuggestionsCard()}${allocationRulesCard()}${ventureMoneyCard()}</aside></div>`;
+  const sections = {
+    overview: `<div class="grid two-column empire-grid"><div class="stack">${incomeTrendCard()}</div><aside class="stack">${empireTruthCard(metrics)}</aside></div>`,
+    streams: `<div class="grid two-column"><div class="stack">${incomeStreamsCard(metrics)}</div><aside class="stack">${ventureMoneyCard()}</aside></div>`,
+    ledger: incomeEntriesCard(entries.slice(0, 100)),
+    rules: `<div class="grid two-column"><div class="stack">${allocationSuggestionsCard()}</div><aside class="stack">${allocationRulesCard()}</aside></div>`
+  };
+  return `<nav class="subsection-tabs" role="tablist" aria-label="Income sections">${[["overview","Overview"],["streams","Streams"],["ledger","Ledger"],["rules","Allocation"]].map(([key,label]) => `<button role="tab" aria-selected="${incomeSection === key}" tabindex="${incomeSection === key ? "0" : "-1"}" class="${incomeSection === key ? "active" : ""}" data-income-section="${key}">${label}</button>`).join("")}</nav><div class="empire-periods">${[["today","Today"],["week","This week"],["month","This month"],["lastMonth","Last month"],["year","This year"],["custom","Custom"]].map(([key,label]) => `<button class="${incomePeriod === key ? "active" : ""}" data-income-period="${key}">${label}</button>`).join("")}</div>${incomePeriod === "custom" ? `<div class="empire-custom-range"><label>From<input type="date" data-income-range="start" value="${incomeCustomStart}" max="${incomeCustomEnd}" /></label><label>To<input type="date" data-income-range="end" value="${incomeCustomEnd}" min="${incomeCustomStart}" /></label></div>` : ""}<div class="wealth-summary">${moneyStat("Revenue", currency(fromMinor(metrics.revenueMinor)), "Earned before costs")}${moneyStat("Net profit", currency(fromMinor(metrics.profitMinor)), "Revenue less costs")}${moneyStat("Cash received", currency(fromMinor(metrics.cashReceivedMinor)), "Actually collected")}${moneyStat("Year to date", currency(fromMinor(year.profitMinor)), "Net recognized profit")}</div>${sections[incomeSection] || sections.overview}`;
 }
 
 function empireTruthCard(metrics) {
@@ -2118,30 +2249,40 @@ function moneyReportData(month = monthKey()) {
   const start = `${month}-01`;
   const date = dateFromKey(start);
   const end = dayKey(new Date(date.getFullYear(), date.getMonth() + 1, 0));
+  const isCurrentMonth = month === monthKey();
   const empire = incomeEmpireMetrics("custom", { start, end });
-  const totals = moneyTotals();
+  const totals = moneyTotals(dateFromKey(end), end);
   const stackLedger = stackLedgerTotals(end);
   const stackEntries = state.finances.stackEntries.filter(item => !item.reversedAt && item.date >= start && item.date <= end);
   const stackInMinor = stackEntries.filter(item => item.type === "add").reduce((sum, item) => sum + item.amountMinor, 0);
   const stackOutMinor = stackEntries.filter(item => item.type === "withdraw").reduce((sum, item) => sum + item.amountMinor, 0);
   const expensesMinor = state.finances.transactions.filter(item => item.type === "expense" && item.date >= start && item.date <= end).reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
   const ventureRows = state.ventures.filter(item => item.status !== "archived").map(venture => ({ venture, ...venturePerformance(venture, { start, end }) })).sort((a, b) => b.profitMinor - a.profitMinor);
-  const upcoming = totals.billSchedule.filter(item => item.hasOutstanding && Number.isFinite(item.days) && item.days >= 0).slice(0, 3).map(item => ({ name: item.bill.name, amountMinor: item.bill.amountMinor, due: dayKey(item.due) }));
-  return { month, capturedAt: new Date().toISOString(), revenueMinor: empire.revenueMinor, profitMinor: empire.profitMinor, cashReceivedMinor: empire.cashReceivedMinor, pendingMinor: empire.pendingMinor, expensesMinor, actualCashMinor: totals.minor.available, heldMinor: totals.minor.held, obligationsMinor: toMinor(totals.obligations), safeMinor: totals.minor.safeToSpend, stackTotalMinor: stackLedger.totalAllocatedMinor, stackInMinor, stackOutMinor, stacks: state.finances.stacks.filter(item => item.status !== "archived").map(stack => ({ id: stack.id, name: stack.name, balanceMinor: Math.max(0, stackLedger.balancesMinor[stack.id] || 0), targetMinor: stack.targetMinor + stack.additionalCostsMinor })), bestVenture: ventureRows[0] ? { name: ventureRows[0].venture.name, profitMinor: ventureRows[0].profitMinor } : null, upcoming };
+  const upcoming = isCurrentMonth ? totals.billSchedule.filter(item => item.hasOutstanding && Number.isFinite(item.days) && item.days >= 0).slice(0, 3).map(item => ({ name: item.bill.name, amountMinor: item.bill.amountMinor, due: dayKey(item.due) })) : [];
+  return { version: 2, month, asOf: end, capturedAt: new Date().toISOString(), revenueMinor: empire.revenueMinor, profitMinor: empire.profitMinor, cashReceivedMinor: empire.cashReceivedMinor, pendingMinor: empire.pendingMinor, expensesMinor, actualCashMinor: totals.minor.available, heldMinor: totals.minor.held, obligationsMinor: isCurrentMonth ? toMinor(totals.obligations) : null, safeMinor: isCurrentMonth ? totals.minor.safeToSpend : null, stackTotalMinor: stackLedger.totalAllocatedMinor, stackInMinor, stackOutMinor, stacks: state.finances.stacks.filter(item => item.status !== "archived").map(stack => ({ id: stack.id, name: stack.name, balanceMinor: Math.max(0, stackLedger.balancesMinor[stack.id] || 0), targetMinor: stack.targetMinor + stack.additionalCostsMinor })), bestVenture: ventureRows[0] ? { name: ventureRows[0].venture.name, profitMinor: ventureRows[0].profitMinor } : null, upcoming };
+}
+
+function latestMoneyReport(month) {
+  return state.finances.monthlyMoneyReports.filter(item => item.month === month).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))[0];
+}
+
+function reportMoney(value) {
+  return value === null || value === undefined ? "Not reconstructed" : currency(fromMinor(value));
 }
 
 function moneyReportWorkspace() {
-  const archived = state.finances.monthlyMoneyReports.find(item => item.month === reportMonth);
+  const archived = latestMoneyReport(reportMonth);
   const report = archived?.snapshot || moneyReportData(reportMonth);
   const previousMonthDate = new Date(`${reportMonth}-01T12:00:00`);
   previousMonthDate.setMonth(previousMonthDate.getMonth() - 1);
   const previousKey = monthKey(previousMonthDate);
-  const previous = state.finances.monthlyMoneyReports.find(item => item.month === previousKey)?.snapshot || moneyReportData(previousKey);
+  const previous = latestMoneyReport(previousKey)?.snapshot || moneyReportData(previousKey);
   const profitDelta = Number(report.profitMinor || 0) - Number(previous.profitMinor || 0);
-  return `<div class="report-toolbar"><label>Report month <input type="month" data-report-month value="${reportMonth}" /></label><button class="button button-primary" data-capture-money-report>${archived ? "Refresh snapshot" : "Capture month"}</button></div>
+  const archiveMonths = [...new Set(state.finances.monthlyMoneyReports.map(item => item.month))].sort().reverse();
+  return `<div class="report-toolbar"><label>Report month <input type="month" data-report-month value="${reportMonth}" /></label><button class="button button-primary" data-capture-money-report>${archived ? "Capture new version" : "Capture month"}</button></div>
     <article class="money-report-hero"><p class="eyebrow">${new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" }).format(new Date(`${reportMonth}-01T12:00:00`))}</p><h2>${currency(fromMinor(report.profitMinor))} net profit</h2><span class="${profitDelta < 0 ? "negative" : "positive"}">${profitDelta >= 0 ? "+" : "−"}${currency(fromMinor(Math.abs(profitDelta)))} vs previous month</span><small>${archived ? `Snapshot captured ${formatSyncTime(archived.updatedAt)}` : "Live preview · capture it to preserve history"}</small></article>
-    <div class="report-section-grid"><article class="card report-section"><p class="eyebrow">Income</p><div class="report-lines"><span>Total revenue <b>${currency(fromMinor(report.revenueMinor))}</b></span><span>Net profit <b>${currency(fromMinor(report.profitMinor))}</b></span><span>Cash received <b>${currency(fromMinor(report.cashReceivedMinor))}</b></span><span>Pending <b>${currency(fromMinor(report.pendingMinor))}</b></span></div></article><article class="card report-section"><p class="eyebrow">Money</p><div class="report-lines"><span>Recorded cash <b>${currency(fromMinor(report.actualCashMinor))}</b></span><span>Expenses <b>${currency(fromMinor(report.expensesMinor))}</b></span><span>Obligations <b>${currency(fromMinor(report.obligationsMinor))}</b></span><span>Personal safe <b>${currency(fromMinor(report.safeMinor))}</b></span></div></article><article class="card report-section"><p class="eyebrow">Stacks</p><div class="report-lines"><span>Total allocated <b>${currency(fromMinor(report.stackTotalMinor))}</b></span><span>Added this month <b>${currency(fromMinor(report.stackInMinor))}</b></span><span>Taken out <b>${currency(fromMinor(report.stackOutMinor))}</b></span></div><div class="report-stack-list">${report.stacks.slice(0, 6).map(stack => `<span>${escapeHTML(stack.name)} <b>${currency(fromMinor(stack.balanceMinor))}</b></span>`).join("")}</div></article><article class="card report-section"><p class="eyebrow">Looking ahead</p><div class="report-lines"><span>Best venture <b>${escapeHTML(report.bestVenture?.name || "No linked venture")}</b></span>${report.upcoming.length ? report.upcoming.map(item => `<span>${escapeHTML(item.name)} <b>${currency(fromMinor(item.amountMinor))}</b></span>`).join("") : "<span>No confirmed bill approaching</span>"}</div></article></div>
-    <article class="card report-archive"><div class="card-head"><div><p class="eyebrow">Archive</p><h2>Captured financial months</h2></div></div><div class="simple-list">${state.finances.monthlyMoneyReports.length ? [...state.finances.monthlyMoneyReports].sort((a, b) => b.month.localeCompare(a.month)).map(item => `<button data-report-open="${item.month}"><span>${escapeHTML(item.month)}</span><strong>${currency(fromMinor(item.snapshot.profitMinor || 0))}</strong></button>`).join("") : '<div class="empty">Capture a month when the records are reconciled.</div>'}</div></article>`;
+    <div class="report-section-grid"><article class="card report-section"><p class="eyebrow">Income</p><div class="report-lines"><span>Total revenue <b>${currency(fromMinor(report.revenueMinor))}</b></span><span>Net profit <b>${currency(fromMinor(report.profitMinor))}</b></span><span>Cash received <b>${currency(fromMinor(report.cashReceivedMinor))}</b></span><span>Pending <b>${currency(fromMinor(report.pendingMinor))}</b></span></div></article><article class="card report-section"><p class="eyebrow">Money</p><div class="report-lines"><span>Recorded cash at month-end <b>${reportMoney(report.actualCashMinor)}</b></span><span>Expenses <b>${currency(fromMinor(report.expensesMinor))}</b></span><span>Obligations <b>${reportMoney(report.obligationsMinor)}</b></span><span>Personal safe <b>${reportMoney(report.safeMinor)}</b></span></div></article><article class="card report-section"><p class="eyebrow">Stacks</p><div class="report-lines"><span>Total allocated <b>${currency(fromMinor(report.stackTotalMinor))}</b></span><span>Added this month <b>${currency(fromMinor(report.stackInMinor))}</b></span><span>Taken out <b>${currency(fromMinor(report.stackOutMinor))}</b></span></div><div class="report-stack-list">${(report.stacks || []).slice(0, 6).map(stack => `<span>${escapeHTML(stack.name)} <b>${currency(fromMinor(stack.balanceMinor))}</b></span>`).join("")}</div></article><article class="card report-section"><p class="eyebrow">Looking ahead</p><div class="report-lines"><span>Best venture <b>${escapeHTML(report.bestVenture?.name || "No linked venture")}</b></span>${(report.upcoming || []).length ? report.upcoming.map(item => `<span>${escapeHTML(item.name)} <b>${currency(fromMinor(item.amountMinor))}</b></span>`).join("") : `<span>${report.month === monthKey() ? "No confirmed bill approaching" : "Historical bill outlook not reconstructed"}</span>`}</div></article></div>
+    <article class="card report-archive"><div class="card-head"><div><p class="eyebrow">Archive</p><h2>Captured financial months</h2></div></div><div class="simple-list">${archiveMonths.length ? archiveMonths.map(month => { const item = latestMoneyReport(month); const versions = state.finances.monthlyMoneyReports.filter(value => value.month === month).length; return `<button data-report-open="${month}"><span>${escapeHTML(month)} · ${versions} version${versions === 1 ? "" : "s"}</span><strong>${currency(fromMinor(item.snapshot.profitMinor || 0))}</strong></button>`; }).join("") : '<div class="empty">Capture a month when the records are reconciled.</div>'}</div></article>`;
 }
 
 function billInsight(totals) {
@@ -2195,6 +2336,12 @@ function billTemplate(entry) {
   return `<div class="bill-row ${entry.status}"><button class="bill-paid-button ${entry.actionPaid ? "done" : ""}" data-bill-paid="${bill.id}" data-bill-period="${entry.actionPeriod || entry.period}" aria-label="${entry.actionPaid ? "Mark unpaid" : "Mark paid"}"></button><div class="bill-copy"><strong>${escapeHTML(bill.name)}</strong><small class="bill-due">${escapeHTML(billDueLabel(entry))}</small><div class="bill-meta"><span>${frequency}</span><span>${escapeHTML(bill.kind)}</span><span>${escapeHTML(bill.account)}</span>${bill.autopay ? "<span>Autopay</span>" : ""}${bill.dueConfirmed ? "<span>Confirmed date</span>" : "<span>Needs verification</span>"}</div></div><div class="bill-value"><strong>${currency(bill.amount)}</strong><small>${bill.dueConfirmed ? formatCompactDate(entry.due) : "No overdue alert"}</small></div><button class="edit-button" data-edit-bill="${bill.id}" aria-label="Edit bill">•••</button></div>`;
 }
 
+function billPaymentHistoryCard() {
+  const payments = state.finances.billPayments.filter(item => !item.reversedAt).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 8);
+  if (!payments.length) return "";
+  return `<article class="card compact-card"><div class="card-head"><div><p class="eyebrow">Payment history</p><h2>Linked bill records</h2><p>Undoing a payment creates a reversal instead of deleting history.</p></div></div><div class="simple-list">${payments.map(payment => { const bill = state.finances.bills.find(item => item.id === payment.billId); return `<button data-reverse-bill-payment="${payment.id}"><span>${escapeHTML(bill?.name || "Bill")} · ${formatCompactDate(payment.date)}</span><strong>${currency(fromMinor(payment.amountMinor))} · Undo</strong></button>`; }).join("")}</div></article>`;
+}
+
 function moneyStat(label, value, note) {
   return `<article class="money-stat"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`;
 }
@@ -2227,7 +2374,7 @@ function renderWeek() {
   const content = buildSection === "portfolio" ? `<div class="stack">${venturePortfolioCard(activeVentures)}${projectsCard(activeProjects)}</div>` : buildSection === "actions" ? buildActionsWorkspace(open, done) : buildSection === "opportunities" ? `<div class="grid two-column"><div class="stack">${inboxCard()}${goalsCard(activeGoals)}</div><aside class="stack">${buildDecisionsCard()}${buildPausedCard()}</aside></div>` : buildOverviewWorkspace({ open, activeGoals, activeProjects, openMilestones, openBlockers, activeVentures });
   document.getElementById("view-build").innerHTML = `
     <div class="page-head compact-page-head"><p class="eyebrow">Build</p><h1 id="build-heading">Turn ideas into assets.</h1><p>Ventures, projects and the next clear move.</p></div>
-    <nav class="section-tabs" aria-label="Build sections">${[["overview","Overview"],["portfolio","Portfolio"],["actions","Actions"],["opportunities","Opportunities"]].map(([key,label]) => `<button class="${buildSection === key ? "active" : ""}" data-build-section="${key}">${label}</button>`).join("")}</nav>
+    <nav class="section-tabs" role="tablist" aria-label="Build sections">${[["overview","Overview"],["portfolio","Portfolio"],["actions","Actions"],["opportunities","Opportunities"]].map(([key,label]) => `<button role="tab" aria-selected="${buildSection === key}" tabindex="${buildSection === key ? "0" : "-1"}" class="${buildSection === key ? "active" : ""}" data-build-section="${key}">${label}</button>`).join("")}</nav>
     ${content}`;
 }
 
@@ -2300,7 +2447,7 @@ function renderMore() {
   const content = moreSection === "routines" ? moreRoutinesWorkspace() : moreSection === "calendar" ? maintenanceCard() : moreSection === "review" ? moreReviewWorkspace() : moreOverviewWorkspace();
   document.getElementById("view-more").innerHTML = `
     <div class="page-head compact-page-head"><p class="eyebrow">More</p><h1 id="more-heading">The rest of the system.</h1><p>Routines, dates, reviews, privacy and settings.</p></div>
-    <nav class="section-tabs" aria-label="More sections">${[["overview","Overview"],["routines","Routines"],["calendar","Calendar"],["review","Review"]].map(([key,label]) => `<button class="${moreSection === key ? "active" : ""}" data-more-section="${key}">${label}</button>`).join("")}</nav>
+    <nav class="section-tabs" role="tablist" aria-label="More sections">${[["overview","Overview"],["routines","Routines"],["calendar","Calendar"],["review","Review"]].map(([key,label]) => `<button role="tab" aria-selected="${moreSection === key}" tabindex="${moreSection === key ? "0" : "-1"}" class="${moreSection === key ? "active" : ""}" data-more-section="${key}">${label}</button>`).join("")}</nav>
     ${content}`;
 }
 
@@ -2319,7 +2466,7 @@ function moreRoutinesWorkspace() {
     cues: `<article class="card"><div class="card-head"><div><p class="eyebrow">Preparation cues</p><h2>Make the start obvious.</h2><p>Prepare, place and trigger the action before the moment arrives.</p></div><button class="button button-primary button-small" data-add="cue">+ Cue</button></div><div class="architecture-flow">${state.cues.length ? state.cues.map((cue, index) => cueTemplate(cue, index)).join("") : '<div class="premium-empty"><strong>Your cues will appear here.</strong><span>Add one preparation that makes an action easier to start.</span><button data-add="cue">Add cue</button></div>'}</div></article>`,
     scripts: `<article class="card"><div class="card-head"><div><p class="eyebrow">If–then scripts</p><h2>Decisions made in advance.</h2><p>Short responses for situations that repeat.</p></div><button class="button button-primary button-small" data-add="script">+ Script</button></div><div class="script-list">${state.scripts.length ? state.scripts.map(script => `<div class="script-card" data-edit-script="${script.id}" role="button" tabindex="0"><p><strong>If</strong> ${escapeHTML(script.trigger)}, <strong>then</strong> ${escapeHTML(script.response)}</p></div>`).join("") : '<div class="premium-empty"><strong>Your scripts will appear here.</strong><span>Add a response when a situation repeats.</span><button data-add="script">Add script</button></div>'}</div></article>`
   };
-  return `<nav class="subsection-tabs" aria-label="Routine sections">${[["modes","Pace"],["cues","Cues"],["scripts","Scripts"]].map(([key,label]) => `<button class="${routineSection === key ? "active" : ""}" data-routine-section="${key}">${label}</button>`).join("")}</nav>${sections[routineSection] || sections.modes}`;
+  return `<nav class="subsection-tabs" role="tablist" aria-label="Routine sections">${[["modes","Pace"],["cues","Cues"],["scripts","Scripts"]].map(([key,label]) => `<button role="tab" aria-selected="${routineSection === key}" tabindex="${routineSection === key ? "0" : "-1"}" class="${routineSection === key ? "active" : ""}" data-routine-section="${key}">${label}</button>`).join("")}</nav>${sections[routineSection] || sections.modes}`;
 }
 
 function moreReviewWorkspace() {
@@ -2331,7 +2478,7 @@ function moreReviewWorkspace() {
     month: `<div class="grid two-column"><div class="stack">${monthlyEvidenceCard()}<article class="card"><div class="card-head"><div><p class="eyebrow">${monthName}</p><h2>Monthly decisions</h2></div></div>${monthlyField("financial", "Wealth position", "What changed in cash, commitments, investments or liabilities?")}${monthlyField("business", "Business movement", "What value, systems or revenue moved?")}${monthlyField("lifestyle", "Life and experiences", "What made the month enjoyable or memorable?")}${monthlyField("adjustment", "One useful adjustment", "What would make next month run better?")}${monthlyField("decisions", "Decisions for next month", "Start, stop, continue or deliberately defer")}</article></div><aside class="stack"><article class="card compact-card"><div class="card-head"><div><p class="eyebrow">Money report</p><h2>Open the financial month.</h2><p>Revenue, profit, cash, STACKS and upcoming payments.</p></div><button class="button button-primary button-small" data-destination="wealth" data-section="report">Open report</button></div></article><article class="card"><div class="card-head"><div><p class="eyebrow">Life areas</p><h2>Context, not a score.</h2></div></div><div class="rating-list">${DIMENSIONS.map((item, index) => ratingTemplate(item, index)).join("")}</div></article></aside></div>`,
     history: `<article class="card history-card"><div class="card-head"><div><p class="eyebrow">Archive</p><h2>Previous weeks</h2><p>The record of what moved and what you decided.</p></div><span class="tag">${state.history.length} archived</span></div>${historyView()}</article>`
   };
-  return `<nav class="subsection-tabs" aria-label="Review sections">${[["week","Week"],["month","Month"],["history","History"]].map(([key,label]) => `<button class="${reviewSection === key ? "active" : ""}" data-review-section="${key}">${label}</button>`).join("")}</nav>${sections[reviewSection] || sections.week}`;
+  return `<nav class="subsection-tabs" role="tablist" aria-label="Review sections">${[["week","Week"],["month","Month"],["history","History"]].map(([key,label]) => `<button role="tab" aria-selected="${reviewSection === key}" tabindex="${reviewSection === key ? "0" : "-1"}" class="${reviewSection === key ? "active" : ""}" data-review-section="${key}">${label}</button>`).join("")}</nav>${sections[reviewSection] || sections.week}`;
 }
 
 function renderArchitecture() {
@@ -2465,6 +2612,7 @@ function goToDestination(destination, section = "") {
 
 function editorCollection(type) {
   if (type === "task") return state.tasks;
+  if (type === "schedule") return state.scheduleEvents;
   if (type === "inbox") return state.inbox;
   if (type === "maintenance") return state.maintenance;
   if (type === "cue") return state.cues;
@@ -2497,15 +2645,16 @@ function editorCollection(type) {
 function openEditor(type, id = null, preset = {}) {
   const dialog = document.getElementById("editor-dialog");
   const fields = document.getElementById("dialog-fields");
-  const collectionTypes = ["task", "inbox", "maintenance", "cue", "script", "transaction", "transfer", "bill", "obligation", "investment", "contact", "experience", "journal", "goal", "project", "milestone", "blocker", "decision", "budget", "income", "savings", "purchase", "stack", "incomeStream", "incomeEntry", "allocationRule", "venture"];
+  const collectionTypes = ["task", "schedule", "inbox", "maintenance", "cue", "script", "transaction", "transfer", "bill", "obligation", "investment", "contact", "experience", "journal", "goal", "project", "milestone", "blocker", "decision", "budget", "income", "savings", "purchase", "stack", "incomeStream", "incomeEntry", "allocationRule", "venture"];
   const item = collectionTypes.includes(type) && id ? editorCollection(type).find(entry => entry.id === id) : null;
   editor = ["handoffImport", "syncPair"].includes(type) ? { type, payload: id } : { type, id, preset };
-  const titles = { task: "Smart action", inbox: "Quick capture", maintenance: "Life maintenance date", cue: "Cue architecture", script: "If–then script", transaction: "Transaction", transfer: "Account transfer", reconciliation: "Weekly reconciliation", allocation: "Receive + allocate income", bill: "Bill + due date", obligation: "Obligation", investment: "Investment", contact: "Relationship intention", experience: "Experience", journal: "Private reflection", goal: "Goal", project: "Project workspace", milestone: "Milestone", blocker: "Project blocker", decision: "Project decision", budget: "Budget line", income: "Income forecast", savings: "Savings goal", purchase: "Next purchase", stack: "Savings stack", stackAdd: "Add Bread", stackMove: "Move Bread", stackWithdraw: "Take Bread Out", incomeStream: "Income stream", incomeEntry: "Income entry", incomeReceive: "Receive income", allocationRule: "Allocation rule", allocationPlan: "Approve stack plan", venture: "Business venture", moneySettings: "Spending guardrails", assistantSettings: "Assistant privacy", routine: `${state.modes[id]?.label || "Routine"} mode`, reminders: "Gentle reminders", security: "App lock", sync: "Device sync", syncPair: "Connect this device", handoff: "Secure phone handoff", handoffImport: "Import secure handoff" };
+  const titles = { task: "Smart action", schedule: "Schedule block", inbox: "Quick capture", maintenance: "Life maintenance date", cue: "Cue architecture", script: "If–then script", transaction: "Transaction", transfer: "Account transfer", reconciliation: "Weekly reconciliation", allocation: "Receive + allocate income", bill: "Bill + due date", billPayment: "Record bill payment", obligation: "Obligation", investment: "Investment", contact: "Relationship intention", experience: "Experience", journal: "Private reflection", goal: "Goal", project: "Project workspace", milestone: "Milestone", blocker: "Project blocker", decision: "Project decision", budget: "Budget line", income: "Income forecast", savings: "Savings goal", purchase: "Next purchase", stack: "Savings stack", stackAdd: "Add Bread", stackMove: "Move Bread", stackWithdraw: "Take Bread Out", incomeStream: "Income stream", incomeEntry: "Income entry", incomeReceive: "Receive income", allocationRule: "Allocation rule", allocationPlan: "Approve stack plan", venture: "Business venture", moneySettings: "Spending guardrails", assistantSettings: "Assistant privacy", routine: `${state.modes[id]?.label || "Routine"} mode`, reminders: "Gentle reminders", security: "App lock", sync: "Device sync", syncPair: "Connect this device", handoff: "Secure phone handoff", handoffImport: "Import secure handoff" };
   document.getElementById("dialog-eyebrow").textContent = ({ routine: "Personalise your system", reminders: "Stay gently connected", security: "Local privacy", sync: "Encrypted private relay", syncPair: "Encrypted private relay", handoff: "Encrypted device transfer", handoffImport: "Encrypted device transfer" })[type] || (id ? "Update your system" : "Add to your system");
   document.getElementById("dialog-title").textContent = titles[type] || "Item";
   document.getElementById("delete-item").classList.toggle("hidden", !(id && collectionTypes.includes(type)));
   document.getElementById("save-item").textContent = ({ sync: cloudSync.namespace ? "Done" : "Start sync + share", syncPair: "Connect this device", handoff: "Create secure link", handoffImport: "Import", security: "Save lock", reminders: "Save reminders", routine: "Save routine" })[type] || "Save";
   if (type === "task") fields.innerHTML = taskEditor(item || preset);
+  if (type === "schedule") fields.innerHTML = scheduleEditor(item || { date: scheduleDate, ...preset });
   if (type === "inbox") fields.innerHTML = inboxEditor(item);
   if (type === "maintenance") fields.innerHTML = maintenanceEditor(item);
   if (type === "cue") fields.innerHTML = cueEditor(item);
@@ -2515,6 +2664,7 @@ function openEditor(type, id = null, preset = {}) {
   if (type === "reconciliation") fields.innerHTML = reconciliationEditor();
   if (type === "allocation") fields.innerHTML = allocationEditor(preset.incomeId);
   if (type === "bill") fields.innerHTML = billEditor(item);
+  if (type === "billPayment") fields.innerHTML = billPaymentEditor(preset.billId, preset.period);
   if (type === "obligation") fields.innerHTML = `<div class="field"><label>Name</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Total owed (£)</label><input name="target" type="number" min="0" step="0.01" required value="${item?.target || ""}" /></div><div class="field"><label>Already restored (£)</label><input name="paid" type="number" min="0" step="0.01" value="${item?.paid || 0}" /></div><div class="field"><label>Planned this month (£)</label><input name="monthlyPayment" type="number" min="0" step="0.01" value="${item?.monthlyPayment || 0}" /></div></div>`;
   if (type === "investment") fields.innerHTML = `<div class="field"><label>Name</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Contributed (£)</label><input name="contributed" type="number" min="0" step="0.01" value="${item?.contributed || 0}" /></div><div class="field"><label>Current value (£)</label><input name="current" type="number" min="0" step="0.01" value="${item?.current || 0}" /></div></div>`;
   if (type === "contact") fields.innerHTML = contactEditor(item);
@@ -2566,6 +2716,16 @@ function connectEditorLabels(fields, type) {
 function taskEditor(item) {
   const dependencyId = item?.dependencyIds?.[0] || "";
   return `<div class="field"><label>Action</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Project</label><select name="projectId"><option value="">No project</option>${state.projects.filter(project => project.status !== "archived").map(project => `<option value="${project.id}" ${item?.projectId === project.id ? "selected" : ""}>${escapeHTML(project.name)}</option>`).join("")}</select></div><div class="field"><label>Goal</label><select name="goalId"><option value="">No direct goal</option>${state.goals.filter(goal => goal.status !== "archived").map(goal => `<option value="${goal.id}" ${item?.goalId === goal.id ? "selected" : ""}>${escapeHTML(goal.name)}</option>`).join("")}</select></div><div class="field"><label>Blocked by</label><select name="dependencyId"><option value="">Nothing</option>${state.tasks.filter(task => !task.done && task.id !== item?.id).map(task => `<option value="${task.id}" ${dependencyId === task.id ? "selected" : ""}>${escapeHTML(task.name)}</option>`).join("")}</select></div></div><div class="inline-fields"><div class="field"><label>Weekly role</label><select name="alignment">${[["primary","Main outcome"],["supporting","Supporting"],["maintenance","Maintenance"]].map(([value,label]) => `<option value="${value}" ${item?.alignment === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Deadline</label><input name="dueDate" type="date" value="${item?.dueDate || ""}" /></div></div><div class="inline-fields"><div class="field"><label>Impact</label><select name="impact">${[1,2,3].map(value => `<option value="${value}" ${Number(item?.impact || 2) === value ? "selected" : ""}>${value}</option>`).join("")}</select></div><div class="field"><label>Complexity</label><select name="complexity">${[1,2,3].map(value => `<option value="${value}" ${Number(item?.complexity || 1) === value ? "selected" : ""}>${value}</option>`).join("")}</select></div><div class="field"><label>Energy</label><select name="energy">${["low","medium","high"].map(value => `<option value="${value}" ${(item?.energy || "medium") === value ? "selected" : ""}>${energyLabel(value)}</option>`).join("")}</select></div></div><div class="field"><label>Minutes</label><input name="duration" type="number" min="5" max="300" step="5" value="${item?.duration || 30}" /></div><div class="task-setup-editor"><div><p class="eyebrow">Automatic start architecture</p><strong>Prepare → place → launch → fallback</strong></div><div class="field"><label>Prepare beforehand</label><textarea name="preparation" placeholder="Pack the bag, open the file, gather the documents…">${escapeHTML(item?.preparation || "")}</textarea></div><div class="field"><label>Put it here</label><textarea name="placement" placeholder="By the door, on the desk, beside breakfast…">${escapeHTML(item?.placement || "")}</textarea></div><div class="field"><label>Start when</label><textarea name="launchCue" placeholder="After meditation, when work ends, after breakfast…">${escapeHTML(item?.launchCue || "")}</textarea></div><div class="field"><label>If the plan breaks</label><textarea name="fallback" placeholder="The minimum version that still keeps momentum.">${escapeHTML(item?.fallback || "")}</textarea></div></div><p class="dialog-note">The scheduler chooses the task. This setup removes the decisions and friction that normally delay starting.</p>`;
+}
+
+function scheduleEditor(item) {
+  return `<div class="field"><label>What is happening?</label><input name="title" required value="${escapeHTML(item?.title || "")}" placeholder="Focused work, gym, appointment…" /></div><div class="inline-fields"><div class="field"><label>Date</label><input name="date" type="date" required value="${item?.date || scheduleDate}" /></div><div class="field"><label>Starts</label><input name="startTime" type="time" required value="${item?.startTime || "09:00"}" /></div><div class="field"><label>Ends</label><input name="endTime" type="time" value="${item?.endTime || ""}" /></div></div><div class="inline-fields"><div class="field"><label>Type</label><select name="type">${[["focus","Focus"],["appointment","Appointment"],["routine","Routine"],["social","Social"],["personal","Personal"],["travel","Travel"],["other","Other"]].map(([value,label]) => `<option value="${value}" ${(item?.type || "focus") === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Linked action</label><select name="taskId"><option value="">None</option>${state.tasks.filter(task => !task.done || task.id === item?.taskId).map(task => `<option value="${task.id}" ${item?.taskId === task.id ? "selected" : ""}>${escapeHTML(task.name)}</option>`).join("")}</select></div><div class="field"><label>Status</label><select name="status"><option value="planned" ${item?.status !== "completed" ? "selected" : ""}>Planned</option><option value="completed" ${item?.status === "completed" ? "selected" : ""}>Completed</option></select></div></div><div class="field"><label>Preparation or notes</label><textarea name="notes" placeholder="What should be ready before this starts?">${escapeHTML(item?.notes || "")}</textarea></div>`;
+}
+
+function billPaymentEditor(billId, period) {
+  const bill = state.finances.bills.find(item => item.id === billId);
+  if (!bill) return '<div class="empty">That bill no longer exists.</div>';
+  return `<div class="bread-editor-intro"><strong>${escapeHTML(bill.name)} · ${currency(bill.amount)}</strong><p>Record the cash movement and close this exact bill cycle together.</p></div><input type="hidden" name="billId" value="${bill.id}" /><input type="hidden" name="period" value="${escapeHTML(period || "")}" /><div class="inline-fields"><div class="field"><label>Payment date</label><input name="date" type="date" required value="${dayKey()}" /></div><div class="field"><label>Paid from</label><select name="account">${accountOptions(bill.account)}</select></div></div><div class="field"><label>Note</label><input name="note" value="${escapeHTML(`${bill.name} payment`)}" /></div><label class="toggle-row"><span><strong>Paid outside tracked accounts</strong><small>Close the bill cycle without changing a recorded balance</small></span><input name="paidOutside" type="checkbox" /><i></i></label>`;
 }
 
 function goalEditor(item) {
@@ -2957,7 +3117,7 @@ async function saveEditor() {
     try {
       const imported = await decryptHandoff(editor.payload, data.password);
       if (!confirm("Replace this device's current Life OS data with the secure handoff?")) return false;
-      state = normalizeState(imported);
+      replaceStateSafely(imported, "Secure handoff import");
       saveState("Secure handoff imported");
       pendingHandoff = null;
       if (location.hash.includes("handoff=")) history.replaceState(null, "", `${location.pathname}${location.search}`);
@@ -2998,6 +3158,18 @@ async function saveEditor() {
     render();
     return true;
   }
+  if (editor.type === "billPayment") {
+    const bill = state.finances.bills.find(item => item.id === data.billId);
+    if (!bill) return showToast("That bill no longer exists"), false;
+    if (bill.paidPeriods.includes(data.period)) return showToast("That bill cycle is already closed"), false;
+    const payment = { id: crypto.randomUUID(), billId: bill.id, period: data.period, account: data.account, amountMinor: bill.amountMinor, date: data.date, transactionId: "", reversalTransactionId: "", paidOutside: form.elements.paidOutside.checked, note: data.note.trim(), createdAt: new Date().toISOString(), reversedAt: "" };
+    if (!payment.paidOutside) payment.transactionId = createCashTransaction("expense", payment.account, payment.amountMinor, payment.date, "Bill payment", payment.note || bill.name, { billPaymentId: payment.id }).id;
+    state.finances.billPayments.push(payment);
+    bill.paidPeriods = [...new Set([...bill.paidPeriods, payment.period])];
+    saveState(payment.paidOutside ? "Bill cycle closed outside tracked cash" : "Bill paid and cash updated");
+    render();
+    return true;
+  }
   if (editor.type === "purchase" && data.url.trim() && !safeExternalURL(data.url)) return showToast("Use a valid http or https product link"), false;
   const collection = editorCollection(editor.type);
   let item = editor.id ? collection.find(entry => entry.id === editor.id) : null;
@@ -3012,17 +3184,34 @@ async function saveEditor() {
     const daily = todayState();
     if (setupChanged && daily.tomorrowTaskId === item.id) daily.tomorrowReady = false;
   }
+  if (editor.type === "schedule") Object.assign(item, { title: data.title.trim(), date: data.date, startTime: data.startTime, endTime: data.endTime || "", type: data.type, taskId: data.taskId || "", notes: data.notes.trim(), status: data.status, createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
   if (editor.type === "inbox") Object.assign(item, { text: data.text.trim(), type: data.type, createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
   if (editor.type === "maintenance") Object.assign(item, { name: data.name.trim(), category: data.category, dueDate: data.dueDate, recurrence: data.recurrence, remindDays: Number(data.remindDays), notes: data.notes.trim(), createdAt: item.createdAt || new Date().toISOString(), completedPeriods: item.completedPeriods || [] });
   if (editor.type === "cue") Object.assign(item, { name: data.name.trim(), cue: data.cue.trim(), response: data.response.trim(), setup: data.setup.trim(), remove: data.remove.trim() });
   if (editor.type === "script") Object.assign(item, { trigger: data.trigger.trim(), response: data.response.trim() });
   if (editor.type === "transaction") {
-    if (item.reconciliationId || item.forecastId) return showToast("This auditable transaction is linked to its source record"), false;
+    if (item.reconciliationId || item.forecastId || item.stackEntryId || item.empireEntryId || item.billPaymentId || item.reversalOf) return showToast("This auditable transaction is linked to its source record"), false;
+    if (editor.id) {
+      item.correctedAt = new Date().toISOString();
+      createCashTransaction(item.type === "income" ? "expense" : "income", item.account, item.amountMinor, dayKey(), "Ledger correction", `Reversal before correcting ${item.note || item.category}`, { reversalOf: item.id });
+      createCashTransaction(data.type, data.account, toMinor(data.amount), data.date, data.category.trim(), data.note.trim(), { correctsId: item.id, budgetId: data.budgetId || "" });
+      saveState("Transaction corrected with its audit trail preserved");
+      render();
+      return true;
+    }
     Object.assign(item, { type: data.type, account: data.account, date: data.date, amount: fromMinor(toMinor(data.amount)), amountMinor: toMinor(data.amount), category: data.category.trim(), budgetId: data.budgetId || "", forecastId: "", reconciliationId: "", note: data.note.trim(), createdAt: item.createdAt || new Date().toISOString() });
   }
   if (editor.type === "transfer") {
     if (item.allocationId) return showToast("Release the linked income allocation instead of editing its transfer"), false;
     if (data.fromAccount === data.toAccount) return showToast("Choose two different accounts"), false;
+    if (editor.id) {
+      item.correctedAt = new Date().toISOString();
+      createAccountTransfer(item.toAccount, item.fromAccount, item.amountMinor, dayKey(), `Reversal before correcting ${item.note || "account transfer"}`, { reversalOf: item.id });
+      createAccountTransfer(data.fromAccount, data.toAccount, toMinor(data.amount), data.date, data.note.trim() || "Corrected account transfer", { correctsId: item.id });
+      saveState("Transfer corrected with its audit trail preserved");
+      render();
+      return true;
+    }
     Object.assign(item, { fromAccount: data.fromAccount, toAccount: data.toAccount, date: data.date, amount: fromMinor(toMinor(data.amount)), amountMinor: toMinor(data.amount), note: data.note.trim() || "Account transfer", allocationId: item.allocationId || "", createdAt: item.createdAt || new Date().toISOString() });
   }
   if (editor.type === "bill") {
@@ -3059,6 +3248,7 @@ async function saveEditor() {
   if (editor.type === "stack") {
     const balanceMinor = editor.id ? Math.max(0, stackLedgerTotals().balancesMinor[editor.id] || 0) : 0;
     if (balanceMinor && item.backingAccount && item.backingAccount !== data.backingAccount) return showToast("Move the bread out before changing this stack's backing account"), false;
+    if (balanceMinor && data.status === "archived") return showToast("Move or take the bread out before archiving this stack"), false;
     Object.assign(item, { name: data.name.trim(), kind: data.kind, target: fromMinor(toMinor(data.target)), targetMinor: toMinor(data.target), backingAccount: data.backingAccount, targetDate: data.targetDate || "", additionalCosts: fromMinor(toMinor(data.additionalCosts)), additionalCostsMinor: toMinor(data.additionalCosts), experienceId: data.experienceId || "", purchaseId: data.purchaseId || "", status: data.status, order: Number.isFinite(Number(item.order)) ? Number(item.order) : state.finances.stacks.length - 1, notes: data.notes.trim(), createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
   }
   if (editor.type === "incomeStream") Object.assign(item, { name: data.name.trim(), category: data.category, ventureId: data.ventureId || "", status: data.status, notes: data.notes.trim(), createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
@@ -3070,12 +3260,31 @@ async function saveEditor() {
 }
 
 function deleteEditor() {
-  if (!editor?.id || !confirm("Delete this item?")) return;
+  const reversal = ["transaction", "transfer"].includes(editor?.type);
+  if (!editor?.id || !confirm(reversal ? "Reverse this record while preserving its audit trail?" : "Delete this item?")) return;
   const collection = editorCollection(editor.type);
   const index = collection.findIndex(entry => entry.id === editor.id);
   if (editor.type === "transfer" && collection[index]?.allocationId) return showToast("This transfer belongs to an income allocation and cannot be deleted separately");
   if (editor.type === "transfer" && (collection[index]?.stackEntryId || collection[index]?.empireEntryId)) return showToast("This transfer belongs to an auditable wealth record and cannot be deleted separately");
-  if (editor.type === "transaction" && (collection[index]?.reconciliationId || collection[index]?.forecastId || collection[index]?.stackEntryId || collection[index]?.empireEntryId)) return showToast("This transaction is linked to an auditable source record and cannot be deleted separately");
+  if (editor.type === "transaction" && (collection[index]?.reconciliationId || collection[index]?.forecastId || collection[index]?.stackEntryId || collection[index]?.empireEntryId || collection[index]?.billPaymentId || collection[index]?.reversalOf)) return showToast("This transaction is linked to an auditable source record and cannot be deleted separately");
+  if (editor.type === "transaction" && index >= 0) {
+    const transaction = collection[index];
+    if (transaction.reversedAt) return showToast("This transaction is already reversed");
+    createCashTransaction(transaction.type === "income" ? "expense" : "income", transaction.account, transaction.amountMinor, dayKey(), "Ledger reversal", `Reversal of ${transaction.note || transaction.category}`, { reversalOf: transaction.id });
+    transaction.reversedAt = new Date().toISOString();
+    saveState("Transaction reversed; history preserved");
+    render();
+    return document.getElementById("editor-dialog").close();
+  }
+  if (editor.type === "transfer" && index >= 0) {
+    const transfer = collection[index];
+    if (transfer.reversedAt || transfer.reversalOf) return showToast("This transfer is already a reversal");
+    createAccountTransfer(transfer.toAccount, transfer.fromAccount, transfer.amountMinor, dayKey(), `Reversal of ${transfer.note || "account transfer"}`, { reversalOf: transfer.id });
+    transfer.reversedAt = new Date().toISOString();
+    saveState("Transfer reversed; history preserved");
+    render();
+    return document.getElementById("editor-dialog").close();
+  }
   if (editor.type === "stack" && Math.max(0, stackLedgerTotals().balancesMinor[editor.id] || 0)) return showToast("Take the bread out before deleting this stack");
   if (editor.type === "incomeStream" && state.finances.incomeEntries.some(item => item.streamId === editor.id)) return showToast("Archive this stream instead; its history must remain auditable");
   if (editor.type === "incomeEntry") return showToast("Use Undo so the source record remains auditable");
@@ -3120,10 +3329,36 @@ function refreshSettings() {
   const reminderStatus = document.getElementById("reminder-status");
   const securityStatus = document.getElementById("security-status");
   const migrationRestore = document.getElementById("restore-migration");
+  const replacementRestore = document.getElementById("restore-replacement");
+  const corruptExport = document.getElementById("export-corrupt-state");
   if (reminderStatus) reminderStatus.textContent = state.preferences.reminders.enabled ? `On · ${state.preferences.reminders.morning} + ${state.preferences.reminders.evening}` : "Off";
   if (securityStatus) securityStatus.textContent = security.pinHash ? (security.credentialId ? "PIN + device unlock" : "PIN enabled") : "Off";
   if (migrationRestore) migrationRestore.classList.toggle("hidden", !(localStorage.getItem(LATEST_MIGRATION_BACKUP_KEY) || localStorage.getItem(MIGRATION_BACKUP_KEY)));
+  if (replacementRestore) replacementRestore.classList.toggle("hidden", !localStorage.getItem(PRE_REPLACEMENT_BACKUP_KEY));
+  if (corruptExport) corruptExport.classList.toggle("hidden", !localStorage.getItem(CORRUPT_STATE_QUARANTINE_KEY));
   refreshSyncUI();
+}
+
+function restoreReplacementSnapshot() {
+  try {
+    const snapshot = JSON.parse(localStorage.getItem(PRE_REPLACEMENT_BACKUP_KEY));
+    if (!snapshot?.data) throw new Error("Recovery copy unavailable");
+    if (!confirm("Restore the copy saved before the last full data replacement? The current copy will be kept first.")) return;
+    replaceStateSafely(snapshot.data, "Restore previous replacement snapshot");
+    recoveryIssue = "";
+    saveState("Previous local copy restored");
+    render();
+    document.getElementById("settings-dialog").close();
+  } catch {
+    showToast("The recovery copy could not be restored");
+  }
+}
+
+function exportCorruptState() {
+  const quarantined = localStorage.getItem(CORRUPT_STATE_QUARANTINE_KEY);
+  if (!quarantined) return;
+  downloadBlob(new Blob([quarantined], { type: "application/json" }), `50x-life-os-quarantine-${dayKey()}.json`);
+  showToast("Quarantined data exported");
 }
 
 function restoreMigrationSnapshot() {
@@ -3454,7 +3689,7 @@ async function decryptCloudState(envelope, config = cloudSync) {
   const unpacked = await gunzipBytes(new Uint8Array(decrypted), envelope.compressed);
   const result = JSON.parse(new TextDecoder().decode(unpacked));
   if (!result?.week || !Array.isArray(result.tasks)) throw new Error("Invalid Life OS state");
-  return result;
+  return assertTrustedStatePayload(result);
 }
 
 async function fetchRemoteEnvelope(config = cloudSync) {
@@ -3603,8 +3838,7 @@ async function connectCloudSync(payload) {
     const envelope = await fetchRemoteEnvelope(nextConfig);
     if (!envelope) throw new Error("The synced copy is no longer available");
     const imported = await decryptCloudState(envelope, nextConfig);
-    state = normalizeState(imported);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    replaceStateSafely(imported, "Connect encrypted sync device");
     cloudSync = { ...nextConfig, lastRevision: Number(envelope.revision) || 1, lastChangeId: envelope.changeId || "", lastSyncedAt: new Date().toISOString() };
     saveCloudSync();
     pendingSyncPair = null;
@@ -3622,8 +3856,7 @@ async function connectCloudSync(payload) {
 }
 
 function applyRemoteEnvelope(envelope, imported) {
-  state = normalizeState(imported);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  replaceStateSafely(imported, "Apply encrypted remote copy");
   cloudSync.lastRevision = Number(envelope.revision) || cloudSync.lastRevision;
   cloudSync.lastChangeId = envelope.changeId || cloudSync.lastChangeId;
   cloudSync.lastSyncedAt = new Date().toISOString();
@@ -3862,7 +4095,7 @@ function exportBackup() {
 async function importBackupFile(file) {
   const imported = JSON.parse(await file.text());
   if (!imported.week || !Array.isArray(imported.tasks)) throw new Error("Invalid backup");
-  state = normalizeState(imported);
+  replaceStateSafely(imported, "Plain backup import");
   saveState("Backup restored and upgraded");
   render();
 }
@@ -3903,17 +4136,31 @@ function undoIncomeEntry(id) {
   render();
 }
 
+function reverseBillPayment(bill, period) {
+  const payment = [...state.finances.billPayments].reverse().find(item => item.billId === bill.id && item.period === period && !item.reversedAt);
+  if (!payment) {
+    if (!confirm("This is a legacy paid marker with no linked cash record. Reopen the bill cycle?")) return;
+    bill.paidPeriods = bill.paidPeriods.filter(item => item !== period);
+    saveState("Legacy bill cycle reopened");
+    render();
+    return;
+  }
+  if (!confirm(`Reopen ${bill.name} and reverse its recorded payment?`)) return;
+  if (payment.transactionId && !payment.paidOutside) {
+    const reversal = createCashTransaction("income", payment.account, payment.amountMinor, dayKey(), "Bill payment reversal", `Reversal of ${payment.note || bill.name}`, { billPaymentId: payment.id, reversalOf: payment.transactionId });
+    payment.reversalTransactionId = reversal.id;
+  }
+  payment.reversedAt = new Date().toISOString();
+  bill.paidPeriods = bill.paidPeriods.filter(item => item !== period);
+  saveState("Bill payment reversed and cycle reopened");
+  render();
+}
+
 function captureMoneyReport() {
   const snapshot = moneyReportData(reportMonth);
-  let report = state.finances.monthlyMoneyReports.find(item => item.month === reportMonth);
-  if (!report) {
-    report = { id: crypto.randomUUID(), month: reportMonth, snapshot, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-    state.finances.monthlyMoneyReports.push(report);
-  } else {
-    report.snapshot = snapshot;
-    report.updatedAt = new Date().toISOString();
-  }
-  saveState("Monthly money report captured");
+  const capturedAt = new Date().toISOString();
+  state.finances.monthlyMoneyReports.push({ id: crypto.randomUUID(), month: reportMonth, snapshot, createdAt: capturedAt, updatedAt: capturedAt });
+  saveState("Versioned monthly money report captured");
   render();
 }
 
@@ -3936,6 +4183,22 @@ document.addEventListener("click", async event => {
     document.getElementById(target.dataset.closeDialog)?.close();
     return;
   }
+  if (target.dataset.homeSection) {
+    homeSection = target.dataset.homeSection;
+    renderHome();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  if (target.dataset.scheduleView) {
+    scheduleView = target.dataset.scheduleView;
+    return renderHome();
+  }
+  if (target.dataset.scheduleDateButton) {
+    scheduleDate = target.dataset.scheduleDateButton;
+    return renderHome();
+  }
+  if (target.dataset.editSchedule) return openEditor("schedule", target.dataset.editSchedule);
+  if (target.hasAttribute("data-open-recovery")) return openSettings();
   if (target.dataset.viewTarget) return goToView(target.dataset.viewTarget);
   if (target.dataset.destination) return goToDestination(target.dataset.destination, target.dataset.section || "");
   if (target.dataset.homeAction) {
@@ -3964,6 +4227,18 @@ document.addEventListener("click", async event => {
   }
   if (target.dataset.wealthMoneySection) {
     wealthMoneySection = target.dataset.wealthMoneySection;
+    renderMoney();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  if (target.dataset.stacksSection) {
+    stacksSection = target.dataset.stacksSection;
+    renderMoney();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  if (target.dataset.incomeSection) {
+    incomeSection = target.dataset.incomeSection;
     renderMoney();
     window.scrollTo({ top: 0, behavior: "smooth" });
     return;
@@ -4178,14 +4453,19 @@ document.addEventListener("click", async event => {
     saveState(daily.tomorrowReady ? "Tomorrow is prepared" : "Preparation reopened");
     return render();
   }
+  if (target.dataset.reverseBillPayment) {
+    const payment = state.finances.billPayments.find(item => item.id === target.dataset.reverseBillPayment && !item.reversedAt);
+    const bill = state.finances.bills.find(item => item.id === payment?.billId);
+    if (payment && bill) return reverseBillPayment(bill, payment.period);
+    return showToast("That payment record is no longer active");
+  }
   if (target.dataset.billPaid) {
     const bill = state.finances.bills.find(item => item.id === target.dataset.billPaid);
     if (!bill) return;
     const period = String(target.dataset.billPeriod);
     const paid = bill.paidPeriods.includes(period);
-    bill.paidPeriods = paid ? bill.paidPeriods.filter(item => item !== period) : [...bill.paidPeriods, period];
-    saveState(paid ? "Bill reopened" : "Bill marked paid");
-    return render();
+    if (paid) return reverseBillPayment(bill, period);
+    return openEditor("billPayment", null, { billId: bill.id, period });
   }
   if (target.dataset.maintenanceDone) {
     const item = state.maintenance.find(entry => entry.id === target.dataset.maintenanceDone);
@@ -4273,7 +4553,7 @@ document.addEventListener("click", async event => {
     return renumberRoutineSteps();
   }
   if (target.hasAttribute("data-disable-lock")) return disableLock();
-  ["task", "inbox", "maintenance", "cue", "script", "transaction", "transfer", "bill", "obligation", "investment", "contact", "experience", "journal", "goal", "project", "milestone", "blocker", "decision", "budget", "income", "savings", "purchase", "stack", "incomeStream", "allocationRule", "venture"].forEach(type => {
+  ["task", "schedule", "inbox", "maintenance", "cue", "script", "transaction", "transfer", "bill", "obligation", "investment", "contact", "experience", "journal", "goal", "project", "milestone", "blocker", "decision", "budget", "income", "savings", "purchase", "stack", "incomeStream", "allocationRule", "venture"].forEach(type => {
     const key = `edit${type[0].toUpperCase()}${type.slice(1)}`;
     if (target.dataset[key]) openEditor(type, target.dataset[key]);
   });
@@ -4285,6 +4565,15 @@ document.addEventListener("click", async event => {
 });
 
 document.addEventListener("keydown", event => {
+  if (event.target.matches('[role="tab"]') && ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+    const tabs = [...event.target.closest('[role="tablist"]').querySelectorAll('[role="tab"]')];
+    const current = tabs.indexOf(event.target);
+    const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : event.key === "ArrowRight" ? (current + 1) % tabs.length : (current - 1 + tabs.length) % tabs.length;
+    event.preventDefault();
+    tabs[next].focus();
+    tabs[next].click();
+    return;
+  }
   if ((event.key !== "Enter" && event.key !== " ") || !event.target.matches("[data-edit-script]")) return;
   event.preventDefault();
   openEditor("script", event.target.dataset.editScript);
@@ -4292,6 +4581,11 @@ document.addEventListener("keydown", event => {
 
 document.addEventListener("change", event => {
   const target = event.target;
+  if (target.dataset.scheduleDate !== undefined) {
+    scheduleDate = target.value || dayKey();
+    renderHome();
+    return;
+  }
   if (target.dataset.reportMonth !== undefined) {
     reportMonth = target.value || monthKey();
     renderMoney();
@@ -4392,6 +4686,8 @@ document.getElementById("device-sync").addEventListener("click", () => { documen
 document.getElementById("create-handoff").addEventListener("click", () => { document.getElementById("settings-dialog").close(); openEditor("handoff"); });
 document.getElementById("export-data").addEventListener("click", exportBackup);
 document.getElementById("restore-migration").addEventListener("click", restoreMigrationSnapshot);
+document.getElementById("restore-replacement").addEventListener("click", restoreReplacementSnapshot);
+document.getElementById("export-corrupt-state").addEventListener("click", exportCorruptState);
 document.getElementById("import-data").addEventListener("change", async event => {
   try {
     await importBackupFile(event.target.files[0]);
@@ -4414,6 +4710,7 @@ document.getElementById("import-handoff").addEventListener("change", async event
 });
 document.getElementById("reset-data").addEventListener("click", () => {
   if (!confirm("Reset 50X Life OS and replace all current data? Export a backup first if you may want it later.")) return;
+  snapshotBeforeReplacement("Manual reset");
   state = defaultState();
   saveState("Fresh 50X system created");
   render();

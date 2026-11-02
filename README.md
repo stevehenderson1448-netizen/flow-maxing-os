@@ -5,6 +5,8 @@ A dependency-free, mobile-first personal command centre organised around five cl
 ## Included systems
 
 - Compact Home command centre using energy, routines, priorities, deadlines, payments, plans, and smart cues
+- Three-part Home workspace with Command, a proper day/week Schedule, and a dedicated Smart Cues view
+- Timed schedule blocks linked to actions, alongside automatic bill, deadline, maintenance, and life-plan entries
 - Five-destination mobile navigation: Home, Wealth, Build, Life, and More, with focused tabs inside each section
 - A dedicated Life module for identity, relationships, experiences, personal care, faith, and private reflection
 - Build/Maintain/Experience daily planning with explicit user-controlled operating modes
@@ -25,10 +27,11 @@ A dependency-free, mobile-first personal command centre organised around five cl
 - Subscription audit with renewals, remembered price changes, and review tracking
 - Life-maintenance calendar for appointments, birthdays, renewals, car, documents, health, and home
 - Financial ledger, obligations, investments, and auditable forecast states that never silently change cash
+- Atomic bill payments with linked cash transactions, reversible payment history, immutable ledger corrections, and versioned monthly reports
 - Private local assistant with fact/assumption separation, explicit data permissions, approval before changes, and reversible change history
 - Optional reminders and a local PIN or device-authenticator lock
 - End-to-end encrypted phone/desktop sync with automatic Inbox merging, one-time device handoffs, and portable backup files
-- Backed-up version-12 migration with recoverable upgrade snapshots and legacy savings converted into auditable opening stack allocations
+- Backed-up version-13 migration with corrupt-state quarantine, pre-replacement rollback, strict imported-ID validation, and legacy savings converted into auditable opening stack allocations
 - Account-safe transfers, confirmed bill dates, protected spending budgets, weekly balance reconciliation, and received-income allocation
 - Compact tabbed overviews that keep detail screens available without turning every landing page into a long feed
 
@@ -67,4 +70,4 @@ HTTPS is required for offline installation and the service worker on a deployed 
 
 ## Verification
 
-`tests/smoke.cjs` verifies version-12 migration and rollback data, account-safe money calculations, stack cash separation, Income Empire no-double-counting, linked transfers, reversible records, dialog closing, and all five destinations plus their tabbed workspaces at 320px, 375px, and 430px widths. It requires Node.js plus Playwright.
+`tests/smoke.cjs` verifies version-13 migration, schedule workspaces, recovery snapshots, unsafe-import rejection, account-safe money calculations, protected stack rules, bill payment reversals, Income Empire no-double-counting, versioned reports, linked transfers, dialog closing, and all five destinations at 320px, 375px, and 430px widths. GitHub Pages deployment runs the suite before publishing.

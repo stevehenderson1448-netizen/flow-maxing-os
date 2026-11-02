@@ -4758,6 +4758,49 @@ main { padding-bottom: calc(102px + env(safe-area-inset-bottom)); }
 .more-philosophy h2 { margin: 4px 0; font: 500 27px/1.1 Georgia,serif; }
 .more-philosophy p:last-child { margin: 0; color: var(--ink-soft); font-size: 9px; }
 
+.home-tabs { margin: 0 0 12px; }
+.home-command-coming { margin-top: 12px; }
+.home-command-coming .coming-up-card { min-height: 0; }
+.home-workspace { display: grid; gap: 12px; }
+.workspace-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 17px 18px; border: 1px solid rgba(210,188,141,.16); border-radius: 17px; background: #151612; }
+.workspace-heading h2 { margin: 3px 0; font: 500 27px/1.08 Georgia,serif; }
+.workspace-heading p:last-child { margin: 0; color: var(--ink-soft); font-size: 9px; }
+.schedule-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.schedule-view-toggle { display: flex; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 11px; background: #111312; }
+.schedule-view-toggle button { min-height: 34px; padding: 7px 14px; border: 0; border-radius: 8px; color: var(--ink-soft); background: transparent; font-size: 8px; font-weight: 800; }
+.schedule-view-toggle button.active { color: #17140f; background: var(--gold); }
+.schedule-controls label { display: flex; align-items: center; gap: 8px; color: var(--ink-soft); font-size: 8px; font-weight: 750; }
+.schedule-controls input { min-height: 38px; width: auto; padding: 7px 10px; }
+.schedule-date-strip { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 6px; }
+.schedule-date-strip button { display: grid; place-items: center; gap: 3px; min-height: 57px; border: 1px solid var(--line); border-radius: 11px; color: var(--ink-soft); background: #111312; }
+.schedule-date-strip small { font-size: 7px; text-transform: uppercase; }
+.schedule-date-strip strong { color: var(--ink); font: 550 16px/1 Georgia,serif; }
+.schedule-date-strip button.active { border-color: rgba(210,188,141,.45); color: var(--gold); background: #211f18; }
+.schedule-date-strip button.active strong { color: var(--gold-soft); }
+.schedule-agenda { display: grid; gap: 10px; }
+.schedule-day { overflow: hidden; border: 1px solid var(--line); border-radius: 15px; background: #111312; }
+.schedule-day > header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--line); background: #161916; }
+.schedule-day > header span { color: var(--gold); font-size: 8px; font-weight: 850; letter-spacing: .07em; text-transform: uppercase; }
+.schedule-day > header strong { font-size: 9px; }
+.schedule-day > div { display: grid; gap: 1px; padding: 6px; }
+.schedule-item { display: grid; grid-template-columns: 74px minmax(0,1fr) auto; align-items: center; gap: 12px; min-height: 58px; padding: 9px 10px; border: 0; border-radius: 10px; color: var(--ink); background: transparent; text-align: left; }
+.schedule-item:hover { background: #191c19; }
+.schedule-item time { color: var(--gold-soft); font-size: 8px; font-weight: 800; }
+.schedule-item span { display: grid; gap: 3px; min-width: 0; }
+.schedule-item strong { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.schedule-item small { color: var(--ink-soft); font-size: 8px; text-transform: capitalize; }
+.schedule-item i { color: var(--gold); font-style: normal; }
+.schedule-item.completed { opacity: .55; }
+.schedule-item.completed strong { text-decoration: line-through; }
+.smart-cue-workspace { display: grid; gap: 8px; }
+.smart-cue-detail { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 74px; padding: 14px 15px; border: 1px solid var(--line); border-radius: 14px; background: #111312; }
+.smart-cue-detail > div { display: grid; gap: 5px; }
+.smart-cue-detail span { color: var(--gold); font-size: 8px; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; }
+.smart-cue-detail strong { font-size: 10px; line-height: 1.45; }
+.smart-cue-detail button { min-height: 38px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 9px; color: var(--gold-soft); background: #1a1d1b; font-size: 8px; font-weight: 800; white-space: nowrap; }
+.recovery-alert { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; margin-bottom: 12px; padding: 11px 13px; border: 1px solid rgba(191,87,87,.32); border-radius: 12px; color: #f0d9d9; background: rgba(126,40,40,.16); text-align: left; }
+.recovery-alert span { color: #c9a7a7; font-size: 8px; }
+
 .editor-dialog { border-color: var(--line-strong); background: #101211; }
 .editor-dialog::backdrop { background: rgba(0,0,0,.74); }
 .dialog-head h2 { font-family: Georgia,serif; font-weight: 500; }
@@ -4828,6 +4871,25 @@ input, textarea, select { border-color: var(--line); color: var(--ink); backgrou
   .overview-quick-row { grid-template-columns: 1fr 1fr; }
   .section-tabs { margin-inline: -2px; }
   .section-tabs button { min-width: 70px; padding-inline: 10px; }
+  .stack-grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 7px; }
+  .stack-card { border-radius: 14px; }
+  .stack-card-head, .stack-card-foot { padding: 8px 9px; }
+  .stack-card-main { gap: 6px; padding: 7px 9px 10px; }
+  .stack-card-main > strong { font-size: 14px; }
+  .stack-card-main > span { font-size: 18px; }
+  .stack-card-main > span small { display: block; margin-top: 3px; font-size: 8px; }
+  .stack-card-main > em { min-height: 22px; font-size: 7px; }
+  .stack-card-foot span { max-width: 62px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .workspace-heading { align-items: stretch; flex-direction: column; padding: 14px; }
+  .workspace-heading > button { width: 100%; }
+  .schedule-controls { align-items: stretch; flex-direction: column; }
+  .schedule-controls label { justify-content: space-between; }
+  .schedule-controls input { flex: 1; }
+  .schedule-date-strip { gap: 4px; }
+  .schedule-date-strip button { min-height: 52px; }
+  .schedule-item { grid-template-columns: 62px minmax(0,1fr) auto; gap: 8px; }
+  .smart-cue-detail { align-items: flex-start; flex-direction: column; }
+  .smart-cue-detail button { width: 100%; }
 }
 
 @media (max-width: 360px) {
