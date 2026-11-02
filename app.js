@@ -2,12 +2,13 @@ const STORAGE_KEY = "flow-maxing-os-v1";
 const SECURITY_KEY = "50x-life-os-security-v1";
 const CLOUD_SYNC_KEY = "50x-life-os-cloud-sync-v1";
 const MIGRATION_BACKUP_KEY = "50x-life-os-pre-v8-backup";
-const LATEST_MIGRATION_BACKUP_KEY = "50x-life-os-pre-v11-backup";
+const LATEST_MIGRATION_BACKUP_KEY = "50x-life-os-pre-v12-backup";
 const PRE_RESTORE_BACKUP_KEY = "50x-life-os-before-snapshot-restore";
-const CURRENT_STATE_VERSION = 11;
+const CURRENT_STATE_VERSION = 12;
 const LIVE_URL = "https://stevehenderson1448-netizen.github.io/flow-maxing-os/";
 const SYNC_RELAY = "https://mantledb.sh/v2";
 const SYNC_PATH = "life-os";
+const FINANCIAL_ACCOUNTS = ["personal", "business", "held", "physical", "trading"];
 
 const DEFAULT_MODES = {
   minimum: { label: "Minimum", note: "An intentionally smaller day. Preserve the foundations and one essential action.", routine: [["Water + daylight", "When I leave the bed, I open the curtains.", 2, "Stand by the window and take three slow breaths."], ["Breathe or meditate", "After drinking water, I sit in the prepared space.", 2, "Take three deliberate breaths where I am."], ["Eat properly", "When I enter the kitchen, I prepare something simple.", 10, "Eat the easiest available nourishing option."], ["One essential action", "After the foundations, I open the prepared next action.", 25, "Work on the first visible step for five minutes."], ["Prepare for sleep", "When I plug in my phone, I begin shutting down.", 10, "Dim the room and put the phone away."]] },
@@ -94,8 +95,8 @@ const defaultState = () => ({
     { id: crypto.randomUUID(), trigger: "I feel mentally exhausted", response: "I switch to a simpler task or recover instead of forcing complex work." }
   ],
   finances: {
-    balances: { personal: 0, business: 0, held: 0 }, balancesMinor: { personal: 0, business: 0, held: 0 },
-    settings: { reserveTarget: 500, reserveTargetMinor: 50000, enjoymentAllowance: 0, enjoymentAllowanceMinor: 0 },
+    balances: { personal: 0, business: 0, held: 0, physical: 0, trading: 0 }, balancesMinor: { personal: 0, business: 0, held: 0, physical: 0, trading: 0 },
+    settings: { reserveTarget: 500, reserveTargetMinor: 50000, enjoymentAllowance: 0, enjoymentAllowanceMinor: 0, taxProvisionRate: 0 },
     transactions: [],
     transfers: [],
     bills: [
@@ -110,8 +111,26 @@ const defaultState = () => ({
       { id: crypto.randomUUID(), name: "Food", category: "Food", account: "personal", amount: 100, amountMinor: 10000, month: monthKey(), recurring: true, protect: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
       { id: crypto.randomUUID(), name: "Transport", category: "Transport", account: "personal", amount: 100, amountMinor: 10000, month: monthKey(), recurring: true, protect: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
     ],
-    incomeForecasts: [], savingsGoals: [], plannedPurchases: [], reconciliations: [], incomeAllocations: [], archivedBills: []
+    incomeForecasts: [], savingsGoals: [], plannedPurchases: [], reconciliations: [], incomeAllocations: [], archivedBills: [],
+    stacks: [
+      { id: crypto.randomUUID(), name: "CLA Stack", kind: "vehicle", target: 15000, targetMinor: 1500000, backingAccount: "personal", targetDate: "", additionalCosts: 0, additionalCostsMinor: 0, experienceId: "", purchaseId: "", status: "active", order: 0, notes: "Mercedes-Benz CLA purchase fund, with insurance and maintenance considered separately.", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      { id: crypto.randomUUID(), name: "Holiday Stack", kind: "holiday", target: 0, targetMinor: 0, backingAccount: "personal", targetDate: "", additionalCosts: 0, additionalCostsMinor: 0, experienceId: "", purchaseId: "", status: "active", order: 1, notes: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      { id: crypto.randomUUID(), name: "Garms & Shoes Stack", kind: "fashion", target: 0, targetMinor: 0, backingAccount: "personal", targetDate: "", additionalCosts: 0, additionalCostsMinor: 0, experienceId: "", purchaseId: "", status: "active", order: 2, notes: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      { id: crypto.randomUUID(), name: "General Stack", kind: "general", target: 0, targetMinor: 0, backingAccount: "personal", targetDate: "", additionalCosts: 0, additionalCostsMinor: 0, experienceId: "", purchaseId: "", status: "active", order: 3, notes: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      { id: crypto.randomUUID(), name: "Physical Cash Stack", kind: "cash", target: 0, targetMinor: 0, backingAccount: "physical", targetDate: "", additionalCosts: 0, additionalCostsMinor: 0, experienceId: "", purchaseId: "", status: "active", order: 4, notes: "Backed only by the recorded Physical Cash location.", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      { id: crypto.randomUUID(), name: "Reserve Stack", kind: "reserve", target: 500, targetMinor: 50000, backingAccount: "personal", targetDate: "", additionalCosts: 0, additionalCostsMinor: 0, experienceId: "", purchaseId: "", status: "active", order: 5, notes: "Emergency and financial-stability reserve.", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+    ],
+    stackEntries: [],
+    incomeStreams: [
+      { id: crypto.randomUUID(), name: "Memecoin Trading", category: "trading", ventureId: "", status: "active", notes: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      { id: crypto.randomUUID(), name: "Forex Trading", category: "trading", ventureId: "", status: "active", notes: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      { id: crypto.randomUUID(), name: "Video Clipping", category: "content", ventureId: "", status: "active", notes: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      { id: crypto.randomUUID(), name: "Digital Business / Client Work", category: "client", ventureId: "", status: "active", notes: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      { id: crypto.randomUUID(), name: "Other Income", category: "other", ventureId: "", status: "active", notes: "", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+    ],
+    incomeEntries: [], allocationRules: [], financialCueDismissals: {}, monthlyMoneyReports: []
   },
+  ventures: [],
   maintenance: [],
   daily: {},
   reflection: { win: "", friction: "", lesson: "", next: "", recovery: "maintain", ratings: [3, 3, 3, 3, 3] },
@@ -288,6 +307,7 @@ function normalizeProjects(items) {
     name: String(item.name || "Project"),
     category: ["business", "software", "education", "creative", "personal"].includes(item.category) ? item.category : "personal",
     goalId: String(item.goalId || ""),
+    ventureId: String(item.ventureId || ""),
     outcome: String(item.outcome || ""),
     nextReviewDate: String(item.nextReviewDate || ""),
     priority: Math.min(3, Math.max(1, Number(item.priority) || 2)),
@@ -331,7 +351,7 @@ function normalizeTransactions(items) {
     ...item,
     id: item.id || crypto.randomUUID(),
     type: item.type === "income" ? "income" : "expense",
-    account: ["personal", "business", "held"].includes(item.account) ? item.account : "personal",
+    account: FINANCIAL_ACCOUNTS.includes(item.account) ? item.account : "personal",
     amount: Math.max(0, Number(item.amount) || fromMinor(item.amountMinor)),
     amountMinor: Math.max(0, minorValue(item, "amountMinor", "amount")),
     budgetId: String(item.budgetId || ""),
@@ -350,13 +370,16 @@ function normalizeTransfers(items) {
   if (!Array.isArray(items)) return [];
   return items.map(item => ({
     id: item.id || crypto.randomUUID(),
-    fromAccount: ["personal", "business", "held"].includes(item.fromAccount) ? item.fromAccount : "personal",
-    toAccount: ["personal", "business", "held"].includes(item.toAccount) ? item.toAccount : "business",
+    fromAccount: FINANCIAL_ACCOUNTS.includes(item.fromAccount) ? item.fromAccount : "personal",
+    toAccount: FINANCIAL_ACCOUNTS.includes(item.toAccount) ? item.toAccount : "business",
     amount: Math.max(0, Number(item.amount) || fromMinor(item.amountMinor)),
     amountMinor: Math.max(0, minorValue(item, "amountMinor", "amount")),
     date: String(item.date || dayKey()),
     note: String(item.note || "Account transfer"),
     allocationId: String(item.allocationId || ""),
+    stackEntryId: String(item.stackEntryId || ""),
+    empireEntryId: String(item.empireEntryId || ""),
+    reversalOf: String(item.reversalOf || ""),
     createdAt: item.createdAt || new Date().toISOString()
   })).filter(item => item.fromAccount !== item.toAccount && item.amountMinor > 0);
 }
@@ -366,9 +389,9 @@ function normalizeReconciliations(items) {
   return items.map(item => ({
     id: item.id || crypto.randomUUID(),
     date: String(item.date || dayKey()),
-    recordedMinor: { personal: Number(item.recordedMinor?.personal) || 0, business: Number(item.recordedMinor?.business) || 0, held: Number(item.recordedMinor?.held) || 0 },
-    actualMinor: { personal: Number(item.actualMinor?.personal) || 0, business: Number(item.actualMinor?.business) || 0, held: Number(item.actualMinor?.held) || 0 },
-    differencesMinor: { personal: Number(item.differencesMinor?.personal) || 0, business: Number(item.differencesMinor?.business) || 0, held: Number(item.differencesMinor?.held) || 0 },
+    recordedMinor: Object.fromEntries(FINANCIAL_ACCOUNTS.map(account => [account, Number(item.recordedMinor?.[account]) || 0])),
+    actualMinor: Object.fromEntries(FINANCIAL_ACCOUNTS.map(account => [account, Number(item.actualMinor?.[account]) || 0])),
+    differencesMinor: Object.fromEntries(FINANCIAL_ACCOUNTS.map(account => [account, Number(item.differencesMinor?.[account]) || 0])),
     applied: Boolean(item.applied),
     adjustmentIds: Array.isArray(item.adjustmentIds) ? item.adjustmentIds.map(String) : [],
     notes: String(item.notes || ""),
@@ -472,6 +495,153 @@ function normalizePlannedPurchases(items) {
   }));
 }
 
+function normalizeStacks(items, fallback = []) {
+  const source = Array.isArray(items) ? items : fallback;
+  return source.map((item, index) => ({
+    id: item.id || crypto.randomUUID(),
+    name: String(item.name || "Savings Stack"),
+    kind: ["vehicle", "holiday", "fashion", "general", "cash", "reserve", "business", "custom"].includes(item.kind) ? item.kind : "custom",
+    target: Math.max(0, Number(item.target) || fromMinor(item.targetMinor)),
+    targetMinor: Math.max(0, minorValue(item, "targetMinor", "target")),
+    backingAccount: FINANCIAL_ACCOUNTS.includes(item.backingAccount) && item.backingAccount !== "held" ? item.backingAccount : "personal",
+    targetDate: String(item.targetDate || item.deadline || ""),
+    additionalCosts: Math.max(0, Number(item.additionalCosts) || fromMinor(item.additionalCostsMinor)),
+    additionalCostsMinor: Math.max(0, minorValue(item, "additionalCostsMinor", "additionalCosts")),
+    experienceId: String(item.experienceId || ""),
+    purchaseId: String(item.purchaseId || ""),
+    status: ["active", "paused", "completed", "archived"].includes(item.status) ? item.status : "active",
+    order: Number.isFinite(Number(item.order)) ? Number(item.order) : index,
+    notes: String(item.notes || ""),
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
+  }));
+}
+
+function normalizeStackEntries(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map(item => ({
+    id: item.id || crypto.randomUUID(),
+    type: ["add", "move", "withdraw"].includes(item.type) ? item.type : "add",
+    stackId: String(item.stackId || ""),
+    fromStackId: String(item.fromStackId || ""),
+    toStackId: String(item.toStackId || ""),
+    amount: Math.max(0, Number(item.amount) || fromMinor(item.amountMinor)),
+    amountMinor: Math.max(0, minorValue(item, "amountMinor", "amount")),
+    sourceAccount: FINANCIAL_ACCOUNTS.includes(item.sourceAccount) ? item.sourceAccount : "personal",
+    date: String(item.date || dayKey()),
+    note: String(item.note || ""),
+    cashTransactionId: String(item.cashTransactionId || ""),
+    transferId: String(item.transferId || ""),
+    incomeEntryId: String(item.incomeEntryId || ""),
+    reversalTransactionId: String(item.reversalTransactionId || ""),
+    reversedAt: String(item.reversedAt || ""),
+    createdAt: item.createdAt || new Date().toISOString()
+  })).filter(item => item.amountMinor > 0);
+}
+
+function normalizeIncomeStreams(items, fallback = []) {
+  const source = Array.isArray(items) ? items : fallback;
+  return source.map(item => ({
+    id: item.id || crypto.randomUUID(),
+    name: String(item.name || "Income stream"),
+    category: ["trading", "content", "client", "business", "freelance", "employment", "other"].includes(item.category) ? item.category : "other",
+    ventureId: String(item.ventureId || ""),
+    status: ["active", "paused", "archived"].includes(item.status) ? item.status : "active",
+    notes: String(item.notes || ""),
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
+  }));
+}
+
+function normalizeIncomeEntries(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map(item => ({
+    id: item.id || crypto.randomUUID(),
+    streamId: String(item.streamId || ""),
+    kind: ["revenue", "expense", "trading_profit", "trading_loss", "fee", "capital_deposit", "capital_withdrawal", "unrealized_gain", "unrealized_loss"].includes(item.kind) ? item.kind : "revenue",
+    status: ["expected", "confirmed", "received", "recorded"].includes(item.status) ? item.status : "recorded",
+    amount: Math.max(0, Number(item.amount) || fromMinor(item.amountMinor)),
+    amountMinor: Math.max(0, minorValue(item, "amountMinor", "amount")),
+    date: String(item.date || dayKey()),
+    account: FINANCIAL_ACCOUNTS.includes(item.account) ? item.account : "business",
+    fromAccount: FINANCIAL_ACCOUNTS.includes(item.fromAccount) ? item.fromAccount : "business",
+    toAccount: FINANCIAL_ACCOUNTS.includes(item.toAccount) ? item.toAccount : "trading",
+    description: String(item.description || ""),
+    estimate: Boolean(item.estimate),
+    cashTransactionId: String(item.cashTransactionId || ""),
+    transferId: String(item.transferId || ""),
+    allocationAppliedAt: String(item.allocationAppliedAt || ""),
+    reversedAt: String(item.reversedAt || ""),
+    reversalTransactionId: String(item.reversalTransactionId || ""),
+    reversalTransferId: String(item.reversalTransferId || ""),
+    createdAt: item.createdAt || new Date().toISOString(),
+    receivedAt: String(item.receivedAt || "")
+  })).filter(item => item.amountMinor > 0);
+}
+
+function normalizeVentures(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map(item => ({
+    id: item.id || crypto.randomUUID(),
+    name: String(item.name || "Business venture"),
+    description: String(item.description || ""),
+    status: ["idea", "research", "building", "testing", "active", "scaling", "paused", "archived"].includes(item.status) ? item.status : "idea",
+    notes: String(item.notes || ""),
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
+  }));
+}
+
+function normalizeAllocationRules(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map(item => ({
+    id: item.id || crypto.randomUUID(),
+    streamId: String(item.streamId || ""),
+    stackId: String(item.stackId || ""),
+    percentage: Math.min(100, Math.max(0, Number(item.percentage) || 0)),
+    priority: Math.min(9, Math.max(1, Number(item.priority) || 5)),
+    active: item.active !== false,
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
+  })).filter(item => item.streamId && item.stackId && item.percentage > 0);
+}
+
+function normalizeMonthlyMoneyReports(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map(item => ({
+    id: item.id || crypto.randomUUID(),
+    month: String(item.month || monthKey()),
+    snapshot: item.snapshot && typeof item.snapshot === "object" ? item.snapshot : {},
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || item.createdAt || new Date().toISOString()
+  }));
+}
+
+function migrateWealthCollections(finances, inputVersion, fallback) {
+  if (inputVersion >= 12) return {
+    stacks: Array.isArray(finances?.stacks) ? finances.stacks : fallback.stacks,
+    stackEntries: Array.isArray(finances?.stackEntries) ? finances.stackEntries : [],
+    incomeStreams: Array.isArray(finances?.incomeStreams) ? finances.incomeStreams : fallback.incomeStreams
+  };
+  const stacks = clone(fallback.stacks);
+  const stackEntries = [];
+  const key = value => String(value || "").toLowerCase().replace(/stack/g, "").replace(/[^a-z0-9]/g, "");
+  (Array.isArray(finances?.savingsGoals) ? finances.savingsGoals : []).filter(item => item.status !== "archived").forEach((goal, index) => {
+    let stack = stacks.find(item => key(item.name) === key(goal.name));
+    if (!stack) {
+      stack = { id: crypto.randomUUID(), name: String(goal.name || "Migrated Savings Stack"), kind: "custom", target: Math.max(0, Number(goal.target) || fromMinor(goal.targetMinor)), targetMinor: Math.max(0, minorValue(goal, "targetMinor", "target")), backingAccount: "personal", targetDate: String(goal.deadline || ""), additionalCosts: 0, additionalCostsMinor: 0, experienceId: "", purchaseId: "", status: goal.status === "completed" ? "completed" : "active", order: stacks.length + index, notes: "Migrated from the version-11 savings goal.", createdAt: goal.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
+      stacks.push(stack);
+    } else {
+      stack.targetMinor = Math.max(stack.targetMinor, minorValue(goal, "targetMinor", "target"));
+      stack.target = fromMinor(stack.targetMinor);
+      stack.targetDate ||= String(goal.deadline || "");
+    }
+    const savedMinor = Math.max(0, minorValue(goal, "savedMinor", "saved"));
+    if (savedMinor) stackEntries.push({ id: crypto.randomUUID(), type: "add", stackId: stack.id, fromStackId: "", toStackId: "", amount: fromMinor(savedMinor), amountMinor: savedMinor, sourceAccount: stack.backingAccount, date: String(goal.createdAt || dayKey()).slice(0, 10), note: `Opening allocation migrated from ${goal.name}`, cashTransactionId: "", reversalTransactionId: "", reversedAt: "", createdAt: goal.createdAt || new Date().toISOString() });
+  });
+  return { stacks, stackEntries, incomeStreams: clone(fallback.incomeStreams) };
+}
+
 function validateState(candidate) {
   if (!candidate || typeof candidate !== "object") return false;
   if (candidate.version !== CURRENT_STATE_VERSION) return false;
@@ -480,6 +650,8 @@ function validateState(candidate) {
   if (!Array.isArray(candidate.goals) || !Array.isArray(candidate.projects) || !Array.isArray(candidate.milestones)) return false;
   if (!Array.isArray(candidate.finances.budgets) || !Array.isArray(candidate.finances.incomeForecasts) || !Array.isArray(candidate.finances.savingsGoals) || !Array.isArray(candidate.finances.plannedPurchases)) return false;
   if (!Array.isArray(candidate.finances.transfers) || !Array.isArray(candidate.finances.reconciliations) || !Array.isArray(candidate.finances.incomeAllocations) || !Array.isArray(candidate.finances.archivedBills)) return false;
+  if (!Array.isArray(candidate.finances.stacks) || !Array.isArray(candidate.finances.stackEntries) || !Array.isArray(candidate.finances.incomeStreams) || !Array.isArray(candidate.finances.incomeEntries)) return false;
+  if (!Array.isArray(candidate.finances.allocationRules) || !Array.isArray(candidate.finances.monthlyMoneyReports) || !Array.isArray(candidate.ventures)) return false;
   if (!candidate.life || !Array.isArray(candidate.life.contacts) || !Array.isArray(candidate.life.experiences) || !Array.isArray(candidate.life.journal)) return false;
   return true;
 }
@@ -504,15 +676,12 @@ function normalizeState(input) {
     if (day.mode === "steady") day.mode = "standard";
   });
   const balances = { ...base.finances.balances, ...(input.finances?.balances || {}) };
-  const balancesMinor = {
-    personal: Number.isInteger(input.finances?.balancesMinor?.personal) ? input.finances.balancesMinor.personal : toMinor(balances.personal),
-    business: Number.isInteger(input.finances?.balancesMinor?.business) ? input.finances.balancesMinor.business : toMinor(balances.business),
-    held: Number.isInteger(input.finances?.balancesMinor?.held) ? input.finances.balancesMinor.held : toMinor(balances.held)
-  };
+  const balancesMinor = Object.fromEntries(FINANCIAL_ACCOUNTS.map(account => [account, Number.isInteger(input.finances?.balancesMinor?.[account]) ? input.finances.balancesMinor[account] : toMinor(balances[account])]));
   const financeSettings = { ...base.finances.settings, ...(input.finances?.settings || {}) };
   financeSettings.reserveTargetMinor = Number.isInteger(input.finances?.settings?.reserveTargetMinor) ? input.finances.settings.reserveTargetMinor : toMinor(financeSettings.reserveTarget);
   financeSettings.enjoymentAllowanceMinor = Number.isInteger(input.finances?.settings?.enjoymentAllowanceMinor) ? input.finances.settings.enjoymentAllowanceMinor : toMinor(financeSettings.enjoymentAllowance);
   const migratedFinance = migrateFinancialCollections(input.finances, inputVersion, base.finances);
+  const migratedWealth = migrateWealthCollections(input.finances, inputVersion, base.finances);
   const normalized = {
     ...base,
     ...input,
@@ -521,6 +690,7 @@ function normalizeState(input) {
     tasks: normalizeTasks(input.tasks, base.tasks),
     goals: normalizeGoals(input.goals),
     projects: normalizeProjects(input.projects),
+    ventures: normalizeVentures(input.ventures),
     milestones: normalizeMilestones(input.milestones),
     projectDecisions: normalizeProjectRecords(input.projectDecisions, "decision"),
     projectBlockers: normalizeProjectRecords(input.projectBlockers, "blocker"),
@@ -547,7 +717,14 @@ function normalizeState(input) {
       plannedPurchases: normalizePlannedPurchases(input.finances?.plannedPurchases),
       reconciliations: normalizeReconciliations(input.finances?.reconciliations),
       incomeAllocations: normalizeIncomeAllocations(input.finances?.incomeAllocations),
-      archivedBills: migratedFinance.archivedBills
+      archivedBills: migratedFinance.archivedBills,
+      stacks: normalizeStacks(migratedWealth.stacks, base.finances.stacks),
+      stackEntries: normalizeStackEntries(migratedWealth.stackEntries),
+      incomeStreams: normalizeIncomeStreams(migratedWealth.incomeStreams, base.finances.incomeStreams),
+      incomeEntries: normalizeIncomeEntries(input.finances?.incomeEntries),
+      allocationRules: normalizeAllocationRules(input.finances?.allocationRules),
+      financialCueDismissals: input.finances?.financialCueDismissals && typeof input.finances.financialCueDismissals === "object" && !Array.isArray(input.finances.financialCueDismissals) ? input.finances.financialCueDismissals : {},
+      monthlyMoneyReports: normalizeMonthlyMoneyReports(input.finances?.monthlyMoneyReports)
     },
     maintenance: normalizeMaintenance(input.maintenance),
     daily,
@@ -601,6 +778,11 @@ let state = loadState();
 let security = loadSecurity();
 let cloudSync = loadCloudSync();
 let activeView = "today";
+let moneySection = "overview";
+let incomePeriod = "month";
+let incomeCustomStart = `${monthKey()}-01`;
+let incomeCustomEnd = dayKey();
+let reportMonth = monthKey();
 let editor = null;
 let toastTimer;
 let lockTimer;
@@ -1002,6 +1184,62 @@ function budgetRemainingMinor(budget, reference = new Date()) {
   return Math.max(0, minorValue(budget, "amountMinor", "amount") - budgetSpentAgainstMinor(budget, reference));
 }
 
+function stackLedgerTotals(cutoffDate = "") {
+  const balancesMinor = Object.fromEntries(state.finances.stacks.map(stack => [stack.id, 0]));
+  state.finances.stackEntries.filter(item => !item.reversedAt && (!cutoffDate || item.date <= cutoffDate)).forEach(item => {
+    const amountMinor = minorValue(item, "amountMinor", "amount");
+    if (item.type === "move") {
+      balancesMinor[item.fromStackId] = (balancesMinor[item.fromStackId] || 0) - amountMinor;
+      balancesMinor[item.toStackId] = (balancesMinor[item.toStackId] || 0) + amountMinor;
+      return;
+    }
+    const stackId = item.stackId;
+    balancesMinor[stackId] = (balancesMinor[stackId] || 0) + (item.type === "withdraw" ? -amountMinor : amountMinor);
+  });
+  const accountAllocatedMinor = Object.fromEntries(FINANCIAL_ACCOUNTS.map(account => [account, 0]));
+  let totalAllocatedMinor = 0;
+  let reserveAllocatedMinor = 0;
+  state.finances.stacks.filter(item => item.status !== "archived").forEach(stack => {
+    const balanceMinor = Math.max(0, Number(balancesMinor[stack.id]) || 0);
+    accountAllocatedMinor[stack.backingAccount] = (accountAllocatedMinor[stack.backingAccount] || 0) + balanceMinor;
+    totalAllocatedMinor += balanceMinor;
+    if (stack.kind === "reserve") reserveAllocatedMinor += balanceMinor;
+  });
+  return { balancesMinor, accountAllocatedMinor, totalAllocatedMinor, reserveAllocatedMinor };
+}
+
+function incomePeriodRange(period = "month", reference = new Date()) {
+  const year = reference.getFullYear();
+  const month = reference.getMonth();
+  if (period === "today") return { start: dayKey(reference), end: dayKey(reference) };
+  if (period === "week") return { start: weekStartKey(reference), end: dayKey(addDays(dateFromKey(weekStartKey(reference)), 6)) };
+  if (period === "lastMonth") return { start: dayKey(new Date(year, month - 1, 1)), end: dayKey(new Date(year, month, 0)) };
+  if (period === "year") return { start: `${year}-01-01`, end: `${year}-12-31` };
+  if (period === "all") return { start: "0000-01-01", end: "9999-12-31" };
+  return { start: dayKey(new Date(year, month, 1)), end: dayKey(new Date(year, month + 1, 0)) };
+}
+
+function incomeEmpireMetrics(period = "month", customRange = null) {
+  const range = customRange || incomePeriodRange(period);
+  const entries = state.finances.incomeEntries.filter(item => !item.reversedAt && item.date >= range.start && item.date <= range.end);
+  const recognized = entries.filter(item => item.status !== "expected");
+  const earningKinds = ["revenue", "trading_profit"];
+  const costKinds = ["expense", "trading_loss", "fee"];
+  const revenueMinor = recognized.filter(item => earningKinds.includes(item.kind)).reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
+  const expensesMinor = recognized.filter(item => costKinds.includes(item.kind)).reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
+  const cashReceivedMinor = entries.filter(item => earningKinds.includes(item.kind) && item.status === "received").reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
+  const pendingMinor = entries.filter(item => earningKinds.includes(item.kind) && ["expected", "confirmed"].includes(item.status)).reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
+  const capitalDeployedMinor = entries.reduce((sum, item) => sum + (item.kind === "capital_deposit" ? minorValue(item, "amountMinor", "amount") : item.kind === "capital_withdrawal" ? -minorValue(item, "amountMinor", "amount") : 0), 0);
+  const unrealizedMinor = entries.reduce((sum, item) => sum + (item.kind === "unrealized_gain" ? minorValue(item, "amountMinor", "amount") : item.kind === "unrealized_loss" ? -minorValue(item, "amountMinor", "amount") : 0), 0);
+  const streams = state.finances.incomeStreams.map(stream => {
+    const streamEntries = recognized.filter(item => item.streamId === stream.id);
+    const streamRevenueMinor = streamEntries.filter(item => earningKinds.includes(item.kind)).reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
+    const streamExpensesMinor = streamEntries.filter(item => costKinds.includes(item.kind)).reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
+    return { stream, revenueMinor: streamRevenueMinor, expensesMinor: streamExpensesMinor, profitMinor: streamRevenueMinor - streamExpensesMinor };
+  }).sort((a, b) => b.profitMinor - a.profitMinor);
+  return { range, entries, revenueMinor, expensesMinor, profitMinor: revenueMinor - expensesMinor, cashReceivedMinor, pendingMinor, capitalDeployedMinor, unrealizedMinor, streams };
+}
+
 function moneyTotals() {
   const totalsMinor = { ...state.finances.balancesMinor };
   state.finances.transactions.forEach(item => {
@@ -1033,6 +1271,7 @@ function moneyTotals() {
   const obligationsMinor = state.finances.obligations.reduce((sum, item) => sum + Math.max(0, minorValue(item, "targetMinor", "target") - minorValue(item, "paidMinor", "paid")), 0);
   const obligationPlanMinor = state.finances.obligations.reduce((sum, item) => sum + minorValue(item, "monthlyPaymentMinor", "monthlyPayment"), 0);
   const investmentsMinor = state.finances.investments.reduce((sum, item) => sum + minorValue(item, "currentMinor", "current"), 0);
+  const stackLedger = stackLedgerTotals();
   const currentBudgets = currentBudgetItems(reference);
   const personalBudgetProtectionMinor = currentBudgets.filter(item => item.protect && item.account !== "business").reduce((sum, item) => sum + budgetRemainingMinor(item, reference), 0);
   const businessBudgetProtectionMinor = currentBudgets.filter(item => item.protect && item.account === "business").reduce((sum, item) => sum + budgetRemainingMinor(item, reference), 0);
@@ -1045,16 +1284,22 @@ function moneyTotals() {
   const personalPurchaseReserveMinor = plannedPurchases.filter(item => item.account !== "business").reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
   const businessPurchaseReserveMinor = plannedPurchases.filter(item => item.account === "business").reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
   const plannedPurchaseReserveMinor = personalPurchaseReserveMinor + businessPurchaseReserveMinor;
-  const savingsCurrentMinor = state.finances.savingsGoals.filter(item => item.status === "active").reduce((sum, item) => sum + minorValue(item, "savedMinor", "saved"), 0);
+  const savingsCurrentMinor = stackLedger.totalAllocatedMinor;
   const personalEssentialProtectionMinor = Math.max(personalBillsMinor + personalBudgetProtectionMinor, allocatedEssentialsMinor);
-  const reserveProtectionMinor = Math.max(reserveTargetMinor, savingsCurrentMinor, allocatedReserveMinor);
+  const reserveProtectionMinor = Math.max(Math.max(0, reserveTargetMinor - stackLedger.reserveAllocatedMinor), allocatedReserveMinor);
   const repaymentProtectionMinor = Math.max(obligationPlanMinor, allocatedRepaymentsMinor);
-  const personalProtectedMinor = personalEssentialProtectionMinor + reserveProtectionMinor + repaymentProtectionMinor + personalPurchaseReserveMinor;
-  const businessProtectedMinor = businessBillsMinor + businessBudgetProtectionMinor + businessPurchaseReserveMinor;
-  const protectedCashMinor = personalProtectedMinor + businessProtectedMinor;
+  const personalStackProtectionMinor = Number(stackLedger.accountAllocatedMinor.personal || 0);
+  const businessStackProtectionMinor = Number(stackLedger.accountAllocatedMinor.business || 0);
+  const physicalStackProtectionMinor = Number(stackLedger.accountAllocatedMinor.physical || 0);
+  const tradingStackProtectionMinor = Number(stackLedger.accountAllocatedMinor.trading || 0);
+  const personalProtectedMinor = personalEssentialProtectionMinor + reserveProtectionMinor + repaymentProtectionMinor + personalPurchaseReserveMinor + personalStackProtectionMinor;
+  const businessProtectedMinor = businessBillsMinor + businessBudgetProtectionMinor + businessPurchaseReserveMinor + businessStackProtectionMinor;
+  const protectedCashMinor = personalProtectedMinor + businessProtectedMinor + physicalStackProtectionMinor + tradingStackProtectionMinor;
   const personalSafeMinor = Math.max(0, Number(totalsMinor.personal || 0) - personalProtectedMinor);
   const businessFreeMinor = Math.max(0, Number(totalsMinor.business || 0) - businessProtectedMinor);
-  const availableMinor = Number(totalsMinor.personal || 0) + Number(totalsMinor.business || 0);
+  const physicalFreeMinor = Math.max(0, Number(totalsMinor.physical || 0) - physicalStackProtectionMinor);
+  const tradingFreeMinor = Math.max(0, Number(totalsMinor.trading || 0) - tradingStackProtectionMinor);
+  const availableMinor = Number(totalsMinor.personal || 0) + Number(totalsMinor.business || 0) + Number(totalsMinor.physical || 0) + Number(totalsMinor.trading || 0);
   const configuredEnjoymentMinor = Math.max(0, Number(state.finances.settings?.enjoymentAllowanceMinor) || toMinor(state.finances.settings?.enjoymentAllowance));
   const enjoymentAvailableMinor = Math.min(personalSafeMinor, configuredEnjoymentMinor);
   const subscriptions = state.finances.bills.filter(item => item.kind === "subscription");
@@ -1066,23 +1311,26 @@ function moneyTotals() {
   const spentThisMonthMinor = state.finances.transactions.filter(item => item.type === "expense" && String(item.date).startsWith(monthKey())).reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
   const budgetSpentMinor = currentBudget.reduce((sum, item) => sum + budgetSpentAgainstMinor(item, reference), 0);
   const unassignedSpendingMinor = Math.max(0, spentThisMonthMinor - budgetSpentMinor);
-  const savingsTargetMinor = state.finances.savingsGoals.filter(item => item.status === "active").reduce((sum, item) => sum + minorValue(item, "targetMinor", "target"), 0);
+  const savingsTargetMinor = state.finances.stacks.filter(item => item.status === "active").reduce((sum, item) => sum + minorValue(item, "targetMinor", "target"), 0);
+  const personalPreStackProtectionMinor = personalProtectedMinor - personalStackProtectionMinor;
+  const businessPreStackProtectionMinor = businessProtectedMinor - businessStackProtectionMinor;
+  const stackGapMinor = Math.max(0, personalStackProtectionMinor - Math.max(0, Number(totalsMinor.personal || 0) - personalPreStackProtectionMinor)) + Math.max(0, businessStackProtectionMinor - Math.max(0, Number(totalsMinor.business || 0) - businessPreStackProtectionMinor)) + Math.max(0, physicalStackProtectionMinor - Number(totalsMinor.physical || 0)) + Math.max(0, tradingStackProtectionMinor - Number(totalsMinor.trading || 0));
   const totals = Object.fromEntries(Object.entries(totalsMinor).map(([key, value]) => [key, fromMinor(value)]));
   return {
     ...totals,
-    available: fromMinor(availableMinor), safeToSpend: fromMinor(personalSafeMinor), businessFree: fromMinor(businessFreeMinor),
+    available: fromMinor(availableMinor), safeToSpend: fromMinor(personalSafeMinor), businessFree: fromMinor(businessFreeMinor), physicalFree: fromMinor(physicalFreeMinor), tradingFree: fromMinor(tradingFreeMinor),
     enjoymentAvailable: fromMinor(enjoymentAvailableMinor), configuredEnjoyment: fromMinor(configuredEnjoymentMinor), protectedCash: fromMinor(protectedCashMinor), personalProtected: fromMinor(personalProtectedMinor), businessProtected: fromMinor(businessProtectedMinor), reserveTarget: fromMinor(reserveTargetMinor),
     plannedPurchaseReserve: fromMinor(plannedPurchaseReserveMinor), personalPurchaseReserve: fromMinor(personalPurchaseReserveMinor), businessPurchaseReserve: fromMinor(businessPurchaseReserveMinor),
     monthlyBills: fromMinor(monthlyBillsMinor), overdueBills: fromMinor(overdueBillsMinor), personalOverdue: fromMinor(personalOverdueMinor), businessOverdue: fromMinor(businessOverdueMinor), dueSoon: fromMinor(dueSoonMinor), personalDueSoon: fromMinor(personalDueSoonMinor), businessDueSoon: fromMinor(businessDueSoonMinor), dueThirty: fromMinor(dueThirtyMinor),
     obligations: fromMinor(obligationsMinor), obligationPlan: fromMinor(obligationPlanMinor), investments: fromMinor(investmentsMinor), subscriptionAnnual: fromMinor(subscriptionAnnualMinor),
     expectedIncome: fromMinor(expectedIncomeMinor), confirmedIncome: fromMinor(confirmedIncomeMinor), budgeted: fromMinor(budgetedMinor), budgetSpent: fromMinor(budgetSpentMinor), unassignedSpending: fromMinor(unassignedSpendingMinor), spentThisMonth: fromMinor(spentThisMonthMinor),
     personalBudgetProtection: fromMinor(personalBudgetProtectionMinor), businessBudgetProtection: fromMinor(businessBudgetProtectionMinor), personalEssentialProtection: fromMinor(personalEssentialProtectionMinor), reserveProtection: fromMinor(reserveProtectionMinor), repaymentProtection: fromMinor(repaymentProtectionMinor),
-    savingsTarget: fromMinor(savingsTargetMinor), savingsCurrent: fromMinor(savingsCurrentMinor), billSchedule, subscriptions,
+    savingsTarget: fromMinor(savingsTargetMinor), savingsCurrent: fromMinor(savingsCurrentMinor), stackGap: fromMinor(stackGapMinor), personalStackProtection: fromMinor(personalStackProtectionMinor), businessStackProtection: fromMinor(businessStackProtectionMinor), physicalStackProtection: fromMinor(physicalStackProtectionMinor), tradingStackProtection: fromMinor(tradingStackProtectionMinor), stackLedger, stackAvailable: { personal: fromMinor(personalSafeMinor), business: fromMinor(businessFreeMinor), physical: fromMinor(physicalFreeMinor), trading: fromMinor(tradingFreeMinor), held: 0 }, billSchedule, subscriptions,
     coverMonths: monthlyBillsMinor ? availableMinor / monthlyBillsMinor : null,
     personalCoverMonths: personalMonthlyBillsMinor ? Number(totalsMinor.personal || 0) / personalMonthlyBillsMinor : null,
     businessCoverMonths: businessMonthlyBillsMinor ? Number(totalsMinor.business || 0) / businessMonthlyBillsMinor : null,
     personalGap: fromMinor(Math.max(0, personalProtectedMinor - Number(totalsMinor.personal || 0))), businessGap: fromMinor(Math.max(0, businessProtectedMinor - Number(totalsMinor.business || 0))),
-    minor: { ...totalsMinor, available: availableMinor, safeToSpend: personalSafeMinor, businessFree: businessFreeMinor, protectedCash: protectedCashMinor, personalProtected: personalProtectedMinor, businessProtected: businessProtectedMinor, personalEssentialProtection: personalEssentialProtectionMinor, reserveProtection: reserveProtectionMinor, repaymentProtection: repaymentProtectionMinor, plannedPurchaseReserve: plannedPurchaseReserveMinor, expectedIncome: expectedIncomeMinor, confirmedIncome: confirmedIncomeMinor }
+    minor: { ...totalsMinor, available: availableMinor, safeToSpend: personalSafeMinor, businessFree: businessFreeMinor, physicalFree: physicalFreeMinor, tradingFree: tradingFreeMinor, protectedCash: protectedCashMinor, personalProtected: personalProtectedMinor, businessProtected: businessProtectedMinor, personalEssentialProtection: personalEssentialProtectionMinor, reserveProtection: reserveProtectionMinor, repaymentProtection: repaymentProtectionMinor, plannedPurchaseReserve: plannedPurchaseReserveMinor, expectedIncome: expectedIncomeMinor, confirmedIncome: confirmedIncomeMinor, stackGap: stackGapMinor }
   };
 }
 
@@ -1479,11 +1727,26 @@ function journalTemplate(entry) {
 
 function renderMoney() {
   const totals = moneyTotals();
+  const titles = {
+    overview: ["Financial OS", "Know your position.", "Actual cash, obligations and decisions—without counting the same pound twice."],
+    stacks: ["Stacks", "Every pound has a purpose.", "Virtual allocations backed by real recorded money."],
+    empire: ["Income Empire", "Every stream. One dashboard.", "Revenue, profit, cash, capital and pending payments kept distinct."],
+    report: ["50X Money Report", "Review the portfolio.", "A monthly record of money made, kept, allocated and enjoyed."]
+  };
+  const [eyebrow, heading, note] = titles[moneySection] || titles.overview;
+  const content = moneySection === "stacks" ? stacksWorkspace(totals) : moneySection === "empire" ? incomeEmpireWorkspace(totals) : moneySection === "report" ? moneyReportWorkspace(totals) : moneyOverviewWorkspace(totals);
+  document.getElementById("view-money").innerHTML = `
+    <div class="page-head money-page-head"><p class="eyebrow">${eyebrow}</p><h1 id="money-heading">${heading}</h1><p>${note}</p></div>
+    <nav class="money-workspace-nav" aria-label="Money workspaces">${[["overview","Overview"],["stacks","Stacks"],["empire","Income Empire"],["report","Report"]].map(([key,label]) => `<button class="${moneySection === key ? "active" : ""}" data-money-section="${key}">${label}</button>`).join("")}</nav>
+    ${content}`;
+}
+
+function moneyOverviewWorkspace(totals = moneyTotals()) {
   const transactions = [...state.finances.transactions].sort((a, b) => b.date.localeCompare(a.date));
   const transfers = [...state.finances.transfers].sort((a, b) => b.date.localeCompare(a.date));
-  document.getElementById("view-money").innerHTML = `
-    <div class="page-head"><p class="eyebrow">Financial OS</p><h1 id="money-heading">Know your position.</h1><p>Every pound has a purpose. Expected investment money does not count until it actually arrives.</p></div>
+  return `
     <div class="money-summary">${moneyStat("Personal safe", currency(totals.safeToSpend), "After personal protection")}${moneyStat("Personal cash", currency(totals.personal), "Business excluded")}${moneyStat("Business free", currency(totals.businessFree), "After business bills")}${moneyStat("Protected", currency(totals.protectedCash), totals.overdueBills ? `${currency(totals.overdueBills)} overdue` : "Bills, reserve + plans")}</div>
+    ${financialCuesCard()}
     <div class="grid two-column">
       <div class="stack">
         ${financialTruthCard(totals)}
@@ -1496,22 +1759,22 @@ function renderMoney() {
         ${budgetCard(totals)}
         ${subscriptionAuditCard(totals)}
         <article class="card"><div class="card-head"><div><p class="eyebrow">Cash ledger</p><h2>Transactions + transfers</h2><p>Record reality. A transfer moves money between accounts without creating income.</p></div><div class="card-actions"><button class="button button-secondary button-small" data-add="transfer">+ Transfer</button><button class="button button-secondary button-small" data-add="transaction">+ Transaction</button></div></div><div class="ledger-list">${[...transactions.map(item => ({ ...item, ledgerKind: "transaction" })), ...transfers.map(item => ({ ...item, ledgerKind: "transfer" }))].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 24).map(item => item.ledgerKind === "transfer" ? transferTemplate(item) : transactionTemplate(item)).join("") || '<div class="empty">No cash movement recorded yet.</div>'}</div></article>
-        <article class="card"><div class="card-head"><div><p class="eyebrow">Starting position</p><h2>Opening balances</h2></div></div><div class="balance-grid">${balanceField("personal", "Personal cash")}${balanceField("business", "Business cash")}${balanceField("held", "Money held for others")}</div><p class="privacy-note">Use opening balances once, then keep the ledger current.</p></article>
+        <article class="card"><div class="card-head"><div><p class="eyebrow">Starting position</p><h2>Opening balances</h2></div></div><div class="balance-grid">${balanceField("personal", "Personal cash")}${balanceField("business", "Business cash")}${balanceField("physical", "Physical cash")}${balanceField("trading", "Trading wallets")}${balanceField("held", "Money held for others")}</div><p class="privacy-note">Use opening balances once, then keep the ledger current.</p></article>
       </div>
-      <aside class="stack">${spendingGuardrailCard(totals)}${cashCoverCard(totals)}${savingsCard(totals)}${moneyCollectionCard("obligation", "Liabilities + obligations", "What must be restored or repaid", state.finances.obligations, item => `${escapeHTML(item.name)} · ${currency(Math.max(0, item.target - item.paid))} left${item.monthlyPayment ? ` · ${currency(item.monthlyPayment)}/mo` : ""}`)}${moneyCollectionCard("investment", "Investments", "Visible, but unavailable until realised", state.finances.investments, item => `${escapeHTML(item.name)} · ${currency(item.current)} current value`)}</aside>
+      <aside class="stack">${spendingGuardrailCard(totals)}${cashCoverCard(totals)}${stackPreviewCard(totals)}${moneyCollectionCard("obligation", "Liabilities + obligations", "What must be restored or repaid", state.finances.obligations, item => `${escapeHTML(item.name)} · ${currency(Math.max(0, item.target - item.paid))} left${item.monthlyPayment ? ` · ${currency(item.monthlyPayment)}/mo` : ""}`)}${moneyCollectionCard("investment", "Investments", "Visible, but unavailable until realised", state.finances.investments, item => `${escapeHTML(item.name)} · ${currency(item.current)} current value`)}</aside>
     </div>`;
 }
 
 function financialTruthCard(totals) {
-  const gap = totals.personalGap + totals.businessGap;
-  return `<article class="card financial-truth-card ${gap ? "urgent" : ""}"><div class="card-head"><div><p class="eyebrow">Financial truth</p><h2>${gap ? `${currency(gap)} protection gap` : "Each account stands on its own"}</h2><p>Personal cash cannot conceal a business gap, and business cash never becomes personal spending money without a recorded transfer.</p></div><span class="tag">Exact pence</span></div><div class="account-truth-grid"><div class="${totals.personalGap ? "gap" : ""}"><span>Personal position</span><strong>${currency(totals.personal)}</strong><small>${totals.personalGap ? `${currency(totals.personalGap)} short of protection` : `${currency(totals.safeToSpend)} safe to spend`}</small></div><div class="${totals.businessGap ? "gap" : ""}"><span>Business position</span><strong>${currency(totals.business)}</strong><small>${totals.businessGap ? `${currency(totals.businessGap)} short of protection` : `${currency(totals.businessFree)} free after business plans`}</small></div></div><div class="truth-grid"><div><span>Expected</span><strong>${currency(totals.expectedIncome)}</strong><small>Not available</small></div><div><span>Confirmed</span><strong>${currency(totals.confirmedIncome)}</strong><small>Still not received</small></div><div><span>Investments</span><strong>${currency(totals.investments)}</strong><small>Not cash</small></div><div><span>Held for others</span><strong>${currency(totals.held)}</strong><small>Restricted</small></div><div><span>Liabilities</span><strong>${currency(totals.obligations)}</strong><small>Outstanding</small></div><div><span>Savings</span><strong>${currency(totals.savingsCurrent)}</strong><small>Protected goals</small></div></div></article>`;
+  const gap = Math.max(totals.personalGap + totals.businessGap, totals.stackGap);
+  return `<article class="card financial-truth-card ${gap ? "urgent" : ""}"><div class="card-head"><div><p class="eyebrow">Financial truth</p><h2>${gap ? `${currency(gap)} protection gap` : "Each account stands on its own"}</h2><p>Personal, business, physical cash and trading wallets remain distinct. Transfers never become income.</p></div><span class="tag">Exact pence</span></div><div class="account-truth-grid"><div class="${totals.personalGap ? "gap" : ""}"><span>Personal position</span><strong>${currency(totals.personal)}</strong><small>${totals.personalGap ? `${currency(totals.personalGap)} short of protection` : `${currency(totals.safeToSpend)} safe to spend`}</small></div><div class="${totals.businessGap ? "gap" : ""}"><span>Business position</span><strong>${currency(totals.business)}</strong><small>${totals.businessGap ? `${currency(totals.businessGap)} short of protection` : `${currency(totals.businessFree)} free after business plans`}</small></div></div><div class="truth-grid"><div><span>Physical cash</span><strong>${currency(totals.physical)}</strong><small>${currency(totals.physicalFree)} unallocated</small></div><div><span>Trading wallets</span><strong>${currency(totals.trading)}</strong><small>Not personal spending</small></div><div><span>Expected</span><strong>${currency(totals.expectedIncome)}</strong><small>Not available</small></div><div><span>Confirmed</span><strong>${currency(totals.confirmedIncome)}</strong><small>Still not received</small></div><div><span>Investments</span><strong>${currency(totals.investments)}</strong><small>Not cash</small></div><div><span>Held for others</span><strong>${currency(totals.held)}</strong><small>Restricted</small></div><div><span>Liabilities</span><strong>${currency(totals.obligations)}</strong><small>Outstanding</small></div><div><span>Stacks</span><strong>${currency(totals.savingsCurrent)}</strong><small>Virtual allocations</small></div></div></article>`;
 }
 
 function reconciliationCard(totals) {
   const latest = [...state.finances.reconciliations].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0];
   const age = latest ? Math.max(0, daysFromToday(new Date(latest.date)) * -1) : null;
   const differenceMinor = latest ? Object.values(latest.differencesMinor).reduce((sum, value) => sum + Math.abs(Number(value) || 0), 0) : 0;
-  return `<article class="card reconciliation-card ${age === null || age >= 7 ? "needs-review" : ""}"><div class="card-head"><div><p class="eyebrow">Weekly reconciliation</p><h2>${latest ? (differenceMinor ? `${currency(fromMinor(differenceMinor))} corrected` : "Recorded cash matched") : "Compare the app with reality"}</h2><p>${latest ? `Last checked ${formatCompactDate(latest.date)} · ${latest.applied ? "differences were recorded in the ledger" : "comparison only"}.` : "Enter the balances shown by your real accounts. Any correction becomes an auditable ledger entry."}</p></div><button class="button button-primary button-small" data-add="reconciliation">Reconcile</button></div>${latest ? `<div class="reconciliation-summary"><span>Personal <strong>${currency(fromMinor(latest.actualMinor.personal))}</strong></span><span>Business <strong>${currency(fromMinor(latest.actualMinor.business))}</strong></span><span>Held <strong>${currency(fromMinor(latest.actualMinor.held))}</strong></span></div>` : `<div class="reconciliation-summary"><span>Recorded personal <strong>${currency(totals.personal)}</strong></span><span>Recorded business <strong>${currency(totals.business)}</strong></span><span>Recorded held <strong>${currency(totals.held)}</strong></span></div>`}</article>`;
+  return `<article class="card reconciliation-card ${age === null || age >= 7 ? "needs-review" : ""}"><div class="card-head"><div><p class="eyebrow">Weekly reconciliation</p><h2>${latest ? (differenceMinor ? `${currency(fromMinor(differenceMinor))} corrected` : "Recorded cash matched") : "Compare the app with reality"}</h2><p>${latest ? `Last checked ${formatCompactDate(latest.date)} · ${latest.applied ? "differences were recorded in the ledger" : "comparison only"}.` : "Enter the balances shown by your real accounts. Any correction becomes an auditable ledger entry."}</p></div><button class="button button-primary button-small" data-add="reconciliation">Reconcile</button></div>${latest ? `<div class="reconciliation-summary"><span>Personal <strong>${currency(fromMinor(latest.actualMinor.personal))}</strong></span><span>Business <strong>${currency(fromMinor(latest.actualMinor.business))}</strong></span><span>Physical <strong>${currency(fromMinor(latest.actualMinor.physical))}</strong></span><span>Trading <strong>${currency(fromMinor(latest.actualMinor.trading))}</strong></span><span>Held <strong>${currency(fromMinor(latest.actualMinor.held))}</strong></span></div>` : `<div class="reconciliation-summary"><span>Personal <strong>${currency(totals.personal)}</strong></span><span>Business <strong>${currency(totals.business)}</strong></span><span>Physical <strong>${currency(totals.physical)}</strong></span><span>Trading <strong>${currency(totals.trading)}</strong></span><span>Held <strong>${currency(totals.held)}</strong></span></div>`}</article>`;
 }
 
 function incomeForecastCard(totals) {
@@ -1626,6 +1889,187 @@ function savingsCard(totals) {
   return `<article class="card savings-card"><div class="card-head"><div><p class="eyebrow">Savings + reserves</p><h2>${currency(totals.savingsCurrent)} protected</h2><p>Progress toward specific goals without counting it as spendable cash.</p></div><button class="button button-secondary button-small" data-add="savings">+ Goal</button></div><div class="simple-list">${state.finances.savingsGoals.length ? state.finances.savingsGoals.map(item => `<button data-edit-savings="${item.id}"><span>${escapeHTML(item.name)} · ${item.deadline ? formatCompactDate(item.deadline) : "No deadline"}</span><strong>${currency(item.saved)} / ${currency(item.target)}</strong></button>`).join("") : '<div class="empty">No savings goals recorded.</div>'}</div></article>`;
 }
 
+function accountLabel(account) {
+  return ({ personal: "Personal cash", business: "Business cash", held: "Held for others", physical: "Physical cash", trading: "Trading wallet" })[account] || account;
+}
+
+function stackPreviewCard(totals = moneyTotals()) {
+  const stacks = state.finances.stacks.filter(item => item.status === "active").sort((a, b) => a.order - b.order).slice(0, 4);
+  return `<article class="card stack-preview-card"><div class="card-head"><div><p class="eyebrow">Stacks</p><h2>${currency(totals.savingsCurrent)} allocated</h2><p>Virtual purpose, reconciled against actual money.</p></div><button class="button button-secondary button-small" data-money-section="stacks">Open</button></div><div class="stack-preview-list">${stacks.map(stack => { const balanceMinor = Math.max(0, totals.stackLedger.balancesMinor[stack.id] || 0); return `<button data-edit-stack="${stack.id}"><span>${escapeHTML(stack.name)}<small>${escapeHTML(accountLabel(stack.backingAccount))}</small></span><strong>${currency(fromMinor(balanceMinor))}</strong></button>`; }).join("")}</div></article>`;
+}
+
+function financialCues() {
+  const totals = moneyTotals();
+  const cues = [];
+  if (totals.stackGap > 0) cues.push({ key: "stack-gap", tone: "urgent", title: "Stacks need reconciling", message: `${currency(totals.stackGap)} is allocated without enough uncommitted money behind it. Correct a balance or move bread out.` , action: "stacks" });
+  const nextBill = totals.billSchedule.find(item => item.bill.dueConfirmed && item.hasOutstanding && Number.isFinite(item.days) && item.days >= 0 && item.days <= 7);
+  if (nextBill) cues.push({ key: `bill-${nextBill.bill.id}-${nextBill.period}`, tone: "watch", title: `${nextBill.bill.name} coming up`, message: `${currency(nextBill.bill.amount)} ${billDueLabel(nextBill).toLowerCase()}. Make sure the ${nextBill.bill.account} account is covered.`, action: "overview" });
+  const pending = state.finances.incomeEntries.filter(item => !item.reversedAt && ["revenue", "trading_profit"].includes(item.kind) && ["expected", "confirmed"].includes(item.status));
+  if (pending.length) cues.push({ key: `pending-${pending.map(item => item.id).sort().join("-")}`, tone: "watch", title: `${pending.length} payment${pending.length === 1 ? "" : "s"} pending`, message: `${currency(fromMinor(pending.reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0)))} is visible but not counted as cash. Follow up where useful.`, action: "empire" });
+  const current = incomeEmpireMetrics("month");
+  const previous = incomeEmpireMetrics("lastMonth");
+  if (current.profitMinor > previous.profitMinor && previous.profitMinor > 0) cues.push({ key: `income-up-${monthKey()}`, tone: "positive", title: "Income is moving", message: `${currency(fromMinor(current.profitMinor - previous.profitMinor))} more net profit than last month so far. Worth checking what is working.`, action: "empire" });
+  const stackLedger = totals.stackLedger;
+  state.finances.stacks.filter(item => item.status === "active" && item.targetMinor > 0).forEach(stack => {
+    const balanceMinor = Math.max(0, stackLedger.balancesMinor[stack.id] || 0);
+    const remainingMinor = Math.max(0, stack.targetMinor + stack.additionalCostsMinor - balanceMinor);
+    if (remainingMinor > 0 && remainingMinor <= Math.max(15000, Math.round(stack.targetMinor * 0.1))) cues.push({ key: `stack-near-${stack.id}-${Math.ceil(remainingMinor / 10000)}`, tone: "positive", title: `${stack.name} is close`, message: `Bro, another ${currency(fromMinor(remainingMinor))} completes the current target.`, action: "stacks" });
+  });
+  return cues.filter(cue => !state.finances.financialCueDismissals[cue.key]).slice(0, 4);
+}
+
+function financialCuesCard() {
+  const cues = financialCues();
+  if (!cues.length) return "";
+  return `<article class="card financial-cues-card"><div class="card-head"><div><p class="eyebrow">Smart cues</p><h2>Useful now, quiet otherwise</h2></div></div><div class="financial-cue-list">${cues.map(cue => `<div class="financial-cue ${cue.tone}"><button class="cue-main" data-money-section="${cue.action}"><strong>${escapeHTML(cue.title)}</strong><span>${escapeHTML(cue.message)}</span></button><button class="cue-dismiss" data-dismiss-financial-cue="${escapeHTML(cue.key)}" aria-label="Dismiss cue">×</button></div>`).join("")}</div></article>`;
+}
+
+function stacksWorkspace(totals = moneyTotals()) {
+  const stacks = state.finances.stacks.filter(item => item.status !== "archived").sort((a, b) => a.order - b.order);
+  const history = [...state.finances.stackEntries].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  const availableMinor = totals.minor.safeToSpend + totals.minor.businessFree + totals.minor.physicalFree + totals.minor.tradingFree;
+  return `<div class="wealth-summary">${moneyStat("Total stacked", currency(totals.savingsCurrent), "Allocated, not extra cash")}${moneyStat("Available to allocate", currency(fromMinor(availableMinor)), "Across eligible locations")}${moneyStat("Stack gap", currency(totals.stackGap), totals.stackGap ? "Needs reconciliation" : "Fully backed")}${moneyStat("Active stacks", String(stacks.filter(item => item.status === "active").length), "Editable and reorderable")}</div>
+    <div class="bread-actions"><button data-add="stackAdd"><span>＋</span><strong>Add Bread</strong><small>Allocate money</small></button><button data-add="stackMove"><span>↔</span><strong>Move Bread</strong><small>Between stacks</small></button><button data-add="stackWithdraw"><span>−</span><strong>Take Bread Out</strong><small>Release or spend</small></button></div>
+    ${totals.stackGap ? `<div class="stack-warning"><strong>Allocations exceed available backing by ${currency(totals.stackGap)}.</strong><span>Nothing fictional is counted as savings. Reconcile account balances or reverse an allocation.</span></div>` : ""}
+    <div class="stack-grid">${stacks.map((stack, index) => stackCard(stack, totals, index, stacks.length)).join("")}</div>
+    <article class="card stack-history-card"><div class="card-head"><div><p class="eyebrow">Stack ledger</p><h2>Every allocation stays traceable</h2></div><button class="button button-secondary button-small" data-add="stack">+ Stack</button></div><div class="stack-history-tools"><input type="search" data-stack-history-search placeholder="Search history" aria-label="Search stack history" /><select data-stack-history-filter aria-label="Filter stack history"><option value="all">All activity</option><option value="add">Added</option><option value="move">Moved</option><option value="withdraw">Taken out</option><option value="reversed">Reversed</option></select></div><div class="stack-entry-list">${history.length ? history.map(stackEntryTemplate).join("") : '<div class="empty">Your first stack allocation will appear here.</div>'}</div></article>`;
+}
+
+function stackCard(stack, totals, index, count) {
+  const balanceMinor = Math.max(0, totals.stackLedger.balancesMinor[stack.id] || 0);
+  const targetMinor = minorValue(stack, "targetMinor", "target") + minorValue(stack, "additionalCostsMinor", "additionalCosts");
+  const progress = targetMinor ? Math.min(100, Math.round((balanceMinor / targetMinor) * 1000) / 10) : 0;
+  const remainingMinor = Math.max(0, targetMinor - balanceMinor);
+  return `<article class="stack-card ${stack.kind}"><div class="stack-card-head"><span>${escapeHTML(stack.kind)}</span><div><button data-stack-move-order="up" data-stack-id="${stack.id}" ${index === 0 ? "disabled" : ""} aria-label="Move stack up">↑</button><button data-stack-move-order="down" data-stack-id="${stack.id}" ${index === count - 1 ? "disabled" : ""} aria-label="Move stack down">↓</button><button data-edit-stack="${stack.id}" aria-label="Edit ${escapeHTML(stack.name)}">•••</button></div></div><button class="stack-card-main" data-add="stackAdd" data-stack-id="${stack.id}"><strong>${escapeHTML(stack.name)}</strong><span>${currency(fromMinor(balanceMinor))}${targetMinor ? ` <small>/ ${currency(fromMinor(targetMinor))}</small>` : ""}</span><i><b style="width:${progress}%"></b></i><em>${targetMinor ? `${progress.toFixed(1)}% · ${currency(fromMinor(remainingMinor))} remaining` : `${escapeHTML(accountLabel(stack.backingAccount))} · No fixed target`}</em></button><div class="stack-card-foot"><span>${escapeHTML(accountLabel(stack.backingAccount))}</span><button data-add="stackWithdraw" data-stack-id="${stack.id}">Take out</button></div></article>`;
+}
+
+function stackEntryTemplate(entry) {
+  const stack = state.finances.stacks.find(item => item.id === entry.stackId);
+  const from = state.finances.stacks.find(item => item.id === entry.fromStackId);
+  const to = state.finances.stacks.find(item => item.id === entry.toStackId);
+  const title = entry.type === "move" ? `${from?.name || "Stack"} → ${to?.name || "Stack"}` : stack?.name || "Archived stack";
+  const label = entry.type === "add" ? "Bread added" : entry.type === "move" ? "Bread moved" : "Bread taken out";
+  return `<div class="stack-entry ${entry.reversedAt ? "reversed" : ""}" data-stack-entry-row data-entry-type="${entry.reversedAt ? "reversed" : entry.type}" data-search-text="${escapeHTML(`${title} ${entry.note} ${label}`.toLowerCase())}"><span><small>${escapeHTML(label)} · ${formatCompactDate(entry.date)} · ${escapeHTML(accountLabel(entry.sourceAccount))}</small><strong>${escapeHTML(title)}</strong>${entry.note ? `<em>${escapeHTML(entry.note)}</em>` : ""}</span><div><b>${entry.type === "withdraw" ? "−" : entry.type === "move" ? "↔" : "+"}${currency(entry.amount)}</b>${entry.reversedAt ? '<small>Reversed</small>' : `<button data-undo-stack-entry="${entry.id}">Undo</button>`}</div></div>`;
+}
+
+function incomeEmpireWorkspace() {
+  const activeRange = incomePeriod === "custom" ? { start: incomeCustomStart, end: incomeCustomEnd } : incomePeriodRange(incomePeriod);
+  const metrics = incomeEmpireMetrics("custom", activeRange);
+  const year = incomeEmpireMetrics("year");
+  const entries = [...metrics.entries].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  return `<div class="empire-periods">${[["today","Today"],["week","This week"],["month","This month"],["lastMonth","Last month"],["year","This year"],["custom","Custom"]].map(([key,label]) => `<button class="${incomePeriod === key ? "active" : ""}" data-income-period="${key}">${label}</button>`).join("")}</div>
+    ${incomePeriod === "custom" ? `<div class="empire-custom-range"><label>From<input type="date" data-income-range="start" value="${incomeCustomStart}" max="${incomeCustomEnd}" /></label><label>To<input type="date" data-income-range="end" value="${incomeCustomEnd}" min="${incomeCustomStart}" /></label></div>` : ""}
+    <div class="wealth-summary">${moneyStat("Revenue", currency(fromMinor(metrics.revenueMinor)), "Earned before costs")}${moneyStat("Net profit", currency(fromMinor(metrics.profitMinor)), "Revenue less costs")}${moneyStat("Cash received", currency(fromMinor(metrics.cashReceivedMinor)), "Actually collected")}${moneyStat("Year to date", currency(fromMinor(year.profitMinor)), "Net recognized profit")}</div>
+    <div class="grid two-column empire-grid"><div class="stack">${incomeTrendCard()}${incomeStreamsCard(metrics)}${incomeEntriesCard(entries)}</div><aside class="stack">${empireTruthCard(metrics)}${allocationSuggestionsCard()}${allocationRulesCard()}${ventureMoneyCard()}</aside></div>`;
+}
+
+function empireTruthCard(metrics) {
+  return `<article class="card empire-truth-card"><div class="card-head"><div><p class="eyebrow">Financial distinctions</p><h2>Profit is not the same as cash</h2></div><button class="button button-primary button-small" data-add="incomeEntry">+ Entry</button></div><div class="truth-grid"><div><span>Business costs</span><strong>${currency(fromMinor(metrics.expensesMinor))}</strong><small>Fees and losses included</small></div><div><span>Payments pending</span><strong>${currency(fromMinor(metrics.pendingMinor))}</strong><small>Outside cash</small></div><div><span>Capital deployed</span><strong>${currency(fromMinor(metrics.capitalDeployedMinor))}</strong><small>Not revenue</small></div><div><span>Unrealized result</span><strong>${currency(fromMinor(metrics.unrealizedMinor))}</strong><small>Not profit or cash</small></div></div></article>`;
+}
+
+function incomeStreamsCard(metrics) {
+  return `<article class="card income-streams-card"><div class="card-head"><div><p class="eyebrow">Income streams</p><h2>Performance by source</h2></div><button class="button button-secondary button-small" data-add="incomeStream">+ Stream</button></div><div class="income-stream-list">${metrics.streams.map(item => { const max = Math.max(1, ...metrics.streams.map(value => Math.abs(value.profitMinor))); const width = Math.round((Math.abs(item.profitMinor) / max) * 100); return `<button class="income-stream-row" data-edit-income-stream="${item.stream.id}"><span><small>${escapeHTML(item.stream.category)} · ${escapeHTML(item.stream.status)}</small><strong>${escapeHTML(item.stream.name)}</strong><i><b class="${item.profitMinor < 0 ? "negative" : ""}" style="width:${width}%"></b></i></span><span><strong class="${item.profitMinor < 0 ? "negative" : ""}">${currency(fromMinor(item.profitMinor))}</strong><small>${currency(fromMinor(item.revenueMinor))} revenue</small></span></button>`; }).join("")}</div></article>`;
+}
+
+function incomeEntriesCard(entries) {
+  return `<article class="card income-entry-card"><div class="card-head"><div><p class="eyebrow">Income ledger</p><h2>Source records</h2><p>Capital movements and transfers never become earnings.</p></div><button class="button button-primary button-small" data-add="incomeEntry">+ Entry</button></div><div class="income-entry-list">${entries.length ? entries.map(incomeEntryTemplate).join("") : '<div class="empty">Record the first earned amount, cost or capital movement.</div>'}</div></article>`;
+}
+
+function incomeKindLabel(kind) {
+  return ({ revenue: "Revenue", expense: "Business expense", trading_profit: "Realized profit", trading_loss: "Realized loss", fee: "Fee / cost", capital_deposit: "Capital deposited", capital_withdrawal: "Capital withdrawn", unrealized_gain: "Unrealized gain", unrealized_loss: "Unrealized loss" })[kind] || kind;
+}
+
+function incomeEntryTemplate(entry) {
+  const stream = state.finances.incomeStreams.find(item => item.id === entry.streamId);
+  const positive = ["revenue", "trading_profit", "capital_withdrawal", "unrealized_gain"].includes(entry.kind);
+  return `<div class="income-entry ${entry.reversedAt ? "reversed" : ""}"><span><small>${escapeHTML(incomeKindLabel(entry.kind))} · ${formatCompactDate(entry.date)} · ${escapeHTML(entry.status)}</small><strong>${escapeHTML(stream?.name || "Archived stream")}</strong>${entry.description ? `<em>${escapeHTML(entry.description)}</em>` : ""}</span><div><b class="${positive ? "positive" : "negative"}">${positive ? "+" : "−"}${currency(entry.amount)}</b>${entry.reversedAt ? '<small>Reversed</small>' : `<span>${["expected","confirmed"].includes(entry.status) && ["revenue","trading_profit"].includes(entry.kind) ? `<button data-receive-income-entry="${entry.id}">Receive</button>` : ""}<button data-undo-income-entry="${entry.id}">Undo</button></span>`}</div></div>`;
+}
+
+function incomeTrendCard() {
+  const now = new Date();
+  const months = Array.from({ length: 6 }, (_, offset) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - 5 + offset, 1);
+    const range = { start: dayKey(date), end: dayKey(new Date(date.getFullYear(), date.getMonth() + 1, 0)) };
+    return { label: new Intl.DateTimeFormat("en-GB", { month: "short" }).format(date), metrics: incomeEmpireMetrics("custom", range) };
+  });
+  const max = Math.max(1, ...months.map(item => Math.max(0, item.metrics.profitMinor)));
+  return `<article class="card income-trend-card"><div class="card-head"><div><p class="eyebrow">Six-month trend</p><h2>Net profit movement</h2></div></div><div class="income-chart">${months.map(item => `<div><i><b class="${item.metrics.profitMinor < 0 ? "negative" : ""}" style="height:${Math.max(3, Math.round((Math.abs(item.metrics.profitMinor) / max) * 100))}%"></b></i><span>${item.label}</span><small>${currency(fromMinor(item.metrics.profitMinor))}</small></div>`).join("")}</div></article>`;
+}
+
+function allocationSuggestionsForEntry(entry) {
+  if (!entry || entry.reversedAt || entry.status !== "received" || !["revenue", "trading_profit"].includes(entry.kind) || entry.allocationAppliedAt) return [];
+  const totals = moneyTotals();
+  const taxRate = Math.min(100, Math.max(0, Number(state.finances.settings.taxProvisionRate) || 0));
+  let remainingMinor = Math.min(Math.round(entry.amountMinor * (1 - taxRate / 100)), Number(totals.stackAvailable[entry.account] || 0) * 100);
+  const suggestions = [];
+  const reserve = state.finances.stacks.find(item => item.status === "active" && item.kind === "reserve");
+  if (reserve && remainingMinor > 0) {
+    const reserveBalance = Math.max(0, totals.stackLedger.balancesMinor[reserve.id] || 0);
+    const gap = Math.max(0, minorValue(reserve, "targetMinor", "target") - reserveBalance);
+    const amountMinor = Math.min(gap, remainingMinor);
+    if (amountMinor) suggestions.push({ stack: reserve, amountMinor, reason: "Reserve below target" }), remainingMinor -= amountMinor;
+  }
+  state.finances.allocationRules.filter(item => item.active && item.streamId === entry.streamId).sort((a, b) => a.priority - b.priority).forEach(rule => {
+    const stack = state.finances.stacks.find(item => item.id === rule.stackId && item.status === "active");
+    if (!stack || remainingMinor <= 0 || suggestions.some(item => item.stack.id === stack.id)) return;
+    const amountMinor = Math.min(remainingMinor, Math.round(entry.amountMinor * rule.percentage / 100));
+    if (amountMinor) suggestions.push({ stack, amountMinor, reason: `${rule.percentage}% rule` }), remainingMinor -= amountMinor;
+  });
+  return suggestions;
+}
+
+function allocationSuggestionsCard() {
+  const entries = state.finances.incomeEntries.filter(item => !item.reversedAt && item.status === "received" && !item.allocationAppliedAt).map(entry => ({ entry, suggestions: allocationSuggestionsForEntry(entry) })).filter(item => item.suggestions.length);
+  return `<article class="card allocation-suggestions-card"><div class="card-head"><div><p class="eyebrow">Smart allocation</p><h2>${entries.length ? "Suggestions ready" : "No unallocated receipt"}</h2><p>Nothing moves until you approve the plan.</p></div></div><div class="allocation-suggestion-list">${entries.length ? entries.slice(0, 4).map(({ entry, suggestions }) => { const stream = state.finances.incomeStreams.find(item => item.id === entry.streamId); return `<div><span><strong>${escapeHTML(stream?.name || "Income")}</strong><small>${suggestions.map(item => `${item.stack.name} ${currency(fromMinor(item.amountMinor))}`).join(" · ")}</small></span><button data-add="allocationPlan" data-income-entry-id="${entry.id}">Review</button></div>`; }).join("") : '<div class="empty">Received money with available cash and matching rules will appear here.</div>'}</div></article>`;
+}
+
+function allocationRulesCard() {
+  return `<article class="card allocation-rules-card"><div class="card-head"><div><p class="eyebrow">Allocation rules</p><h2>Flexible defaults</h2></div><button class="button button-secondary button-small" data-add="allocationRule">+ Rule</button></div><div class="simple-list">${state.finances.allocationRules.length ? state.finances.allocationRules.sort((a, b) => a.priority - b.priority).map(rule => { const stream = state.finances.incomeStreams.find(item => item.id === rule.streamId); const stack = state.finances.stacks.find(item => item.id === rule.stackId); return `<button data-edit-allocation-rule="${rule.id}"><span>${escapeHTML(stream?.name || "Stream")} → ${escapeHTML(stack?.name || "Stack")}</span><strong>${rule.percentage}%</strong></button>`; }).join("") : '<div class="empty">Add a rule when a repeated income decision becomes clear.</div>'}</div></article>`;
+}
+
+function venturePerformance(venture, range = incomePeriodRange("all")) {
+  const streamIds = state.finances.incomeStreams.filter(item => item.ventureId === venture.id).map(item => item.id);
+  const metrics = incomeEmpireMetrics("custom", range);
+  const streams = metrics.streams.filter(item => streamIds.includes(item.stream.id));
+  return { revenueMinor: streams.reduce((sum, item) => sum + item.revenueMinor, 0), profitMinor: streams.reduce((sum, item) => sum + item.profitMinor, 0), streams: streams.length, projects: state.projects.filter(item => item.ventureId === venture.id && item.status !== "archived").length };
+}
+
+function ventureMoneyCard() {
+  const ventures = state.ventures.filter(item => item.status !== "archived");
+  const range = incomePeriod === "custom" ? { start: incomeCustomStart, end: incomeCustomEnd } : incomePeriodRange(incomePeriod);
+  return `<article class="card venture-money-card"><div class="card-head"><div><p class="eyebrow">Business portfolio</p><h2>Ventures behind the numbers</h2></div><button class="button button-secondary button-small" data-add="venture">+ Venture</button></div><div class="simple-list">${ventures.length ? ventures.map(venture => { const metrics = venturePerformance(venture, range); return `<button data-edit-venture="${venture.id}"><span>${escapeHTML(venture.name)} · ${escapeHTML(venture.status)}</span><strong>${currency(fromMinor(metrics.profitMinor))}</strong></button>`; }).join("") : '<div class="empty">Link streams and projects under a venture when useful.</div>'}</div></article>`;
+}
+
+function moneyReportData(month = monthKey()) {
+  const start = `${month}-01`;
+  const date = dateFromKey(start);
+  const end = dayKey(new Date(date.getFullYear(), date.getMonth() + 1, 0));
+  const empire = incomeEmpireMetrics("custom", { start, end });
+  const totals = moneyTotals();
+  const stackLedger = stackLedgerTotals(end);
+  const stackEntries = state.finances.stackEntries.filter(item => !item.reversedAt && item.date >= start && item.date <= end);
+  const stackInMinor = stackEntries.filter(item => item.type === "add").reduce((sum, item) => sum + item.amountMinor, 0);
+  const stackOutMinor = stackEntries.filter(item => item.type === "withdraw").reduce((sum, item) => sum + item.amountMinor, 0);
+  const expensesMinor = state.finances.transactions.filter(item => item.type === "expense" && item.date >= start && item.date <= end).reduce((sum, item) => sum + minorValue(item, "amountMinor", "amount"), 0);
+  const ventureRows = state.ventures.filter(item => item.status !== "archived").map(venture => ({ venture, ...venturePerformance(venture, { start, end }) })).sort((a, b) => b.profitMinor - a.profitMinor);
+  const upcoming = totals.billSchedule.filter(item => item.hasOutstanding && Number.isFinite(item.days) && item.days >= 0).slice(0, 3).map(item => ({ name: item.bill.name, amountMinor: item.bill.amountMinor, due: dayKey(item.due) }));
+  return { month, capturedAt: new Date().toISOString(), revenueMinor: empire.revenueMinor, profitMinor: empire.profitMinor, cashReceivedMinor: empire.cashReceivedMinor, pendingMinor: empire.pendingMinor, expensesMinor, actualCashMinor: totals.minor.available, heldMinor: totals.minor.held, obligationsMinor: toMinor(totals.obligations), safeMinor: totals.minor.safeToSpend, stackTotalMinor: stackLedger.totalAllocatedMinor, stackInMinor, stackOutMinor, stacks: state.finances.stacks.filter(item => item.status !== "archived").map(stack => ({ id: stack.id, name: stack.name, balanceMinor: Math.max(0, stackLedger.balancesMinor[stack.id] || 0), targetMinor: stack.targetMinor + stack.additionalCostsMinor })), bestVenture: ventureRows[0] ? { name: ventureRows[0].venture.name, profitMinor: ventureRows[0].profitMinor } : null, upcoming };
+}
+
+function moneyReportWorkspace() {
+  const archived = state.finances.monthlyMoneyReports.find(item => item.month === reportMonth);
+  const report = archived?.snapshot || moneyReportData(reportMonth);
+  const previousMonthDate = new Date(`${reportMonth}-01T12:00:00`);
+  previousMonthDate.setMonth(previousMonthDate.getMonth() - 1);
+  const previousKey = monthKey(previousMonthDate);
+  const previous = state.finances.monthlyMoneyReports.find(item => item.month === previousKey)?.snapshot || moneyReportData(previousKey);
+  const profitDelta = Number(report.profitMinor || 0) - Number(previous.profitMinor || 0);
+  return `<div class="report-toolbar"><label>Report month <input type="month" data-report-month value="${reportMonth}" /></label><button class="button button-primary" data-capture-money-report>${archived ? "Refresh snapshot" : "Capture month"}</button></div>
+    <article class="money-report-hero"><p class="eyebrow">${new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" }).format(new Date(`${reportMonth}-01T12:00:00`))}</p><h2>${currency(fromMinor(report.profitMinor))} net profit</h2><span class="${profitDelta < 0 ? "negative" : "positive"}">${profitDelta >= 0 ? "+" : "−"}${currency(fromMinor(Math.abs(profitDelta)))} vs previous month</span><small>${archived ? `Snapshot captured ${formatSyncTime(archived.updatedAt)}` : "Live preview · capture it to preserve history"}</small></article>
+    <div class="report-section-grid"><article class="card report-section"><p class="eyebrow">Income</p><div class="report-lines"><span>Total revenue <b>${currency(fromMinor(report.revenueMinor))}</b></span><span>Net profit <b>${currency(fromMinor(report.profitMinor))}</b></span><span>Cash received <b>${currency(fromMinor(report.cashReceivedMinor))}</b></span><span>Pending <b>${currency(fromMinor(report.pendingMinor))}</b></span></div></article><article class="card report-section"><p class="eyebrow">Money</p><div class="report-lines"><span>Recorded cash <b>${currency(fromMinor(report.actualCashMinor))}</b></span><span>Expenses <b>${currency(fromMinor(report.expensesMinor))}</b></span><span>Obligations <b>${currency(fromMinor(report.obligationsMinor))}</b></span><span>Personal safe <b>${currency(fromMinor(report.safeMinor))}</b></span></div></article><article class="card report-section"><p class="eyebrow">Stacks</p><div class="report-lines"><span>Total allocated <b>${currency(fromMinor(report.stackTotalMinor))}</b></span><span>Added this month <b>${currency(fromMinor(report.stackInMinor))}</b></span><span>Taken out <b>${currency(fromMinor(report.stackOutMinor))}</b></span></div><div class="report-stack-list">${report.stacks.slice(0, 6).map(stack => `<span>${escapeHTML(stack.name)} <b>${currency(fromMinor(stack.balanceMinor))}</b></span>`).join("")}</div></article><article class="card report-section"><p class="eyebrow">Looking ahead</p><div class="report-lines"><span>Best venture <b>${escapeHTML(report.bestVenture?.name || "No linked venture")}</b></span>${report.upcoming.length ? report.upcoming.map(item => `<span>${escapeHTML(item.name)} <b>${currency(fromMinor(item.amountMinor))}</b></span>`).join("") : "<span>No confirmed bill approaching</span>"}</div></article></div>
+    <article class="card report-archive"><div class="card-head"><div><p class="eyebrow">Archive</p><h2>Captured financial months</h2></div></div><div class="simple-list">${state.finances.monthlyMoneyReports.length ? [...state.finances.monthlyMoneyReports].sort((a, b) => b.month.localeCompare(a.month)).map(item => `<button data-report-open="${item.month}"><span>${escapeHTML(item.month)}</span><strong>${currency(fromMinor(item.snapshot.profitMinor || 0))}</strong></button>`).join("") : '<div class="empty">Capture a month when the records are reconciled.</div>'}</div></article>`;
+}
+
 function billInsight(totals) {
   const unconfirmed = state.finances.bills.filter(item => !item.dueConfirmed).length;
   if (totals.personalOverdue || totals.businessOverdue) return `<div class="bill-insight urgent"><span>Confirmed overdue bills</span><strong>${currency(totals.personalOverdue)} personal · ${currency(totals.businessOverdue)} business</strong><small>Only bills with a confirmed due date can create this alert.</small></div>`;
@@ -1640,12 +2084,12 @@ function billInsight(totals) {
 function cashCoverCard(totals) {
   const autopay = state.finances.bills.filter(item => item.autopay).length;
   const coverLabel = value => value === null ? "No bills" : value < 0 ? "Below zero" : `${value.toFixed(1)} mo`;
-  return `<article class="card cash-cover-card"><div class="card-head"><div><p class="eyebrow">Cash cover</p><h2>Separated by account</h2><p>Personal and business cash never conceal a gap in the other account.</p></div></div><div class="cover-metrics"><div><span>Personal cover</span><strong>${escapeHTML(coverLabel(totals.personalCoverMonths))}</strong></div><div><span>Business cover</span><strong>${escapeHTML(coverLabel(totals.businessCoverMonths))}</strong></div><div><span>Next 30 days</span><strong>${currency(totals.dueThirty)}</strong></div><div><span>Autopay bills</span><strong>${autopay}</strong></div><div><span>Held separately</span><strong>${currency(totals.held)}</strong></div></div></article>`;
+  return `<article class="card cash-cover-card"><div class="card-head"><div><p class="eyebrow">Cash cover</p><h2>Separated by account</h2><p>Personal and business cash never conceal a gap in the other account.</p></div></div><div class="cover-metrics"><div><span>Personal cover</span><strong>${escapeHTML(coverLabel(totals.personalCoverMonths))}</strong></div><div><span>Business cover</span><strong>${escapeHTML(coverLabel(totals.businessCoverMonths))}</strong></div><div><span>Physical unallocated</span><strong>${currency(totals.physicalFree)}</strong></div><div><span>Trading wallet</span><strong>${currency(totals.trading)}</strong></div><div><span>Next 30 days</span><strong>${currency(totals.dueThirty)}</strong></div><div><span>Held separately</span><strong>${currency(totals.held)}</strong></div></div></article>`;
 }
 
 function spendingGuardrailCard(totals) {
   const gap = totals.personalGap;
-  return `<article class="card guardrail-card ${gap ? "urgent" : ""}"><div class="card-head"><div><p class="eyebrow">Personal safe-to-spend</p><h2>${gap ? `${currency(gap)} protection gap` : `${currency(totals.safeToSpend)} flexible`}</h2><p>${gap ? "Personal cash does not fully cover the protected plan." : "Business funds, expected income, investments, and money held for others are excluded."}</p></div><button class="edit-button" data-add="moneySettings" aria-label="Edit spending guardrails">•••</button></div><div class="protection-breakdown"><span>Essential commitments <b>${currency(totals.personalEssentialProtection)}</b></span><span>Reserve floor <b>${currency(totals.reserveProtection)}</b></span><span>Repayments <b>${currency(totals.repaymentProtection)}</b></span><span>Reserved purchases <b>${currency(totals.personalPurchaseReserve)}</b></span></div><div class="guardrail-formula"><span>Personal cash <b>${currency(totals.personal)}</b></span><i>−</i><span>Protection <b>${currency(totals.personalProtected)}</b></span><i>=</i><span>Safe <b>${currency(totals.safeToSpend)}</b></span></div></article>`;
+  return `<article class="card guardrail-card ${gap ? "urgent" : ""}"><div class="card-head"><div><p class="eyebrow">Personal safe-to-spend</p><h2>${gap ? `${currency(gap)} protection gap` : `${currency(totals.safeToSpend)} flexible`}</h2><p>${gap ? "Personal cash does not fully cover the protected plan." : "Business funds, expected income, investments, and money held for others are excluded."}</p></div><button class="edit-button" data-add="moneySettings" aria-label="Edit spending guardrails">•••</button></div><div class="protection-breakdown"><span>Essential commitments <b>${currency(totals.personalEssentialProtection)}</b></span><span>Stacks <b>${currency(totals.personalStackProtection)}</b></span><span>Reserve still needed <b>${currency(totals.reserveProtection)}</b></span><span>Repayments <b>${currency(totals.repaymentProtection)}</b></span><span>Reserved purchases <b>${currency(totals.personalPurchaseReserve)}</b></span></div><div class="guardrail-formula"><span>Personal cash <b>${currency(totals.personal)}</b></span><i>−</i><span>Protection <b>${currency(totals.personalProtected)}</b></span><i>=</i><span>Safe <b>${currency(totals.safeToSpend)}</b></span></div></article>`;
 }
 
 function subscriptionAuditCard(totals) {
@@ -1705,12 +2149,14 @@ function renderWeek() {
   const activeProjects = state.projects.filter(item => item.status === "active");
   const openMilestones = state.milestones.filter(item => item.status !== "completed");
   const openBlockers = state.projectBlockers.filter(item => item.status !== "resolved");
+  const activeVentures = state.ventures.filter(item => !["paused", "archived"].includes(item.status));
   document.getElementById("view-week").innerHTML = `
     <div class="page-head"><p class="eyebrow">Focus OS · Build</p><h1 id="week-heading">Move meaningful work.</h1><p>Goals set direction. Projects create outputs. Today only needs the next visible action.</p></div>
-    <div class="focus-summary">${reviewMetric("Active goals", String(activeGoals.length), "Longer direction")}${reviewMetric("Projects", String(activeProjects.length), "Current workspaces")}${reviewMetric("Milestones", String(openMilestones.length), "Open deliverables")}${reviewMetric("Blockers", String(openBlockers.length), openBlockers.length ? "Needs a decision" : "Nothing stuck")}</div>
+    <div class="focus-summary">${reviewMetric("Ventures", String(activeVentures.length), "Income-producing operations")}${reviewMetric("Active goals", String(activeGoals.length), "Longer direction")}${reviewMetric("Projects", String(activeProjects.length), "Current workspaces")}${reviewMetric("Milestones", String(openMilestones.length), "Open deliverables")}${reviewMetric("Blockers", String(openBlockers.length), openBlockers.length ? "Needs a decision" : "Nothing stuck")}</div>
     <article class="week-outcome"><div class="field"><label for="week-outcome">Primary weekly outcome</label><textarea class="outcome-input" id="week-outcome" data-week-field="outcome" data-auto-resize rows="2" placeholder="One measurable result">${escapeHTML(state.week.outcome)}</textarea></div><div class="field"><label for="week-evidence">Evidence of completion</label><textarea id="week-evidence" data-week-field="evidence" placeholder="What proves this is finished?">${escapeHTML(state.week.evidence)}</textarea></div><div class="inline-fields week-details"><div class="field"><label for="week-secondary">Secondary outcome</label><textarea class="week-compact-input" id="week-secondary" data-week-field="secondary" data-auto-resize rows="2">${escapeHTML(state.week.secondary)}</textarea></div><div class="field"><label for="week-why">Why now?</label><textarea class="week-compact-input" id="week-why" data-week-field="why" data-auto-resize rows="2">${escapeHTML(state.week.why)}</textarea></div></div></article>
     <div class="grid two-column focus-grid">
       <div class="stack">
+        ${venturePortfolioCard(activeVentures)}
         ${projectsCard(activeProjects)}
         <article class="card"><div class="card-head"><div><p class="eyebrow">Flow-matched actions</p><h2>Open work, ranked for your state</h2></div><button class="button button-secondary button-small" data-add="task">+ Action</button></div><div class="task-list">${open.length ? open.map(taskTemplate).join("") : '<div class="empty">No open actions. Add the first visible step.</div>'}</div></article>
         <article class="card"><div class="card-head"><div><p class="eyebrow">Completed</p><h2>${done.length} actions moved</h2></div></div><div class="task-list">${done.length ? done.map(taskTemplate).join("") : '<div class="empty">Completed actions collect here until the weekly close.</div>'}</div></article>
@@ -1726,6 +2172,20 @@ function goalsCard(goals = state.goals.filter(item => item.status === "active"))
 function goalTemplate(goal) {
   const projectCount = state.projects.filter(item => item.goalId === goal.id && item.status !== "archived").length;
   return `<button class="goal-row" data-edit-goal="${goal.id}"><span><small>${escapeHTML(goal.area)} · ${escapeHTML(goal.horizon)}</small><strong>${escapeHTML(goal.name)}</strong><em>${escapeHTML(goal.evidence || goal.why || "Define the evidence that proves progress.")}</em></span><b>${projectCount} project${projectCount === 1 ? "" : "s"}</b></button>`;
+}
+
+function venturePortfolioCard(ventures = state.ventures.filter(item => item.status !== "archived")) {
+  return `<article class="card venture-portfolio-card"><div class="card-head"><div><p class="eyebrow">Business portfolio</p><h2>Operations connected to income</h2><p>Revenue is derived from linked streams once—never copied into the venture.</p></div><button class="button button-primary button-small" data-add="venture">+ Venture</button></div><div class="venture-portfolio-list">${ventures.length ? ventures.map(venturePortfolioTemplate).join("") : '<div class="empty">Create a venture to connect projects, streams and financial performance.</div>'}</div></article>`;
+}
+
+function venturePortfolioTemplate(venture) {
+  const month = venturePerformance(venture, incomePeriodRange("month"));
+  const all = venturePerformance(venture);
+  const projects = state.projects.filter(item => item.ventureId === venture.id && item.status !== "archived");
+  const projectIds = projects.map(item => item.id);
+  const milestones = state.milestones.filter(item => projectIds.includes(item.projectId) && item.status !== "completed").length;
+  const tasks = state.tasks.filter(item => projectIds.includes(item.projectId) && !item.done).length;
+  return `<div class="venture-card"><button class="venture-main" data-edit-venture="${venture.id}"><span><small>${escapeHTML(venture.status)}</small><strong>${escapeHTML(venture.name)}</strong><em>${escapeHTML(venture.description || "Connect the operation to measurable outputs and income.")}</em></span><div><strong>${currency(fromMinor(month.profitMinor))}</strong><small>profit this month</small></div></button><div class="venture-stats"><span>${month.streams} streams</span><span>${projects.length} projects</span><span>${milestones} milestones</span><span>${tasks} actions</span><span>${currency(fromMinor(all.profitMinor))} lifetime profit</span></div></div>`;
 }
 
 function projectsCard(projects = state.projects.filter(item => item.status === "active")) {
@@ -1887,16 +2347,21 @@ function editorCollection(type) {
   if (type === "income") return state.finances.incomeForecasts;
   if (type === "savings") return state.finances.savingsGoals;
   if (type === "purchase") return state.finances.plannedPurchases;
+  if (type === "stack") return state.finances.stacks;
+  if (type === "incomeStream") return state.finances.incomeStreams;
+  if (type === "incomeEntry") return state.finances.incomeEntries;
+  if (type === "allocationRule") return state.finances.allocationRules;
+  if (type === "venture") return state.ventures;
   return [];
 }
 
 function openEditor(type, id = null, preset = {}) {
   const dialog = document.getElementById("editor-dialog");
   const fields = document.getElementById("dialog-fields");
-  const collectionTypes = ["task", "inbox", "maintenance", "cue", "script", "transaction", "transfer", "bill", "obligation", "investment", "contact", "experience", "journal", "goal", "project", "milestone", "blocker", "decision", "budget", "income", "savings", "purchase"];
+  const collectionTypes = ["task", "inbox", "maintenance", "cue", "script", "transaction", "transfer", "bill", "obligation", "investment", "contact", "experience", "journal", "goal", "project", "milestone", "blocker", "decision", "budget", "income", "savings", "purchase", "stack", "incomeStream", "incomeEntry", "allocationRule", "venture"];
   const item = collectionTypes.includes(type) && id ? editorCollection(type).find(entry => entry.id === id) : null;
   editor = ["handoffImport", "syncPair"].includes(type) ? { type, payload: id } : { type, id, preset };
-  const titles = { task: "Smart action", inbox: "Quick capture", maintenance: "Life maintenance date", cue: "Cue architecture", script: "If–then script", transaction: "Transaction", transfer: "Account transfer", reconciliation: "Weekly reconciliation", allocation: "Receive + allocate income", bill: "Bill + due date", obligation: "Obligation", investment: "Investment", contact: "Relationship intention", experience: "Experience", journal: "Private reflection", goal: "Goal", project: "Project workspace", milestone: "Milestone", blocker: "Project blocker", decision: "Project decision", budget: "Budget line", income: "Income forecast", savings: "Savings goal", purchase: "Next purchase", moneySettings: "Spending guardrails", assistantSettings: "Assistant privacy", routine: `${state.modes[id]?.label || "Routine"} mode`, reminders: "Gentle reminders", security: "App lock", sync: "Device sync", syncPair: "Connect this device", handoff: "Secure phone handoff", handoffImport: "Import secure handoff" };
+  const titles = { task: "Smart action", inbox: "Quick capture", maintenance: "Life maintenance date", cue: "Cue architecture", script: "If–then script", transaction: "Transaction", transfer: "Account transfer", reconciliation: "Weekly reconciliation", allocation: "Receive + allocate income", bill: "Bill + due date", obligation: "Obligation", investment: "Investment", contact: "Relationship intention", experience: "Experience", journal: "Private reflection", goal: "Goal", project: "Project workspace", milestone: "Milestone", blocker: "Project blocker", decision: "Project decision", budget: "Budget line", income: "Income forecast", savings: "Savings goal", purchase: "Next purchase", stack: "Savings stack", stackAdd: "Add Bread", stackMove: "Move Bread", stackWithdraw: "Take Bread Out", incomeStream: "Income stream", incomeEntry: "Income entry", incomeReceive: "Receive income", allocationRule: "Allocation rule", allocationPlan: "Approve stack plan", venture: "Business venture", moneySettings: "Spending guardrails", assistantSettings: "Assistant privacy", routine: `${state.modes[id]?.label || "Routine"} mode`, reminders: "Gentle reminders", security: "App lock", sync: "Device sync", syncPair: "Connect this device", handoff: "Secure phone handoff", handoffImport: "Import secure handoff" };
   document.getElementById("dialog-eyebrow").textContent = ({ routine: "Personalise your system", reminders: "Stay gently connected", security: "Local privacy", sync: "Encrypted private relay", syncPair: "Encrypted private relay", handoff: "Encrypted device transfer", handoffImport: "Encrypted device transfer" })[type] || (id ? "Update your system" : "Add to your system");
   document.getElementById("dialog-title").textContent = titles[type] || "Item";
   document.getElementById("delete-item").classList.toggle("hidden", !(id && collectionTypes.includes(type)));
@@ -1924,6 +2389,16 @@ function openEditor(type, id = null, preset = {}) {
   if (type === "income") fields.innerHTML = incomeEditor(item);
   if (type === "savings") fields.innerHTML = savingsEditor(item);
   if (type === "purchase") fields.innerHTML = purchaseEditor(item);
+  if (type === "stack") fields.innerHTML = stackEditor(item);
+  if (type === "stackAdd") fields.innerHTML = stackAddEditor(preset.stackId);
+  if (type === "stackMove") fields.innerHTML = stackMoveEditor(preset.stackId);
+  if (type === "stackWithdraw") fields.innerHTML = stackWithdrawEditor(preset.stackId);
+  if (type === "incomeStream") fields.innerHTML = incomeStreamEditor(item);
+  if (type === "incomeEntry") fields.innerHTML = incomeEntryEditor();
+  if (type === "incomeReceive") fields.innerHTML = incomeReceiveEditor(preset.incomeEntryId);
+  if (type === "allocationRule") fields.innerHTML = allocationRuleEditor(item);
+  if (type === "allocationPlan") fields.innerHTML = allocationPlanEditor(preset.incomeEntryId);
+  if (type === "venture") fields.innerHTML = ventureEditor(item);
   if (type === "moneySettings") fields.innerHTML = moneySettingsEditor();
   if (type === "assistantSettings") fields.innerHTML = assistantSettingsEditor();
   if (type === "routine") fields.innerHTML = routineEditor(id);
@@ -1960,7 +2435,61 @@ function goalEditor(item) {
 
 function projectEditor(item) {
   const links = (item?.links || []).map(link => `${link.label} | ${link.url}`).join("\n");
-  return `<div class="field"><label>Project name</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Category</label><select name="category">${["business","software","education","creative","personal"].map(value => `<option value="${value}" ${(item?.category || "personal") === value ? "selected" : ""}>${value[0].toUpperCase() + value.slice(1)}</option>`).join("")}</select></div><div class="field"><label>Goal</label><select name="goalId"><option value="">No parent goal</option>${state.goals.filter(goal => goal.status !== "archived").map(goal => `<option value="${goal.id}" ${item?.goalId === goal.id ? "selected" : ""}>${escapeHTML(goal.name)}</option>`).join("")}</select></div><div class="field"><label>Priority</label><select name="priority">${[1,2,3].map(value => `<option value="${value}" ${Number(item?.priority || 2) === value ? "selected" : ""}>${value}</option>`).join("")}</select></div></div><div class="field"><label>Project output</label><textarea name="outcome" required placeholder="What tangible result must this project create?">${escapeHTML(item?.outcome || "")}</textarea></div><div class="inline-fields"><div class="field"><label>Next review</label><input name="nextReviewDate" type="date" value="${item?.nextReviewDate || ""}" /></div><div class="field"><label>Status</label><select name="status">${["active","paused","completed","archived"].map(value => `<option value="${value}" ${(item?.status || "active") === value ? "selected" : ""}>${value[0].toUpperCase() + value.slice(1)}</option>`).join("")}</select></div></div><div class="field"><label>Working notes</label><textarea name="notes">${escapeHTML(item?.notes || "")}</textarea></div><div class="field"><label>Links (one per line)</label><textarea name="links" placeholder="Repository | https://github.com/…">${escapeHTML(links)}</textarea></div>`;
+  return `<div class="field"><label>Project name</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Category</label><select name="category">${["business","software","education","creative","personal"].map(value => `<option value="${value}" ${(item?.category || "personal") === value ? "selected" : ""}>${value[0].toUpperCase() + value.slice(1)}</option>`).join("")}</select></div><div class="field"><label>Goal</label><select name="goalId"><option value="">No parent goal</option>${state.goals.filter(goal => goal.status !== "archived").map(goal => `<option value="${goal.id}" ${item?.goalId === goal.id ? "selected" : ""}>${escapeHTML(goal.name)}</option>`).join("")}</select></div><div class="field"><label>Venture</label><select name="ventureId"><option value="">No venture</option>${state.ventures.filter(venture => venture.status !== "archived").map(venture => `<option value="${venture.id}" ${item?.ventureId === venture.id ? "selected" : ""}>${escapeHTML(venture.name)}</option>`).join("")}</select></div><div class="field"><label>Priority</label><select name="priority">${[1,2,3].map(value => `<option value="${value}" ${Number(item?.priority || 2) === value ? "selected" : ""}>${value}</option>`).join("")}</select></div></div><div class="field"><label>Project output</label><textarea name="outcome" required placeholder="What tangible result must this project create?">${escapeHTML(item?.outcome || "")}</textarea></div><div class="inline-fields"><div class="field"><label>Next review</label><input name="nextReviewDate" type="date" value="${item?.nextReviewDate || ""}" /></div><div class="field"><label>Status</label><select name="status">${["active","paused","completed","archived"].map(value => `<option value="${value}" ${(item?.status || "active") === value ? "selected" : ""}>${value[0].toUpperCase() + value.slice(1)}</option>`).join("")}</select></div></div><div class="field"><label>Working notes</label><textarea name="notes">${escapeHTML(item?.notes || "")}</textarea></div><div class="field"><label>Links (one per line)</label><textarea name="links" placeholder="Repository | https://github.com/…">${escapeHTML(links)}</textarea></div>`;
+}
+
+function accountOptions(selected = "personal", includeHeld = false) {
+  return FINANCIAL_ACCOUNTS.filter(account => includeHeld || account !== "held").map(account => `<option value="${account}" ${selected === account ? "selected" : ""}>${escapeHTML(accountLabel(account))}</option>`).join("");
+}
+
+function stackSelect(name, selected = "", exclude = "") {
+  return `<select name="${name}" required><option value="">Choose a stack</option>${state.finances.stacks.filter(stack => stack.status === "active" && stack.id !== exclude).sort((a, b) => a.order - b.order).map(stack => `<option value="${stack.id}" ${selected === stack.id ? "selected" : ""}>${escapeHTML(stack.name)}</option>`).join("")}</select>`;
+}
+
+function stackEditor(item) {
+  return `<div class="field"><label>Stack name</label><input name="name" required value="${escapeHTML(item?.name || "")}" placeholder="CLA Stack, Ibiza 2027, New trainers…" /></div><div class="inline-fields"><div class="field"><label>Purpose</label><select name="kind">${[["vehicle","Vehicle"],["holiday","Holiday"],["fashion","Garms & shoes"],["general","General"],["cash","Physical cash"],["reserve","Reserve"],["business","Business"],["custom","Custom"]].map(([value,label]) => `<option value="${value}" ${(item?.kind || "custom") === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Backed by</label><select name="backingAccount">${accountOptions(item?.backingAccount || "personal")}</select></div><div class="field"><label>Status</label><select name="status">${["active","paused","completed","archived"].map(value => `<option value="${value}" ${(item?.status || "active") === value ? "selected" : ""}>${value[0].toUpperCase() + value.slice(1)}</option>`).join("")}</select></div></div><div class="inline-fields"><div class="field"><label>Goal (£)</label><input name="target" type="number" min="0" step="0.01" value="${item?.target ?? 0}" /></div><div class="field"><label>Extra costs (£)</label><input name="additionalCosts" type="number" min="0" step="0.01" value="${item?.additionalCosts ?? 0}" /></div><div class="field"><label>Target date</label><input name="targetDate" type="date" value="${item?.targetDate || ""}" /></div></div><div class="inline-fields"><div class="field"><label>Linked experience</label><select name="experienceId"><option value="">None</option>${state.life.experiences.filter(value => value.status !== "archived").map(value => `<option value="${value.id}" ${item?.experienceId === value.id ? "selected" : ""}>${escapeHTML(value.name)}</option>`).join("")}</select></div><div class="field"><label>Linked purchase</label><select name="purchaseId"><option value="">None</option>${state.finances.plannedPurchases.filter(value => value.status !== "archived").map(value => `<option value="${value.id}" ${item?.purchaseId === value.id ? "selected" : ""}>${escapeHTML(value.name)}</option>`).join("")}</select></div></div><div class="field"><label>Notes</label><textarea name="notes" placeholder="Insurance estimate, destination, item list, purchase conditions…">${escapeHTML(item?.notes || "")}</textarea></div><p class="dialog-note">The stack is a virtual allocation backed by the selected real cash location. Editing its goal never changes cash.</p>`;
+}
+
+function stackAddEditor(stackId = "") {
+  return `<div class="bread-editor-intro"><strong>Allocate money already recorded in the OS</strong><p>This changes purpose, not your bank balance.</p></div><div class="field"><label>Add to</label>${stackSelect("stackId", stackId)}</div><div class="inline-fields"><div class="field"><label>Amount (£)</label><input name="amount" type="number" min="0.01" step="0.01" required /></div><div class="field"><label>Date</label><input name="date" type="date" required value="${dayKey()}" /></div></div><div class="field"><label>Note</label><input name="note" placeholder="Why this money is being stacked" /></div>`;
+}
+
+function stackMoveEditor(stackId = "") {
+  return `<div class="bread-editor-intro"><strong>Move an existing allocation</strong><p>No revenue is created. If backing accounts differ, a linked transfer keeps actual locations accurate.</p></div><div class="inline-fields"><div class="field"><label>From</label>${stackSelect("fromStackId", stackId)}</div><div class="field"><label>To</label>${stackSelect("toStackId", "", stackId)}</div></div><div class="inline-fields"><div class="field"><label>Amount (£)</label><input name="amount" type="number" min="0.01" step="0.01" required /></div><div class="field"><label>Date</label><input name="date" type="date" required value="${dayKey()}" /></div></div><div class="field"><label>Note</label><input name="note" placeholder="Why the priority changed" /></div>`;
+}
+
+function stackWithdrawEditor(stackId = "") {
+  return `<div class="bread-editor-intro"><strong>Release or spend stacked money</strong><p>The allocation falls immediately. Record a cash expense only if money actually leaves its backing account.</p></div><div class="field"><label>Take from</label>${stackSelect("stackId", stackId)}</div><div class="inline-fields"><div class="field"><label>Amount (£)</label><input name="amount" type="number" min="0.01" step="0.01" required /></div><div class="field"><label>Date</label><input name="date" type="date" required value="${dayKey()}" /></div></div><div class="field"><label>Note</label><input name="note" required placeholder="Purchase, booking, release to general cash…" /></div><label class="toggle-row"><span><strong>Money actually left the account</strong><small>Create one linked expense transaction as well as reducing the stack</small></span><input name="recordCashExpense" type="checkbox" /><i></i></label>`;
+}
+
+function incomeStreamEditor(item) {
+  return `<div class="field"><label>Income stream</label><input name="name" required value="${escapeHTML(item?.name || "")}" /></div><div class="inline-fields"><div class="field"><label>Category</label><select name="category">${["trading","content","client","business","freelance","employment","other"].map(value => `<option value="${value}" ${(item?.category || "other") === value ? "selected" : ""}>${value[0].toUpperCase() + value.slice(1)}</option>`).join("")}</select></div><div class="field"><label>Venture</label><select name="ventureId"><option value="">No linked venture</option>${state.ventures.filter(venture => venture.status !== "archived").map(venture => `<option value="${venture.id}" ${item?.ventureId === venture.id ? "selected" : ""}>${escapeHTML(venture.name)}</option>`).join("")}</select></div><div class="field"><label>Status</label><select name="status">${["active","paused","archived"].map(value => `<option value="${value}" ${(item?.status || "active") === value ? "selected" : ""}>${value[0].toUpperCase() + value.slice(1)}</option>`).join("")}</select></div></div><div class="field"><label>Notes</label><textarea name="notes">${escapeHTML(item?.notes || "")}</textarea></div>`;
+}
+
+function incomeEntryEditor() {
+  return `<div class="field"><label>Income stream</label><select name="streamId" required><option value="">Choose a stream</option>${state.finances.incomeStreams.filter(item => item.status === "active").map(item => `<option value="${item.id}">${escapeHTML(item.name)}</option>`).join("")}</select></div><div class="inline-fields"><div class="field"><label>Entry type</label><select name="kind">${[["revenue","Revenue earned"],["trading_profit","Realized trading profit"],["expense","Business expense"],["trading_loss","Realized trading loss"],["fee","Fee / cost"],["capital_deposit","Capital deposit"],["capital_withdrawal","Capital withdrawal"],["unrealized_gain","Unrealized gain"],["unrealized_loss","Unrealized loss"]].map(([value,label]) => `<option value="${value}">${label}</option>`).join("")}</select></div><div class="field"><label>Amount (£)</label><input name="amount" type="number" min="0.01" step="0.01" required /></div><div class="field"><label>Date</label><input name="date" type="date" required value="${dayKey()}" /></div></div><div class="inline-fields"><div class="field"><label>Payment state</label><select name="status"><option value="expected">Expected</option><option value="confirmed">Confirmed</option><option value="received">Received / settled</option><option value="recorded">Recorded result</option></select></div><div class="field"><label>Cash location</label><select name="account">${accountOptions("business")}</select></div></div><div class="inline-fields"><div class="field"><label>Capital from</label><select name="fromAccount">${accountOptions("business")}</select></div><div class="field"><label>Capital to</label><select name="toAccount">${accountOptions("trading")}</select></div></div><div class="field"><label>Description</label><input name="description" placeholder="Client, trade batch, platform, software cost…" /></div><label class="toggle-row"><span><strong>Estimate</strong><small>Label the figure as provisional rather than verified</small></span><input name="estimate" type="checkbox" /><i></i></label><p class="dialog-note">Revenue and realized profit create cash only when received. Capital movements become transfers. Unrealized results never become cash or net profit.</p>`;
+}
+
+function incomeReceiveEditor(entryId) {
+  const entry = state.finances.incomeEntries.find(item => item.id === entryId);
+  const stream = state.finances.incomeStreams.find(item => item.id === entry?.streamId);
+  if (!entry) return '<div class="empty">That income entry no longer exists.</div>';
+  return `<div class="bread-editor-intro"><strong>${escapeHTML(stream?.name || "Income")} · ${currency(entry.amount)}</strong><p>Confirm where the cash actually arrived. It will be recorded exactly once.</p></div><input type="hidden" name="incomeEntryId" value="${entry.id}" /><div class="inline-fields"><div class="field"><label>Date received</label><input name="date" type="date" required value="${dayKey()}" /></div><div class="field"><label>Cash location</label><select name="account">${accountOptions(entry.account || "business")}</select></div></div>`;
+}
+
+function allocationRuleEditor(item) {
+  return `<div class="field"><label>When money comes from</label><select name="streamId" required><option value="">Choose a stream</option>${state.finances.incomeStreams.filter(stream => stream.status !== "archived").map(stream => `<option value="${stream.id}" ${item?.streamId === stream.id ? "selected" : ""}>${escapeHTML(stream.name)}</option>`).join("")}</select></div><div class="field"><label>Suggest allocating to</label>${stackSelect("stackId", item?.stackId || "")}</div><div class="inline-fields"><div class="field"><label>Percentage</label><input name="percentage" type="number" min="1" max="100" step="1" required value="${item?.percentage || 10}" /></div><div class="field"><label>Priority</label><input name="priority" type="number" min="1" max="9" required value="${item?.priority || 5}" /></div></div><label class="toggle-row"><span><strong>Rule active</strong><small>Prepare suggestions without moving money automatically</small></span><input name="active" type="checkbox" ${item?.active !== false ? "checked" : ""} /><i></i></label>`;
+}
+
+function allocationPlanEditor(entryId) {
+  const entry = state.finances.incomeEntries.find(item => item.id === entryId);
+  const suggestions = allocationSuggestionsForEntry(entry);
+  if (!entry || !suggestions.length) return '<div class="empty">No safe allocation suggestion is currently available.</div>';
+  return `<input type="hidden" name="incomeEntryId" value="${entry.id}" /><div class="bread-editor-intro"><strong>${currency(entry.amount)} received</strong><p>Adjust any amount. Cross-account allocations create a linked transfer; no bank movement happens outside this ledger.</p></div><div class="allocation-plan-list">${suggestions.map(item => `<div class="field"><label>${escapeHTML(item.stack.name)} · ${escapeHTML(item.reason)}</label><input name="stackAmount_${item.stack.id}" type="number" min="0" step="0.01" value="${fromMinor(item.amountMinor)}" /></div>`).join("")}</div>`;
+}
+
+function ventureEditor(item) {
+  return `<div class="field"><label>Venture name</label><input name="name" required value="${escapeHTML(item?.name || "")}" placeholder="ARQENT X, Clipping operations…" /></div><div class="field"><label>Description</label><textarea name="description">${escapeHTML(item?.description || "")}</textarea></div><div class="field"><label>Status</label><select name="status">${["idea","research","building","testing","active","scaling","paused","archived"].map(value => `<option value="${value}" ${(item?.status || "idea") === value ? "selected" : ""}>${value[0].toUpperCase() + value.slice(1)}</option>`).join("")}</select></div><div class="field"><label>Notes</label><textarea name="notes">${escapeHTML(item?.notes || "")}</textarea></div>`;
 }
 
 function projectSelect(name, selected = "") {
@@ -2022,16 +2551,16 @@ function scriptEditor(item) {
 
 function transactionEditor(item) {
   const budgets = currentBudgetItems();
-  return `<div class="inline-fields"><div class="field"><label>Type</label><select name="type"><option value="expense" ${item?.type === "expense" ? "selected" : ""}>Expense</option><option value="income" ${item?.type === "income" ? "selected" : ""}>Income</option></select></div><div class="field"><label>Account</label><select name="account">${[["personal","Personal"],["business","Business"],["held","Held for others"]].map(([value,label]) => `<option value="${value}" ${item?.account === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Date</label><input name="date" type="date" required value="${item?.date || dayKey()}" /></div></div><div class="field"><label>Amount (£)</label><input name="amount" type="number" min="0.01" step="0.01" required value="${item?.amount || ""}" /></div><div class="inline-fields"><div class="field"><label>Category</label><input name="category" required value="${escapeHTML(item?.category || "Other")}" placeholder="Food, transport, income…" /></div><div class="field"><label>Budget line</label><select name="budgetId"><option value="">Not assigned</option>${budgets.map(budget => `<option value="${budget.id}" ${item?.budgetId === budget.id ? "selected" : ""}>${escapeHTML(budget.name)} · ${escapeHTML(budget.account)}</option>`).join("")}</select></div></div><div class="field"><label>Note</label><input name="note" value="${escapeHTML(item?.note || "")}" placeholder="What was this for?" /></div>`;
+  return `<div class="inline-fields"><div class="field"><label>Type</label><select name="type"><option value="expense" ${item?.type === "expense" ? "selected" : ""}>Expense</option><option value="income" ${item?.type === "income" ? "selected" : ""}>Income</option></select></div><div class="field"><label>Account</label><select name="account">${accountOptions(item?.account || "personal", true)}</select></div><div class="field"><label>Date</label><input name="date" type="date" required value="${item?.date || dayKey()}" /></div></div><div class="field"><label>Amount (£)</label><input name="amount" type="number" min="0.01" step="0.01" required value="${item?.amount || ""}" /></div><div class="inline-fields"><div class="field"><label>Category</label><input name="category" required value="${escapeHTML(item?.category || "Other")}" placeholder="Food, transport, income…" /></div><div class="field"><label>Budget line</label><select name="budgetId"><option value="">Not assigned</option>${budgets.map(budget => `<option value="${budget.id}" ${item?.budgetId === budget.id ? "selected" : ""}>${escapeHTML(budget.name)} · ${escapeHTML(budget.account)}</option>`).join("")}</select></div></div><div class="field"><label>Note</label><input name="note" value="${escapeHTML(item?.note || "")}" placeholder="What was this for?" /></div>`;
 }
 
 function transferEditor(item) {
-  return `<div class="inline-fields"><div class="field"><label>From</label><select name="fromAccount">${[["personal","Personal"],["business","Business"],["held","Held for others"]].map(([value,label]) => `<option value="${value}" ${(item?.fromAccount || "personal") === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>To</label><select name="toAccount">${[["personal","Personal"],["business","Business"],["held","Held for others"]].map(([value,label]) => `<option value="${value}" ${(item?.toAccount || "business") === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Date</label><input name="date" type="date" required value="${item?.date || dayKey()}" /></div></div><div class="field"><label>Amount (£)</label><input name="amount" type="number" min="0.01" step="0.01" required value="${item?.amount || ""}" /></div><div class="field"><label>Note</label><input name="note" value="${escapeHTML(item?.note || "")}" placeholder="Why is this money moving?" /></div><p class="dialog-note">A transfer reduces one account and increases the other by the same amount. It never counts as income.</p>`;
+  return `<div class="inline-fields"><div class="field"><label>From</label><select name="fromAccount">${accountOptions(item?.fromAccount || "personal", true)}</select></div><div class="field"><label>To</label><select name="toAccount">${accountOptions(item?.toAccount || "business", true)}</select></div><div class="field"><label>Date</label><input name="date" type="date" required value="${item?.date || dayKey()}" /></div></div><div class="field"><label>Amount (£)</label><input name="amount" type="number" min="0.01" step="0.01" required value="${item?.amount || ""}" /></div><div class="field"><label>Note</label><input name="note" value="${escapeHTML(item?.note || "")}" placeholder="Why is this money moving?" /></div><p class="dialog-note">A transfer reduces one location and increases another by the same amount. It never counts as income.</p>`;
 }
 
 function reconciliationEditor() {
   const totals = moneyTotals();
-  return `<div class="reconciliation-intro"><strong>Compare recorded cash with the real account balances</strong><p>Differences can be added as clearly labelled adjustment transactions, preserving the audit trail.</p></div><div class="inline-fields"><div class="field"><label>Date checked</label><input name="date" type="date" required value="${dayKey()}" /></div><div class="field"><label>Actual personal (£)</label><input name="actualPersonal" type="number" step="0.01" required value="${totals.personal}" /></div></div><div class="inline-fields"><div class="field"><label>Actual business (£)</label><input name="actualBusiness" type="number" step="0.01" required value="${totals.business}" /></div><div class="field"><label>Actual held for others (£)</label><input name="actualHeld" type="number" step="0.01" required value="${totals.held}" /></div></div><div class="field"><label>Notes</label><textarea name="notes" placeholder="Missing transaction, bank fee, cash movement to investigate…"></textarea></div><label class="toggle-row"><span><strong>Apply differences to the ledger</strong><small>Create auditable reconciliation adjustments instead of rewriting balances</small></span><input name="applyAdjustments" type="checkbox" checked /><i></i></label>`;
+  return `<div class="reconciliation-intro"><strong>Compare recorded cash with the real account balances</strong><p>Differences can be added as clearly labelled adjustment transactions, preserving the audit trail.</p></div><div class="inline-fields"><div class="field"><label>Date checked</label><input name="date" type="date" required value="${dayKey()}" /></div><div class="field"><label>Actual personal (£)</label><input name="actualPersonal" type="number" step="0.01" required value="${totals.personal}" /></div><div class="field"><label>Actual business (£)</label><input name="actualBusiness" type="number" step="0.01" required value="${totals.business}" /></div></div><div class="inline-fields"><div class="field"><label>Actual physical cash (£)</label><input name="actualPhysical" type="number" step="0.01" required value="${totals.physical}" /></div><div class="field"><label>Actual trading wallets (£)</label><input name="actualTrading" type="number" step="0.01" required value="${totals.trading}" /></div><div class="field"><label>Actual held for others (£)</label><input name="actualHeld" type="number" step="0.01" required value="${totals.held}" /></div></div><div class="field"><label>Notes</label><textarea name="notes" placeholder="Missing transaction, bank fee, cash movement to investigate…"></textarea></div><label class="toggle-row"><span><strong>Apply differences to the ledger</strong><small>Create auditable reconciliation adjustments instead of rewriting balances</small></span><input name="applyAdjustments" type="checkbox" checked /><i></i></label>`;
 }
 
 function allocationEditor(incomeId) {
@@ -2047,7 +2576,7 @@ function billEditor(item) {
 }
 
 function moneySettingsEditor() {
-  return `<div class="field"><label>Cash reserve floor (£)</label><input name="reserveTarget" type="number" min="0" step="10" required value="${Number(state.finances.settings.reserveTarget) || 0}" /></div><div class="field"><label>Monthly enjoyment allowance (£)</label><input name="enjoymentAllowance" type="number" min="0" step="5" value="${Number(state.finances.settings.enjoymentAllowance) || 0}" /></div><p class="dialog-note">Personal safe-to-spend uses personal cash only, then protects genuine bills, remaining protected budgets, the reserve floor, planned repayments, active income allocations and reserved purchases. Expected income, investments, business cash and money held for others remain excluded.</p>`;
+  return `<div class="field"><label>Cash reserve floor (£)</label><input name="reserveTarget" type="number" min="0" step="10" required value="${Number(state.finances.settings.reserveTarget) || 0}" /></div><div class="field"><label>Monthly enjoyment allowance (£)</label><input name="enjoymentAllowance" type="number" min="0" step="5" value="${Number(state.finances.settings.enjoymentAllowance) || 0}" /></div><div class="field"><label>Default tax provision on allocation suggestions (%)</label><input name="taxProvisionRate" type="number" min="0" max="100" step="1" value="${Number(state.finances.settings.taxProvisionRate) || 0}" /></div><p class="dialog-note">Personal safe-to-spend uses personal cash only, then protects genuine bills, stacks, the remaining reserve floor, planned repayments, active allocations and reserved purchases. Expected income, investments, business cash, trading wallets and money held for others remain excluded.</p>`;
 }
 
 function assistantSettingsEditor() {
@@ -2101,6 +2630,18 @@ function handoffImportEditor() {
   return `<div class="handoff-intro"><strong>Encrypted transfer detected</strong><p>Enter the password chosen on the sending device.</p></div><div class="field"><label>Transfer password</label><input name="password" type="password" required autocomplete="current-password" /></div><p class="dialog-note">Importing replaces this device's Life OS data. Its local PIN settings remain unchanged.</p>`;
 }
 
+function createCashTransaction(type, account, amountMinor, date, category, note, links = {}) {
+  const transaction = { id: crypto.randomUUID(), type, account, date, amount: fromMinor(amountMinor), amountMinor, category, budgetId: "", forecastId: "", reconciliationId: "", note, createdAt: new Date().toISOString(), ...links };
+  state.finances.transactions.push(transaction);
+  return transaction;
+}
+
+function createAccountTransfer(fromAccount, toAccount, amountMinor, date, note, links = {}) {
+  const transfer = { id: crypto.randomUUID(), fromAccount, toAccount, amount: fromMinor(amountMinor), amountMinor, date, note, allocationId: "", stackEntryId: "", empireEntryId: "", reversalOf: "", createdAt: new Date().toISOString(), ...links };
+  state.finances.transfers.push(transfer);
+  return transfer;
+}
+
 async function saveEditor() {
   const form = document.getElementById("editor-form");
   if (!form.reportValidity()) return false;
@@ -2138,14 +2679,15 @@ async function saveEditor() {
     state.finances.settings.reserveTargetMinor = toMinor(state.finances.settings.reserveTarget);
     state.finances.settings.enjoymentAllowance = Math.max(0, Number(data.enjoymentAllowance) || 0);
     state.finances.settings.enjoymentAllowanceMinor = toMinor(state.finances.settings.enjoymentAllowance);
+    state.finances.settings.taxProvisionRate = Math.min(100, Math.max(0, Number(data.taxProvisionRate) || 0));
     saveState("Spending guardrails updated");
     render();
     return true;
   }
   if (editor.type === "reconciliation") {
     const totals = moneyTotals();
-    const recordedMinor = { personal: totals.minor.personal, business: totals.minor.business, held: totals.minor.held };
-    const actualMinor = { personal: toMinor(data.actualPersonal), business: toMinor(data.actualBusiness), held: toMinor(data.actualHeld) };
+    const recordedMinor = Object.fromEntries(FINANCIAL_ACCOUNTS.map(account => [account, totals.minor[account]]));
+    const actualMinor = { personal: toMinor(data.actualPersonal), business: toMinor(data.actualBusiness), physical: toMinor(data.actualPhysical), trading: toMinor(data.actualTrading), held: toMinor(data.actualHeld) };
     const differencesMinor = Object.fromEntries(Object.keys(recordedMinor).map(account => [account, actualMinor[account] - recordedMinor[account]]));
     const reconciliation = { id: crypto.randomUUID(), date: data.date || dayKey(), recordedMinor, actualMinor, differencesMinor, applied: form.elements.applyAdjustments.checked, adjustmentIds: [], notes: data.notes.trim(), createdAt: new Date().toISOString() };
     if (reconciliation.applied) {
@@ -2188,6 +2730,85 @@ async function saveEditor() {
     render();
     return true;
   }
+  if (editor.type === "stackAdd") {
+    const stack = state.finances.stacks.find(item => item.id === data.stackId && item.status === "active");
+    if (!stack) return showToast("Choose an active stack"), false;
+    const amountMinor = toMinor(data.amount);
+    const totals = moneyTotals();
+    const reserveCapacityMinor = stack.kind === "reserve" && stack.backingAccount === "personal" ? totals.minor.reserveProtection : 0;
+    const capacityMinor = toMinor(totals.stackAvailable[stack.backingAccount] || 0) + reserveCapacityMinor;
+    if (amountMinor > capacityMinor) return showToast(`Only ${currency(fromMinor(capacityMinor))} is safely available from ${accountLabel(stack.backingAccount)}`), false;
+    state.finances.stackEntries.push({ id: crypto.randomUUID(), type: "add", stackId: stack.id, fromStackId: "", toStackId: "", amount: fromMinor(amountMinor), amountMinor, sourceAccount: stack.backingAccount, date: data.date, note: data.note.trim(), cashTransactionId: "", transferId: "", incomeEntryId: "", reversalTransactionId: "", reversedAt: "", createdAt: new Date().toISOString() });
+    saveState(`${currency(fromMinor(amountMinor))} added to ${stack.name}`);
+    render();
+    return true;
+  }
+  if (editor.type === "stackMove") {
+    const fromStack = state.finances.stacks.find(item => item.id === data.fromStackId);
+    const toStack = state.finances.stacks.find(item => item.id === data.toStackId);
+    const amountMinor = toMinor(data.amount);
+    if (!fromStack || !toStack || fromStack.id === toStack.id) return showToast("Choose two different stacks"), false;
+    const balances = stackLedgerTotals().balancesMinor;
+    if (amountMinor > Math.max(0, balances[fromStack.id] || 0)) return showToast(`Only ${currency(fromMinor(Math.max(0, balances[fromStack.id] || 0)))} is in ${fromStack.name}`), false;
+    const entry = { id: crypto.randomUUID(), type: "move", stackId: "", fromStackId: fromStack.id, toStackId: toStack.id, amount: fromMinor(amountMinor), amountMinor, sourceAccount: fromStack.backingAccount, date: data.date, note: data.note.trim(), cashTransactionId: "", transferId: "", incomeEntryId: "", reversalTransactionId: "", reversedAt: "", createdAt: new Date().toISOString() };
+    if (fromStack.backingAccount !== toStack.backingAccount) {
+      const transfer = createAccountTransfer(fromStack.backingAccount, toStack.backingAccount, amountMinor, data.date, `Backing transfer for ${fromStack.name} → ${toStack.name}`, { stackEntryId: entry.id });
+      entry.transferId = transfer.id;
+    }
+    state.finances.stackEntries.push(entry);
+    saveState(`Bread moved to ${toStack.name}`);
+    render();
+    return true;
+  }
+  if (editor.type === "stackWithdraw") {
+    const stack = state.finances.stacks.find(item => item.id === data.stackId);
+    const amountMinor = toMinor(data.amount);
+    if (!stack) return showToast("Choose a stack"), false;
+    const balanceMinor = Math.max(0, stackLedgerTotals().balancesMinor[stack.id] || 0);
+    if (amountMinor > balanceMinor) return showToast(`Only ${currency(fromMinor(balanceMinor))} is in ${stack.name}`), false;
+    const entry = { id: crypto.randomUUID(), type: "withdraw", stackId: stack.id, fromStackId: "", toStackId: "", amount: fromMinor(amountMinor), amountMinor, sourceAccount: stack.backingAccount, date: data.date, note: data.note.trim(), cashTransactionId: "", transferId: "", incomeEntryId: "", reversalTransactionId: "", reversedAt: "", createdAt: new Date().toISOString() };
+    if (form.elements.recordCashExpense.checked) entry.cashTransactionId = createCashTransaction("expense", stack.backingAccount, amountMinor, data.date, "Stack withdrawal", data.note.trim(), { stackEntryId: entry.id }).id;
+    state.finances.stackEntries.push(entry);
+    saveState(form.elements.recordCashExpense.checked ? "Stack reduced and cash expense recorded" : "Stack allocation released");
+    render();
+    return true;
+  }
+  if (editor.type === "incomeReceive") {
+    const entry = state.finances.incomeEntries.find(item => item.id === data.incomeEntryId);
+    if (!entry || entry.reversedAt || entry.cashTransactionId) return showToast("That income has already been settled"), false;
+    const transaction = createCashTransaction("income", data.account, entry.amountMinor, data.date, "Income Empire receipt", entry.description || incomeKindLabel(entry.kind), { empireEntryId: entry.id });
+    entry.account = data.account;
+    entry.date = data.date;
+    entry.status = "received";
+    entry.receivedAt = new Date().toISOString();
+    entry.cashTransactionId = transaction.id;
+    saveState("Income received and recorded once");
+    render();
+    return true;
+  }
+  if (editor.type === "allocationPlan") {
+    const entry = state.finances.incomeEntries.find(item => item.id === data.incomeEntryId);
+    if (!entry || entry.reversedAt || entry.status !== "received" || entry.allocationAppliedAt) return showToast("That receipt is no longer available for allocation"), false;
+    const allocations = [...form.elements].filter(element => element.name?.startsWith("stackAmount_")).map(element => ({ stack: state.finances.stacks.find(item => item.id === element.name.replace("stackAmount_", "")), amountMinor: toMinor(element.value) })).filter(item => item.stack && item.amountMinor > 0);
+    const totalMinor = allocations.reduce((sum, item) => sum + item.amountMinor, 0);
+    const taxRate = Math.min(100, Math.max(0, Number(state.finances.settings.taxProvisionRate) || 0));
+    const distributableMinor = Math.round(entry.amountMinor * (1 - taxRate / 100));
+    if (!totalMinor) return showToast("Allocate at least one amount or close the plan"), false;
+    if (totalMinor > distributableMinor) return showToast(`Keep the plan within ${currency(fromMinor(distributableMinor))} after the tax provision`), false;
+    const sourceAvailableMinor = toMinor(moneyTotals().stackAvailable[entry.account] || 0);
+    if (totalMinor > sourceAvailableMinor) return showToast(`Only ${currency(fromMinor(sourceAvailableMinor))} is currently free in ${accountLabel(entry.account)}`), false;
+    allocations.forEach(item => {
+      const stackEntry = { id: crypto.randomUUID(), type: "add", stackId: item.stack.id, fromStackId: "", toStackId: "", amount: fromMinor(item.amountMinor), amountMinor: item.amountMinor, sourceAccount: item.stack.backingAccount, date: dayKey(), note: "Approved Income Empire allocation", cashTransactionId: "", transferId: "", incomeEntryId: entry.id, reversalTransactionId: "", reversedAt: "", createdAt: new Date().toISOString() };
+      if (item.stack.backingAccount !== entry.account) {
+        stackEntry.transferId = createAccountTransfer(entry.account, item.stack.backingAccount, item.amountMinor, dayKey(), `Approved allocation from ${state.finances.incomeStreams.find(value => value.id === entry.streamId)?.name || "income"} to ${item.stack.name}`, { empireEntryId: entry.id, stackEntryId: stackEntry.id }).id;
+      }
+      state.finances.stackEntries.push(stackEntry);
+    });
+    entry.allocationAppliedAt = new Date().toISOString();
+    saveState("Allocation plan approved and recorded");
+    render();
+    return true;
+  }
   if (editor.type === "handoff") {
     if (data.password !== data.confirmPassword) return showToast("Passwords do not match"), false;
     await createSecureHandoff(data.password);
@@ -2207,6 +2828,36 @@ async function saveEditor() {
       showToast("Password incorrect or transfer damaged");
       return false;
     }
+  }
+  if (editor.type === "incomeEntry") {
+    const stream = state.finances.incomeStreams.find(item => item.id === data.streamId && item.status !== "archived");
+    if (!stream) return showToast("Choose an active income stream"), false;
+    const amountMinor = toMinor(data.amount);
+    const earningKinds = ["revenue", "trading_profit"];
+    const costKinds = ["expense", "trading_loss", "fee"];
+    const capitalKinds = ["capital_deposit", "capital_withdrawal"];
+    const unrealizedKinds = ["unrealized_gain", "unrealized_loss"];
+    if (capitalKinds.includes(data.kind) && data.fromAccount === data.toAccount) return showToast("Capital must move between two different locations"), false;
+    const entry = { id: crypto.randomUUID(), streamId: stream.id, kind: data.kind, status: data.status, amount: fromMinor(amountMinor), amountMinor, date: data.date, account: data.account, fromAccount: data.fromAccount, toAccount: data.toAccount, description: data.description.trim(), estimate: form.elements.estimate.checked, cashTransactionId: "", transferId: "", allocationAppliedAt: "", reversedAt: "", reversalTransactionId: "", reversalTransferId: "", createdAt: new Date().toISOString(), receivedAt: "" };
+    if (capitalKinds.includes(entry.kind)) {
+      entry.status = "recorded";
+      const fromAccount = entry.kind === "capital_deposit" ? entry.fromAccount : entry.toAccount;
+      const toAccount = entry.kind === "capital_deposit" ? entry.toAccount : entry.fromAccount;
+      const transfer = createAccountTransfer(fromAccount, toAccount, amountMinor, entry.date, `${incomeKindLabel(entry.kind)} · ${stream.name}`, { empireEntryId: entry.id });
+      entry.transferId = transfer.id;
+    } else if (costKinds.includes(entry.kind)) {
+      entry.status = "recorded";
+      entry.cashTransactionId = createCashTransaction("expense", entry.account, amountMinor, entry.date, "Income Empire cost", entry.description || `${incomeKindLabel(entry.kind)} · ${stream.name}`, { empireEntryId: entry.id }).id;
+    } else if (earningKinds.includes(entry.kind) && entry.status === "received") {
+      entry.receivedAt = new Date().toISOString();
+      entry.cashTransactionId = createCashTransaction("income", entry.account, amountMinor, entry.date, "Income Empire receipt", entry.description || `${incomeKindLabel(entry.kind)} · ${stream.name}`, { empireEntryId: entry.id }).id;
+    } else if (unrealizedKinds.includes(entry.kind)) {
+      entry.status = "recorded";
+    }
+    state.finances.incomeEntries.push(entry);
+    saveState(capitalKinds.includes(entry.kind) ? "Capital movement recorded without creating income" : unrealizedKinds.includes(entry.kind) ? "Unrealized result recorded outside cash and profit" : "Income Empire entry recorded");
+    render();
+    return true;
   }
   if (editor.type === "purchase" && data.url.trim() && !safeExternalURL(data.url)) return showToast("Use a valid http or https product link"), false;
   const collection = editorCollection(editor.type);
@@ -2257,7 +2908,7 @@ async function saveEditor() {
       const url = urlParts.join("|").trim() || label.trim();
       return { label: urlParts.length ? label.trim() || "Link" : "Link", url };
     }).filter(link => safeExternalURL(link.url));
-    Object.assign(item, { name: data.name.trim(), category: data.category, goalId: data.goalId || "", outcome: data.outcome.trim(), nextReviewDate: data.nextReviewDate || "", priority: Number(data.priority), status: data.status, notes: data.notes.trim(), links, createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
+    Object.assign(item, { name: data.name.trim(), category: data.category, goalId: data.goalId || "", ventureId: data.ventureId || "", outcome: data.outcome.trim(), nextReviewDate: data.nextReviewDate || "", priority: Number(data.priority), status: data.status, notes: data.notes.trim(), links, createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
   }
   if (editor.type === "milestone") Object.assign(item, { projectId: data.projectId, name: data.name.trim(), dueDate: data.dueDate || "", status: data.status, createdAt: item.createdAt || new Date().toISOString(), completedAt: data.status === "completed" ? (item.completedAt || new Date().toISOString()) : "" });
   if (editor.type === "blocker") Object.assign(item, { projectId: data.projectId, text: data.text.trim(), reason: data.reason.trim(), status: data.status, createdAt: item.createdAt || new Date().toISOString(), resolvedAt: data.status === "resolved" ? (item.resolvedAt || new Date().toISOString()) : "" });
@@ -2266,6 +2917,14 @@ async function saveEditor() {
   if (editor.type === "income") Object.assign(item, { source: data.source.trim(), amount: fromMinor(toMinor(data.amount)), amountMinor: toMinor(data.amount), expectedDate: data.expectedDate || "", status: data.status, account: data.account, notes: data.notes.trim(), createdAt: item.createdAt || new Date().toISOString(), receivedAt: data.status === "received" ? (item.receivedAt || new Date().toISOString()) : "" });
   if (editor.type === "savings") Object.assign(item, { name: data.name.trim(), target: fromMinor(toMinor(data.target)), targetMinor: toMinor(data.target), saved: fromMinor(toMinor(data.saved)), savedMinor: toMinor(data.saved), deadline: data.deadline || "", status: data.status, createdAt: item.createdAt || new Date().toISOString() });
   if (editor.type === "purchase") Object.assign(item, { name: data.name.trim(), url: safeExternalURL(data.url) || "", amount: fromMinor(Math.max(0, toMinor(data.amount))), amountMinor: Math.max(0, toMinor(data.amount)), category: data.category, account: data.account, priority: data.priority, targetDate: data.targetDate || "", status: data.status, reserved: form.elements.reserved.checked, notes: data.notes.trim(), createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString(), boughtAt: data.status === "bought" ? (item.boughtAt || new Date().toISOString()) : "" });
+  if (editor.type === "stack") {
+    const balanceMinor = editor.id ? Math.max(0, stackLedgerTotals().balancesMinor[editor.id] || 0) : 0;
+    if (balanceMinor && item.backingAccount && item.backingAccount !== data.backingAccount) return showToast("Move the bread out before changing this stack's backing account"), false;
+    Object.assign(item, { name: data.name.trim(), kind: data.kind, target: fromMinor(toMinor(data.target)), targetMinor: toMinor(data.target), backingAccount: data.backingAccount, targetDate: data.targetDate || "", additionalCosts: fromMinor(toMinor(data.additionalCosts)), additionalCostsMinor: toMinor(data.additionalCosts), experienceId: data.experienceId || "", purchaseId: data.purchaseId || "", status: data.status, order: Number.isFinite(Number(item.order)) ? Number(item.order) : state.finances.stacks.length - 1, notes: data.notes.trim(), createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
+  }
+  if (editor.type === "incomeStream") Object.assign(item, { name: data.name.trim(), category: data.category, ventureId: data.ventureId || "", status: data.status, notes: data.notes.trim(), createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
+  if (editor.type === "allocationRule") Object.assign(item, { streamId: data.streamId, stackId: data.stackId, percentage: Math.min(100, Math.max(1, Number(data.percentage) || 1)), priority: Math.min(9, Math.max(1, Number(data.priority) || 5)), active: form.elements.active.checked, createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
+  if (editor.type === "venture") Object.assign(item, { name: data.name.trim(), description: data.description.trim(), status: data.status, notes: data.notes.trim(), createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
   saveState(editor.type === "inbox" ? "Captured without changing direction" : "System updated", { scope: editor.type === "inbox" ? "inbox" : "all" });
   render();
   return true;
@@ -2276,7 +2935,12 @@ function deleteEditor() {
   const collection = editorCollection(editor.type);
   const index = collection.findIndex(entry => entry.id === editor.id);
   if (editor.type === "transfer" && collection[index]?.allocationId) return showToast("This transfer belongs to an income allocation and cannot be deleted separately");
-  if (editor.type === "transaction" && (collection[index]?.reconciliationId || collection[index]?.forecastId)) return showToast("This transaction is linked to an auditable source record and cannot be deleted separately");
+  if (editor.type === "transfer" && (collection[index]?.stackEntryId || collection[index]?.empireEntryId)) return showToast("This transfer belongs to an auditable wealth record and cannot be deleted separately");
+  if (editor.type === "transaction" && (collection[index]?.reconciliationId || collection[index]?.forecastId || collection[index]?.stackEntryId || collection[index]?.empireEntryId)) return showToast("This transaction is linked to an auditable source record and cannot be deleted separately");
+  if (editor.type === "stack" && Math.max(0, stackLedgerTotals().balancesMinor[editor.id] || 0)) return showToast("Take the bread out before deleting this stack");
+  if (editor.type === "incomeStream" && state.finances.incomeEntries.some(item => item.streamId === editor.id)) return showToast("Archive this stream instead; its history must remain auditable");
+  if (editor.type === "incomeEntry") return showToast("Use Undo so the source record remains auditable");
+  if (editor.type === "venture" && (state.projects.some(item => item.ventureId === editor.id) || state.finances.incomeStreams.some(item => item.ventureId === editor.id))) return showToast("Archive this venture instead; linked records must remain intact");
   if (editor.type === "inbox" && index >= 0) recordInboxDeletion(editor.id);
   if (index >= 0) collection.splice(index, 1);
   if (editor.type === "task" && todayState().tomorrowTaskId === editor.id) {
@@ -3064,6 +3728,68 @@ async function importBackupFile(file) {
   render();
 }
 
+function undoStackEntry(id) {
+  const entry = state.finances.stackEntries.find(item => item.id === id && !item.reversedAt);
+  if (!entry) return;
+  entry.reversedAt = new Date().toISOString();
+  const transaction = state.finances.transactions.find(item => item.id === entry.cashTransactionId);
+  if (transaction) entry.reversalTransactionId = createCashTransaction(transaction.type === "income" ? "expense" : "income", transaction.account, transaction.amountMinor, dayKey(), "Stack reversal", `Reversal of ${transaction.note || "stack cash movement"}`, { stackEntryId: entry.id, reversalOf: transaction.id }).id;
+  const transfer = state.finances.transfers.find(item => item.id === entry.transferId);
+  if (transfer) createAccountTransfer(transfer.toAccount, transfer.fromAccount, transfer.amountMinor, dayKey(), `Reversal of ${transfer.note}`, { stackEntryId: entry.id, reversalOf: transfer.id });
+  if (entry.incomeEntryId && !state.finances.stackEntries.some(item => item.incomeEntryId === entry.incomeEntryId && !item.reversedAt)) {
+    const incomeEntry = state.finances.incomeEntries.find(item => item.id === entry.incomeEntryId);
+    if (incomeEntry) {
+      incomeEntry.allocationAppliedAt = "";
+      state.finances.transfers.filter(item => item.empireEntryId === incomeEntry.id && !item.reversalOf && !state.finances.transfers.some(candidate => candidate.reversalOf === item.id)).forEach(item => createAccountTransfer(item.toAccount, item.fromAccount, item.amountMinor, dayKey(), `Reversal of ${item.note}`, { empireEntryId: incomeEntry.id, reversalOf: item.id }));
+    }
+  }
+  saveState("Stack entry reversed; source history preserved");
+  render();
+}
+
+function undoIncomeEntry(id) {
+  const entry = state.finances.incomeEntries.find(item => item.id === id && !item.reversedAt);
+  if (!entry) return;
+  entry.reversedAt = new Date().toISOString();
+  state.finances.transactions.filter(item => item.empireEntryId === entry.id && !item.reversalOf && !state.finances.transactions.some(candidate => candidate.reversalOf === item.id)).forEach(transaction => {
+    const reversal = createCashTransaction(transaction.type === "income" ? "expense" : "income", transaction.account, transaction.amountMinor, dayKey(), "Income Empire reversal", `Reversal of ${transaction.note || incomeKindLabel(entry.kind)}`, { empireEntryId: entry.id, reversalOf: transaction.id });
+    entry.reversalTransactionId ||= reversal.id;
+  });
+  state.finances.transfers.filter(item => item.empireEntryId === entry.id && !item.reversalOf && !state.finances.transfers.some(candidate => candidate.reversalOf === item.id)).forEach(transfer => {
+    const reversal = createAccountTransfer(transfer.toAccount, transfer.fromAccount, transfer.amountMinor, dayKey(), `Reversal of ${transfer.note}`, { empireEntryId: entry.id, reversalOf: transfer.id });
+    entry.reversalTransferId ||= reversal.id;
+  });
+  state.finances.stackEntries.filter(item => item.incomeEntryId === entry.id && !item.reversedAt).forEach(item => { item.reversedAt = new Date().toISOString(); });
+  saveState("Income entry reversed without deleting its audit trail");
+  render();
+}
+
+function captureMoneyReport() {
+  const snapshot = moneyReportData(reportMonth);
+  let report = state.finances.monthlyMoneyReports.find(item => item.month === reportMonth);
+  if (!report) {
+    report = { id: crypto.randomUUID(), month: reportMonth, snapshot, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    state.finances.monthlyMoneyReports.push(report);
+  } else {
+    report.snapshot = snapshot;
+    report.updatedAt = new Date().toISOString();
+  }
+  saveState("Monthly money report captured");
+  render();
+}
+
+function moveStackOrder(id, direction) {
+  const stacks = state.finances.stacks.filter(item => item.status !== "archived").sort((a, b) => a.order - b.order);
+  const index = stacks.findIndex(item => item.id === id);
+  const swapIndex = direction === "up" ? index - 1 : index + 1;
+  if (index < 0 || swapIndex < 0 || swapIndex >= stacks.length) return;
+  const currentOrder = stacks[index].order;
+  stacks[index].order = stacks[swapIndex].order;
+  stacks[swapIndex].order = currentOrder;
+  saveState("Stack order updated");
+  render();
+}
+
 document.addEventListener("click", async event => {
   const target = event.target.closest("button, [data-edit-script]");
   if (!target || document.body.classList.contains("locked")) return;
@@ -3072,6 +3798,33 @@ document.addEventListener("click", async event => {
     return;
   }
   if (target.dataset.viewTarget) return goToView(target.dataset.viewTarget);
+  if (target.dataset.moneySection) {
+    moneySection = target.dataset.moneySection;
+    renderMoney();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  if (target.dataset.incomePeriod) {
+    incomePeriod = target.dataset.incomePeriod;
+    renderMoney();
+    return;
+  }
+  if (target.dataset.dismissFinancialCue) {
+    state.finances.financialCueDismissals[target.dataset.dismissFinancialCue] = new Date().toISOString();
+    saveState("Cue dismissed");
+    renderMoney();
+    return;
+  }
+  if (target.dataset.stackMoveOrder) return moveStackOrder(target.dataset.stackId, target.dataset.stackMoveOrder);
+  if (target.dataset.undoStackEntry) return undoStackEntry(target.dataset.undoStackEntry);
+  if (target.dataset.undoIncomeEntry) return undoIncomeEntry(target.dataset.undoIncomeEntry);
+  if (target.dataset.receiveIncomeEntry) return openEditor("incomeReceive", null, { incomeEntryId: target.dataset.receiveIncomeEntry });
+  if (target.hasAttribute("data-capture-money-report")) return captureMoneyReport();
+  if (target.dataset.reportOpen) {
+    reportMonth = target.dataset.reportOpen;
+    renderMoney();
+    return;
+  }
   if (target.dataset.scrollTarget) {
     document.getElementById(target.dataset.scrollTarget)?.scrollIntoView({ behavior: "smooth", block: "center" });
     return;
@@ -3294,7 +4047,7 @@ document.addEventListener("click", async event => {
     saveState(releasing ? "Allocation protection released" : "Allocation protection restored");
     return render();
   }
-  if (target.dataset.add) return openEditor(target.dataset.add, null, { projectId: target.dataset.projectId || "" });
+  if (target.dataset.add) return openEditor(target.dataset.add, null, { projectId: target.dataset.projectId || "", stackId: target.dataset.stackId || "", incomeEntryId: target.dataset.incomeEntryId || "" });
   if (target.dataset.editRoutine) return openEditor("routine", target.dataset.editRoutine);
   if (target.dataset.inboxTask) return promoteInboxItem(target.dataset.inboxTask);
   if (target.hasAttribute("data-capture-month")) return captureMonthlyEvidence();
@@ -3316,7 +4069,7 @@ document.addEventListener("click", async event => {
     return renumberRoutineSteps();
   }
   if (target.hasAttribute("data-disable-lock")) return disableLock();
-  ["task", "inbox", "maintenance", "cue", "script", "transaction", "transfer", "bill", "obligation", "investment", "contact", "experience", "journal", "goal", "project", "milestone", "blocker", "decision", "budget", "income", "savings", "purchase"].forEach(type => {
+  ["task", "inbox", "maintenance", "cue", "script", "transaction", "transfer", "bill", "obligation", "investment", "contact", "experience", "journal", "goal", "project", "milestone", "blocker", "decision", "budget", "income", "savings", "purchase", "stack", "incomeStream", "allocationRule", "venture"].forEach(type => {
     const key = `edit${type[0].toUpperCase()}${type.slice(1)}`;
     if (target.dataset[key]) openEditor(type, target.dataset[key]);
   });
@@ -3335,6 +4088,25 @@ document.addEventListener("keydown", event => {
 
 document.addEventListener("change", event => {
   const target = event.target;
+  if (target.dataset.reportMonth !== undefined) {
+    reportMonth = target.value || monthKey();
+    renderMoney();
+    return;
+  }
+  if (target.dataset.incomeRange !== undefined) {
+    if (target.dataset.incomeRange === "start") incomeCustomStart = target.value || incomeCustomStart;
+    if (target.dataset.incomeRange === "end") incomeCustomEnd = target.value || incomeCustomEnd;
+    if (incomeCustomStart > incomeCustomEnd) {
+      if (target.dataset.incomeRange === "start") incomeCustomEnd = incomeCustomStart;
+      else incomeCustomStart = incomeCustomEnd;
+    }
+    renderMoney();
+    return;
+  }
+  if (target.dataset.stackHistoryFilter !== undefined) {
+    document.querySelectorAll("[data-stack-entry-row]").forEach(row => row.classList.toggle("hidden", target.value !== "all" && row.dataset.entryType !== target.value));
+    return;
+  }
   if (target.matches("[data-bill-frequency]")) updateBillEditorFields();
   if (target.dataset.connectionField) {
     todayState().connection[target.dataset.connectionField] = target.value.trim();
@@ -3368,6 +4140,11 @@ document.addEventListener("change", event => {
 
 document.addEventListener("input", event => {
   const target = event.target;
+  if (target.dataset.stackHistorySearch !== undefined) {
+    const query = target.value.trim().toLowerCase();
+    document.querySelectorAll("[data-stack-entry-row]").forEach(row => row.classList.toggle("search-hidden", query && !row.dataset.searchText.includes(query)));
+    return;
+  }
   if (target.matches("[data-auto-resize]")) resizeOutcomeInput(target);
   if (target.dataset.balance) {
     const amountMinor = toMinor(target.value);

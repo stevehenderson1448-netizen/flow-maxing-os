@@ -6,7 +6,7 @@ const { chromium } = require("playwright");
 
 const root = path.resolve(__dirname, "..");
 const storageKey = "flow-maxing-os-v1";
-const backupKey = "50x-life-os-pre-v11-backup";
+const backupKey = "50x-life-os-pre-v12-backup";
 
 const mimeTypes = {
   ".css": "text/css",
@@ -74,7 +74,7 @@ function legacyFixture() {
       investments: [],
       budgets: [],
       incomeForecasts: [{ id: "student-finance", source: "Student Finance", amount: 5000, amountMinor: 500000, status: "expected", account: "personal", expectedDate: "2026-11-15", createdAt }],
-      savingsGoals: [],
+      savingsGoals: [{ id: "legacy-savings", name: "Car fund", target: 1000, targetMinor: 100000, saved: 50, savedMinor: 5000, deadline: "", status: "active", createdAt }],
       plannedPurchases: []
     },
     life: { contacts: [], experiences: [], journal: [] },
@@ -93,26 +93,172 @@ async function openWithFixture(browser, baseUrl, fixture = legacyFixture()) {
   return { context, page };
 }
 
+async function tap(locator) {
+  await locator.dispatchEvent("click");
+}
+
 async function testMigrationAndMoney(browser, baseUrl) {
   const { context, page } = await openWithFixture(browser, baseUrl);
   const state = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), storageKey);
   const backup = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), backupKey);
 
-  assert.equal(state.version, 11);
+  assert.equal(state.version, 12);
   assert.equal(backup.fromVersion, 10);
   assert.deepEqual(state.finances.bills.map(item => item.name), ["Rent", "Business AI development tools"]);
   assert.deepEqual(state.finances.budgets.map(item => item.name).sort(), ["Food", "Transport"]);
   assert.ok(state.finances.budgets.every(item => item.recurring && item.protect));
   assert.deepEqual(state.finances.archivedBills.map(item => item.id).sort(), ["food-bill", "transport-bill"]);
   assert.ok(state.finances.bills.every(item => item.dueConfirmed === false));
+  assert.equal(state.finances.balancesMinor.physical, 0);
+  assert.equal(state.finances.balancesMinor.trading, 0);
+  assert.equal(state.finances.stacks.length, 7);
+  assert.equal(state.finances.stackEntries.length, 1);
+  assert.equal(state.finances.stackEntries[0].amountMinor, 5000);
+  assert.equal(state.finances.incomeStreams.length, 5);
 
-  await page.locator('.nav-item[data-view-target="money"]').click();
+  await tap(page.locator('.nav-item[data-view-target="money"]'));
   await page.locator("#view-money.active").waitFor();
   const moneyText = await page.locator("#view-money").innerText();
-  assert.match(moneyText, /Personal safe\s+£500\.00/i);
+  assert.match(moneyText, /Personal safe\s+£450\.00/i);
   assert.match(moneyText, /Business free\s+£545\.00/i);
   assert.match(moneyText, /Expected\s+£5,000\.00\s+Not available/i);
   assert.doesNotMatch(moneyText, /£500\.00 overdue/);
+
+  await tap(page.locator('[data-money-section="stacks"]').first());
+  await tap(page.locator('.bread-actions [data-add="stackAdd"]'));
+  await page.locator('[name="stackId"]').selectOption({ label: "CLA Stack" });
+  await page.locator('[name="amount"]').fill("50");
+  await page.locator('[name="note"]').fill("First CLA allocation");
+  await tap(page.locator("#save-item"));
+  await page.locator("#editor-dialog").waitFor({ state: "hidden" });
+
+  await tap(page.locator('.bread-actions [data-add="stackMove"]'));
+  await page.locator('[name="fromStackId"]').selectOption({ label: "CLA Stack" });
+  await page.locator('[name="toStackId"]').selectOption({ label: "Holiday Stack" });
+  await page.locator('[name="amount"]').fill("20");
+  await tap(page.locator("#save-item"));
+  await page.locator("#editor-dialog").waitFor({ state: "hidden" });
+
+  await tap(page.locator('.bread-actions [data-add="stackWithdraw"]'));
+  await page.locator('[name="stackId"]').selectOption({ label: "Holiday Stack" });
+  await page.locator('[name="amount"]').fill("10");
+  await page.locator('[name="note"]').fill("Released for another priority");
+  await tap(page.locator("#save-item"));
+  await page.locator("#editor-dialog").waitFor({ state: "hidden" });
+
+  const afterStacks = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), storageKey);
+  assert.equal(afterStacks.finances.balancesMinor.personal, 100000);
+  assert.equal(afterStacks.finances.transactions.length, 0);
+  const activeStackEntries = afterStacks.finances.stackEntries.filter(item => !item.reversedAt);
+  assert.equal(activeStackEntries.filter(item => item.type === "add").reduce((sum, item) => sum + item.amountMinor, 0), 10000);
+  assert.equal(activeStackEntries.filter(item => item.type === "withdraw").reduce((sum, item) => sum + item.amountMinor, 0), 1000);
+
+  await tap(page.locator('[data-money-section="empire"]').first());
+  await tap(page.locator('.empire-truth-card [data-add="incomeEntry"]'));
+  await page.locator('[name="streamId"]').selectOption({ label: "Memecoin Trading" });
+  await page.locator('[name="kind"]').selectOption("trading_profit");
+  await page.locator('[name="amount"]').fill("800");
+  await page.locator('[name="status"]').selectOption("received");
+  await page.locator('[name="account"]').selectOption("trading");
+  await tap(page.locator("#save-item"));
+  await page.locator("#editor-dialog").waitFor({ state: "hidden" });
+  const profitState = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), storageKey);
+  assert.equal(profitState.finances.incomeEntries.length, 1);
+  assert.equal(profitState.finances.transactions.length, 1);
+  assert.equal(profitState.finances.transactions[0].account, "trading");
+  const profitEntryId = profitState.finances.incomeEntries[0].id;
+  const empireText = await page.locator("#view-money").innerText();
+  assert.match(empireText, /Revenue\s+£800\.00/i);
+  assert.match(empireText, /Net profit\s+£800\.00/i);
+
+  await tap(page.locator('.empire-truth-card [data-add="incomeEntry"]'));
+  await page.locator('[name="streamId"]').selectOption({ label: "Memecoin Trading" });
+  await page.locator('[name="kind"]').selectOption("capital_deposit");
+  await page.locator('[name="amount"]').fill("100");
+  await page.locator('[name="fromAccount"]').selectOption("business");
+  await page.locator('[name="toAccount"]').selectOption("trading");
+  await tap(page.locator("#save-item"));
+  await page.locator("#editor-dialog").waitFor({ state: "hidden" });
+  const capitalState = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), storageKey);
+  assert.equal(capitalState.finances.transfers.filter(item => item.empireEntryId).length, 1);
+  assert.equal(capitalState.finances.transactions.length, 1);
+  assert.match(await page.locator("#view-money").innerText(), /Revenue\s+£800\.00/i);
+
+  await tap(page.locator('.empire-truth-card [data-add="incomeEntry"]'));
+  await page.locator('[name="streamId"]').selectOption({ label: "Digital Business / Client Work" });
+  await page.locator('[name="kind"]').selectOption("revenue");
+  await page.locator('[name="amount"]').fill("200");
+  await page.locator('[name="status"]').selectOption("recorded");
+  await page.locator('[name="account"]').selectOption("business");
+  await tap(page.locator("#save-item"));
+  await page.locator("#editor-dialog").waitFor({ state: "hidden" });
+  const recordedState = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), storageKey);
+  assert.equal(recordedState.finances.transactions.length, 1, "Recorded revenue must not create received cash");
+  assert.match(await page.locator("#view-money").innerText(), /Revenue\s+£1,000\.00/i);
+  assert.match(await page.locator("#view-money").innerText(), /Cash received\s+£800\.00/i);
+
+  await tap(page.locator('.empire-truth-card [data-add="incomeEntry"]'));
+  await page.locator('[name="streamId"]').selectOption({ label: "Video Clipping" });
+  await page.locator('[name="kind"]').selectOption("revenue");
+  await page.locator('[name="amount"]').fill("500");
+  await page.locator('[name="status"]').selectOption("expected");
+  await tap(page.locator("#save-item"));
+  await page.locator("#editor-dialog").waitFor({ state: "hidden" });
+
+  await tap(page.locator('.empire-truth-card [data-add="incomeEntry"]'));
+  await page.locator('[name="streamId"]').selectOption({ label: "Memecoin Trading" });
+  await page.locator('[name="kind"]').selectOption("unrealized_gain");
+  await page.locator('[name="amount"]').fill("250");
+  await tap(page.locator("#save-item"));
+  await page.locator("#editor-dialog").waitFor({ state: "hidden" });
+  const distinctionText = await page.locator("#view-money").innerText();
+  assert.match(distinctionText, /Payments pending\s+£500\.00/i);
+  assert.match(distinctionText, /Unrealized result\s+£250\.00/i);
+  assert.match(distinctionText, /Revenue\s+£1,000\.00/i);
+
+  await tap(page.locator('[data-income-period="custom"]'));
+  assert.equal(await page.locator("[data-income-range]").count(), 2);
+  await page.locator('[data-income-range="start"]').fill("2026-11-01");
+  await page.locator('[data-income-range="start"]').dispatchEvent("change");
+  assert.match(await page.locator("#view-money").innerText(), /Revenue\s+£1,000\.00/i);
+  await tap(page.locator('[data-income-period="month"]'));
+
+  await tap(page.locator(`[data-add="allocationPlan"][data-income-entry-id="${profitEntryId}"]`));
+  await tap(page.locator("#save-item"));
+  await page.locator("#editor-dialog").waitFor({ state: "hidden" });
+  const allocatedState = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), storageKey);
+  const allocatedStackEntry = allocatedState.finances.stackEntries.find(item => item.incomeEntryId === profitEntryId && !item.reversedAt);
+  assert.equal(allocatedStackEntry.amountMinor, 50000);
+  assert.ok(allocatedStackEntry.transferId);
+  const allocationTransfer = allocatedState.finances.transfers.find(item => item.id === allocatedStackEntry.transferId);
+  assert.equal(allocationTransfer.fromAccount, "trading");
+  assert.equal(allocationTransfer.toAccount, "personal");
+  assert.equal(allocationTransfer.amountMinor, 50000);
+
+  await tap(page.locator('[data-money-section="stacks"]').first());
+  await tap(page.locator(`[data-undo-stack-entry="${allocatedStackEntry.id}"]`));
+  const releasedState = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), storageKey);
+  assert.ok(releasedState.finances.stackEntries.find(item => item.id === allocatedStackEntry.id).reversedAt);
+  assert.equal(releasedState.finances.incomeEntries.find(item => item.id === profitEntryId).allocationAppliedAt, "");
+  assert.ok(releasedState.finances.transfers.some(item => item.reversalOf === allocationTransfer.id));
+
+  await tap(page.locator('[data-money-section="empire"]').first());
+  await tap(page.locator(`[data-undo-income-entry="${profitEntryId}"]`));
+  const reversedState = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), storageKey);
+  assert.ok(reversedState.finances.incomeEntries.find(item => item.id === profitEntryId).reversedAt);
+  assert.equal(reversedState.finances.transactions.length, 2);
+  assert.ok(reversedState.finances.transactions.some(item => item.reversalOf === profitState.finances.transactions[0].id));
+  const reversedText = await page.locator("#view-money").innerText();
+  assert.match(reversedText, /Revenue\s+£200\.00/i);
+  assert.match(reversedText, /Cash received\s+£0\.00/i);
+  assert.match(reversedText, /Payments pending\s+£500\.00/i);
+  assert.match(reversedText, /Unrealized result\s+£250\.00/i);
+
+  await tap(page.locator('[data-money-section="report"]').first());
+  await tap(page.locator("[data-capture-money-report]"));
+  const reportState = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), storageKey);
+  assert.equal(reportState.finances.monthlyMoneyReports.length, 1);
+  assert.equal(reportState.finances.monthlyMoneyReports[0].snapshot.revenueMinor, 20000);
 
   await context.close();
 
@@ -128,9 +274,9 @@ async function testMigrationAndMoney(browser, baseUrl) {
     createdAt: "2026-11-01T09:00:00.000Z"
   }];
   const transferred = await openWithFixture(browser, baseUrl, transferFixture);
-  await transferred.page.locator('.nav-item[data-view-target="money"]').click();
+  await tap(transferred.page.locator('.nav-item[data-view-target="money"]'));
   const transferredText = await transferred.page.locator("#view-money").innerText();
-  assert.match(transferredText, /Personal safe\s+£600\.00/i);
+  assert.match(transferredText, /Personal safe\s+£550\.00/i);
   assert.match(transferredText, /Business free\s+£445\.00/i);
   await transferred.context.close();
 }
@@ -147,15 +293,22 @@ async function testMobileAndDialogs(browser, baseUrl) {
     assert.equal(await page.locator(".today-secondary").getAttribute("open"), null);
 
     for (const view of ["today", "life", "money", "week", "architecture", "review"]) {
-      await page.locator(`.nav-item[data-view-target="${view}"]`).click();
+      await tap(page.locator(`.nav-item[data-view-target="${view}"]`));
       await page.locator(`#view-${view}.active`).waitFor();
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       assert.ok(overflow <= 1, `${view} overflows by ${overflow}px at ${width}px`);
+      if (view === "money") {
+        for (const section of ["overview", "stacks", "empire", "report"]) {
+          await tap(page.locator(`[data-money-section="${section}"]`).first());
+          const sectionOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+          assert.ok(sectionOverflow <= 1, `money/${section} overflows by ${sectionOverflow}px at ${width}px`);
+        }
+      }
     }
 
-    await page.locator("#quick-capture").click();
+    await tap(page.locator("#quick-capture"));
     assert.equal(await page.locator("#editor-dialog").evaluate(dialog => dialog.open), true);
-    await page.locator('#editor-dialog [data-close-dialog="editor-dialog"]').click();
+    await tap(page.locator('#editor-dialog [data-close-dialog="editor-dialog"]'));
     assert.equal(await page.locator("#editor-dialog").evaluate(dialog => dialog.open), false);
     assert.deepEqual(pageErrors, [], `Browser errors at ${width}px: ${pageErrors.join("; ")}`);
     await context.close();

@@ -15,6 +15,10 @@ A dependency-free, mobile-first personal command centre organised around six mod
 - Routine and recovery intelligence plus an evidence-based weekly coach
 - Weekly rollover, monthly evidence snapshots, eight-week trends, and archived reflections
 - Exact-pence safe-to-spend engine with personal, business, restricted, expected, invested, and held money kept separate
+- STACKS virtual allocation ledger with Add Bread, Move Bread, Take Bread Out, reversible history, goal progress, and reconciliation against real cash locations
+- Income Empire with revenue, realized profit/loss, costs, cash received, pending payments, deployed capital, unrealized results, period analytics, and venture links
+- Approval-only allocation rules connecting genuinely received income to reserve, lifestyle, and savings stacks without counting transfers as earnings
+- Financial cues and a capturable monthly 50X Money Report with income, cash, obligations, stack movement, ventures, and upcoming commitments
 - Monthly budgets, savings goals, expected-versus-confirmed income, a conservative three-month cash-flow view, repayment planning, bill calendar, cash-cover insight, and reminders
 - Smart next-purchase planning with product links, account-aware affordability, priorities, target dates, and optional protected money
 - Subscription audit with renewals, remembered price changes, and review tracking
@@ -23,13 +27,13 @@ A dependency-free, mobile-first personal command centre organised around six mod
 - Private local assistant with fact/assumption separation, explicit data permissions, approval before changes, and reversible change history
 - Optional reminders and a local PIN or device-authenticator lock
 - End-to-end encrypted phone/desktop sync with automatic Inbox merging, one-time device handoffs, and portable backup files
-- Backed-up version-11 migration with recoverable upgrade snapshots
+- Backed-up version-12 migration with recoverable upgrade snapshots and legacy savings converted into auditable opening stack allocations
 - Account-safe transfers, confirmed bill dates, protected spending budgets, weekly balance reconciliation, and received-income allocation
 - Compact mobile Today command surface with event-based routine cues and explicit fallback actions
 
 The current assistant is deliberately local and rule-based. It does not send records to an external model. A future model provider can be added behind the existing permissions and approval controls without making the core app dependent on AI.
 
-The verified 2.0 audit, architecture, data model, migration strategy, and roadmap are documented in `docs/50X-LIFE-OS-2.0-AUDIT.md`.
+The verified 3.0 audit, architecture, data model, migration strategy, and roadmap are documented in `docs/50X-LIFE-OS-3.0-AUDIT.md`.
 
 ## Live app
 
@@ -62,4 +66,4 @@ HTTPS is required for offline installation and the service worker on a deployed 
 
 ## Verification
 
-`tests/smoke.cjs` verifies version-11 migration and rollback data, account-safe money calculations, expected-income exclusion, linked transfers, dialog closing, and all six modules at 320px, 375px, and 430px widths. It requires Node.js plus Playwright.
+`tests/smoke.cjs` verifies version-12 migration and rollback data, account-safe money calculations, stack cash separation, Income Empire no-double-counting, linked transfers, reversible records, dialog closing, and all six modules plus every Money workspace at 320px, 375px, and 430px widths. It requires Node.js plus Playwright.
