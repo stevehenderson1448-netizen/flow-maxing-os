@@ -71,7 +71,7 @@ function weekStartKey(date = new Date()) {
 
 const defaultState = () => ({
   version: CURRENT_STATE_VERSION,
-  week: { startedAt: weekStartKey(), outcome: "Create consistent movement in the business", secondary: "Protect health, clarity, and recovery while executing", evidence: "Complete one meaningful business deliverable and identify the next milestone.", why: "Build proof that focused mornings compound into real momentum." },
+  week: { startedAt: weekStartKey(), outcome: "Create consistent movement in the business", secondary: "Keep health, clarity, and a full life in the picture", evidence: "Complete one meaningful business deliverable and identify the next milestone.", why: "Build proof that focused mornings compound into real momentum." },
   tasks: [
     { id: crypto.randomUUID(), name: "Define this week's business needle-mover", impact: 3, complexity: 2, energy: "high", duration: 30, dueDate: "", alignment: "primary", ...TASK_SETUP_DEFAULTS["Define this week's business needle-mover"], createdAt: new Date().toISOString(), done: false },
     { id: crypto.randomUUID(), name: "Complete one focused business work block", impact: 3, complexity: 3, energy: "high", duration: 90, dueDate: "", alignment: "primary", ...TASK_SETUP_DEFAULTS["Complete one focused business work block"], createdAt: new Date().toISOString(), done: false },
@@ -92,7 +92,7 @@ const defaultState = () => ({
     { id: crypto.randomUUID(), trigger: "I feel overwhelmed", response: "I write everything down, identify one next action, and begin there." },
     { id: crypto.randomUUID(), trigger: "I start overthinking", response: "I separate what I know from what I am assuming and choose one testable action." },
     { id: crypto.randomUUID(), trigger: "I become distracted", response: "I capture the distraction in a note and return to the current task." },
-    { id: crypto.randomUUID(), trigger: "I feel mentally exhausted", response: "I switch to a simpler task or recover instead of forcing complex work." }
+    { id: crypto.randomUUID(), trigger: "The day has less capacity than planned", response: "I switch to Minimum pace and keep the essential move clear." }
   ],
   finances: {
     balances: { personal: 0, business: 0, held: 0, physical: 0, trading: 0 }, balancesMinor: { personal: 0, business: 0, held: 0, physical: 0, trading: 0 },
@@ -777,12 +777,19 @@ function loadCloudSync() {
 let state = loadState();
 let security = loadSecurity();
 let cloudSync = loadCloudSync();
-let activeView = "today";
+let activeView = "home";
 let moneySection = "overview";
 let incomePeriod = "month";
 let incomeCustomStart = `${monthKey()}-01`;
 let incomeCustomEnd = dayKey();
 let reportMonth = monthKey();
+let wealthMoneySection = "accounts";
+let buildSection = "overview";
+let lifeSection = "overview";
+let lifePersonalSection = "identity";
+let moreSection = "overview";
+let routineSection = "modes";
+let reviewSection = "week";
 let editor = null;
 let toastTimer;
 let lockTimer;
@@ -967,12 +974,12 @@ function recoverySignal(daily = todayState()) {
   const lowDays = records.filter(item => Number(item.energy) <= 2).length;
   const currentEnergy = Number(daily.energy);
   if ((currentEnergy > 0 && currentEnergy <= 2) || lowDays >= 3 || (records.length >= 3 && averageEnergy < 2.8)) {
-    return { key: "restore", mode: "minimum", label: "Protect recovery", note: `${lowDays || 1} low-energy signal${lowDays === 1 ? "" : "s"} this week. Keep foundations and one essential action.`, averageEnergy, averageClarity, lowDays };
+    return { key: "restore", mode: "minimum", label: "Use a lighter pace", note: `${lowDays || 1} lower-capacity check-in${lowDays === 1 ? "" : "s"} this week. Keep the essentials and one clear move.`, averageEnergy, averageClarity, lowDays };
   }
   if (currentEnergy >= 5 && (records.length < 2 || averageEnergy >= 3.8) && lowDays === 0) {
-    return { key: "expand", mode: "peak", label: "Use the capacity", note: "Energy is strong without a visible recovery warning. Add stretch only after the main outcome.", averageEnergy, averageClarity, lowDays };
+    return { key: "expand", mode: "peak", label: "Use the capacity", note: "Energy and clarity are strong. Add stretch only after the main outcome.", averageEnergy, averageClarity, lowDays };
   }
-  return { key: "maintain", mode: "standard", label: "Stay sustainable", note: records.length ? `Seven-day energy is ${averageEnergy.toFixed(1)}/5. Use a steady load and preserve tomorrow.` : "Check in for a few days and the recovery signal will become more precise.", averageEnergy, averageClarity, lowDays };
+  return { key: "maintain", mode: "standard", label: "Stay sustainable", note: records.length ? `Seven-day energy is ${averageEnergy.toFixed(1)}/5. Use a steady load and preserve tomorrow.` : "Check in for a few days and the pace suggestion will become more precise.", averageEnergy, averageClarity, lowDays };
 }
 
 function routineSignal() {
@@ -1451,7 +1458,7 @@ function assistantRecommendation(kind) {
     const protectionGap = Math.max(0, totals.personalProtected - totals.personal);
     base.title = protectionGap ? "Personal cash needs protection" : "Your financial categories are clear";
     base.assumptions = ["All recent cash movements have been entered in the ledger.", "Expected income and investments are not available cash until recorded as received."];
-    base.suggestions = [protectionGap ? `Close a ${currency(protectionGap)} personal protection gap before increasing flexible spending.` : `${currency(totals.safeToSpend)} is currently flexible after recorded personal protection.`, `${currency(totals.expectedIncome)} expected and ${currency(totals.confirmedIncome)} confirmed income remain outside available cash.`, totals.obligationPlan ? `${currency(totals.obligationPlan)} is planned toward liabilities this month.` : "Set a realistic repayment amount when the cash-flow evidence is clear."];
+    base.suggestions = [protectionGap ? `${currency(protectionGap)} of the current personal plan is not yet covered.` : `${currency(totals.safeToSpend)} is currently flexible after recorded commitments.`, `${currency(totals.expectedIncome)} expected and ${currency(totals.confirmedIncome)} confirmed income remain outside available cash.`, totals.obligationPlan ? `${currency(totals.obligationPlan)} is planned toward liabilities this month.` : "Set a realistic repayment amount when the cash-flow evidence is clear."];
   } else if (kind === "week") {
     const leadingProject = [...openProjects].sort((a, b) => b.priority - a.priority)[0];
     base.title = "Protect one weekly output";
@@ -1565,12 +1572,11 @@ function weekMetrics(startKey = state.week.startedAt, tasks = state.tasks, ratin
 }
 
 function render() {
-  renderToday();
-  renderLife();
+  renderHome();
   renderMoney();
   renderWeek();
-  renderArchitecture();
-  renderReview();
+  renderLife();
+  renderMore();
   document.querySelectorAll(".view").forEach(view => view.classList.toggle("active", view.id === `view-${activeView}`));
   document.querySelectorAll(".nav-item").forEach(item => item.classList.toggle("active", item.dataset.viewTarget === activeView));
   document.querySelectorAll("[data-auto-resize]").forEach(resizeOutcomeInput);
@@ -1584,21 +1590,72 @@ function resizeOutcomeInput(input) {
   input.style.height = `${Math.max(72, input.scrollHeight + borders)}px`;
 }
 
-function renderToday() {
+function renderHome() {
   const daily = todayState();
   const mode = state.modes[daily.mode] || state.modes.standard;
   const totals = moneyTotals();
   const plan = buildDailyPlan(daily);
-  const routineDone = daily.routine.filter(Boolean).length;
-  const openTasks = rankedTasks(daily);
-  document.getElementById("view-today").innerHTML = `
-    <div class="page-head today-page-head"><p class="eyebrow">${escapeHTML(formatDate())} · Daily command centre</p><h1 id="today-heading">${greeting()}</h1><p>Decide the day in a few minutes, then leave the system and live it.</p></div>
-    ${todayPriorityCard(daily, plan, mode, routineDone, totals)}
-    <div class="today-core-grid">
-      ${dailyCommandCard(plan, daily)}
-      <article class="card routine-core-card" id="today-routine"><div class="card-head"><div><p class="eyebrow">Essential routine</p><h2>${escapeHTML(mode.label)} mode</h2><p>${escapeHTML(mode.note)}</p></div><span class="tag">${routineDone}/${mode.routine.length}</span></div><div class="routine-list">${mode.routine.map((item, index) => routineTemplate(item, index, daily.routine[index])).join("")}</div></article>
+  const cues = homeSmartCues(totals, plan).slice(0, 2);
+  document.getElementById("view-home").innerHTML = `
+    <div class="home-hero"><div><p class="eyebrow">${escapeHTML(formatDate())}</p><h1 id="home-heading">${escapeHTML(homeGreeting())}</h1><p>Let’s see what’s moving.</p></div><span>Everything patterned.</span></div>
+    <div class="home-command-grid">
+      ${homeFocusCard(daily, plan, mode)}
+      ${homeQuickActions()}
     </div>
-    ${todaySecondaryDetails(plan, daily, openTasks)}`;
+    ${homeSnapshot(totals)}
+    <div class="home-lower-grid">
+      ${homeCuesCard(cues)}
+      ${homeComingUp(plan, totals)}
+    </div>`;
+}
+
+function homeGreeting() {
+  const hour = new Date().getHours();
+  return hour < 12 ? "Morning, 50X." : hour < 18 ? "Afternoon, 50X." : "Evening, 50X.";
+}
+
+function homeFocusCard(daily, plan, mode) {
+  const taskItems = plan.tasks.slice(0, daily.primaryOutcome ? 2 : 3);
+  const priorities = [daily.primaryOutcome ? `<div class="home-priority outcome"><i>01</i><span><small>Today’s move</small><input data-daily-field="primaryOutcome" value="${escapeHTML(daily.primaryOutcome)}" placeholder="Name the result that matters most" /></span></div>` : "", ...taskItems.map((task, index) => `<div class="home-priority"><i>${String(index + (daily.primaryOutcome ? 2 : 1)).padStart(2, "0")}</i><span><small>${escapeHTML(taskReason(task))}</small><strong>${escapeHTML(task.name)}</strong></span><button class="mini-check" data-task-toggle="${task.id}" aria-label="Complete ${escapeHTML(task.name)}">✓</button></div>`)].filter(Boolean);
+  const routineDone = daily.routine.filter(Boolean).length;
+  return `<article class="command-surface home-focus-card"><div class="surface-head"><div><p class="eyebrow">Today’s focus</p><h2>What’s the move?</h2></div><button class="surface-link" data-destination="build" data-section="actions">All actions</button></div><div class="home-priority-list">${priorities.length ? priorities.join("") : '<div class="premium-empty"><strong>The day is open.</strong><span>Add one clear move and keep it simple.</span><button data-home-action="task">Add an action</button></div>'}</div><div class="home-focus-footer"><div><span>Energy</span><div class="energy-picker home-energy">${[1,2,3,4,5].map(value => `<button class="energy-button ${daily.energy === value ? "selected" : ""}" data-energy="${value}" aria-label="Energy ${value}">${value}</button>`).join("")}</div></div><div><span>Pace</span><div class="mode-row home-modes">${Object.entries(state.modes).map(([key, value]) => `<button class="mode-button ${daily.mode === key ? "selected" : ""}" data-mode="${key}">${escapeHTML(value.label)}</button>`).join("")}</div></div><button class="routine-status" data-destination="more" data-section="routines"><span>${escapeHTML(mode.label)}</span><strong>${routineDone}/${mode.routine.length}</strong></button></div></article>`;
+}
+
+function homeQuickActions() {
+  return `<article class="command-surface quick-action-surface"><div class="surface-head"><div><p class="eyebrow">Quick actions</p><h2>Keep it moving.</h2></div></div><div class="home-quick-actions"><button data-home-action="income"><i>＋</i><span><strong>Add income</strong><small>Record money</small></span></button><button data-home-action="stack"><i>↗</i><span><strong>Add to stack</strong><small>Allocate bread</small></span></button><button data-home-action="task"><i>✓</i><span><strong>New action</strong><small>Move a project</small></span></button><button data-home-action="plan"><i>◇</i><span><strong>Add plan</strong><small>Something to enjoy</small></span></button></div></article>`;
+}
+
+function homeSnapshot(totals) {
+  const empire = incomeEmpireMetrics("month");
+  const activeProjects = state.projects.filter(item => item.status === "active");
+  const nextExperience = experienceOpportunity(totals);
+  return `<section class="home-snapshot"><div class="section-title"><div><p class="eyebrow">Snapshot</p><h2>Position at a glance.</h2></div></div><div class="snapshot-grid"><button data-destination="wealth" data-section="overview"><span>Wealth</span><strong>${currency(totals.safeToSpend)}</strong><small>available after plans · ${currency(fromMinor(empire.profitMinor))} profit this month</small><i>↗</i></button><button data-destination="build" data-section="overview"><span>Build</span><strong>${activeProjects.length} active</strong><small>${state.tasks.filter(item => !item.done).length} actions · ${state.ventures.filter(item => !["paused","archived"].includes(item.status)).length} ventures</small><i>↗</i></button><button data-destination="life" data-section="plans"><span>Life</span><strong>${escapeHTML(nextExperience?.experience.name || "Plans open")}</strong><small>${nextExperience ? (nextExperience.experience.targetDate ? formatCompactDate(nextExperience.experience.targetDate) : "Ready when you are") : "Add something to look forward to"}</small><i>↗</i></button></div></section>`;
+}
+
+function homeSmartCues(totals, plan) {
+  const cues = financialCues().map(cue => ({ ...cue, destination: "wealth", section: cue.action }));
+  const task = plan.tasks.find(item => { const days = taskDueDays(item); return days !== null && days <= 3; });
+  if (task) cues.unshift({ key: `task-${task.id}`, title: task.name, message: taskDueDays(task) <= 0 ? "This is ready for your attention today." : `Coming up ${formatCompactDate(task.dueDate)}.`, destination: "build", section: "actions" });
+  const experience = experienceOpportunity(totals);
+  if (experience?.experience.targetDate && experience.days !== null && experience.days >= 0 && experience.days <= 7) cues.push({ key: `experience-${experience.experience.id}`, title: experience.experience.name, message: `Coming up ${formatCompactDate(experience.experience.targetDate)}. Everything sorted?`, destination: "life", section: "plans" });
+  return cues;
+}
+
+function homeCuesCard(cues) {
+  return `<article class="command-surface home-cues-card"><div class="surface-head"><div><p class="eyebrow">Smart cues</p><h2>${cues.length ? "Worth knowing." : "All clear."}</h2></div></div><div class="home-cue-list">${cues.length ? cues.map(cue => `<button data-destination="${cue.destination}" data-section="${cue.section}"><span><strong>${escapeHTML(cue.title)}</strong><small>${escapeHTML(cue.message)}</small></span><i>↗</i></button>`).join("") : '<div class="premium-empty compact"><span>Nothing needs your attention right now.</span></div>'}</div></article>`;
+}
+
+function homeComingUp(plan, totals) {
+  const items = [];
+  const nextBill = totals.billSchedule.find(item => item.hasOutstanding && Number.isFinite(item.days) && item.days >= 0);
+  if (nextBill) items.push({ label: nextBill.bill.name, meta: `${currency(nextBill.bill.amount)} · ${billDueLabel(nextBill)}`, destination: "wealth", section: "money" });
+  const maintenance = maintenanceSchedule().find(item => !item.actionDone && item.days >= 0);
+  if (maintenance) items.push({ label: maintenance.item.name, meta: maintenanceDueLabel(maintenance), destination: "more", section: "calendar" });
+  const experience = state.life.experiences.filter(item => item.status === "planned" && item.targetDate).sort((a,b) => a.targetDate.localeCompare(b.targetDate))[0];
+  if (experience) items.push({ label: experience.name, meta: formatCompactDate(experience.targetDate), destination: "life", section: "plans" });
+  const task = plan.tasks.find(item => item.dueDate);
+  if (task) items.push({ label: task.name, meta: taskReason(task), destination: "build", section: "actions" });
+  return `<article class="command-surface coming-up-card"><div class="surface-head"><div><p class="eyebrow">Coming up</p><h2>Ready for what’s next.</h2></div></div><div class="coming-up-list">${items.length ? items.slice(0, 4).map(item => `<button data-destination="${item.destination}" data-section="${item.section}"><span><strong>${escapeHTML(item.label)}</strong><small>${escapeHTML(item.meta)}</small></span><i>›</i></button>`).join("") : '<div class="premium-empty compact"><span>No dated commitments are coming up.</span></div>'}</div></article>`;
 }
 
 function dailyNorthStarCard(daily = todayState()) {
@@ -1678,21 +1735,39 @@ function renderLife() {
   const upcomingContacts = state.life.contacts.filter(item => item.status === "active").sort((a, b) => String(a.nextContactDate || "9999").localeCompare(String(b.nextContactDate || "9999")));
   const openExperiences = state.life.experiences.filter(item => item.status !== "archived").sort((a, b) => Number(a.status === "completed") - Number(b.status === "completed") || String(a.targetDate || "9999").localeCompare(String(b.targetDate || "9999")));
   const recentJournal = [...state.life.journal].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 8);
+  const content = lifeSection === "people" ? lifePeopleWorkspace(upcomingContacts, contactOpportunity) : lifeSection === "plans" ? lifePlansWorkspace(openExperiences, experience, totals) : lifeSection === "personal" ? lifePersonalWorkspace(recentJournal) : lifeOverviewWorkspace(upcomingContacts, openExperiences, totals);
   document.getElementById("view-life").innerHTML = `
-    <div class="page-head life-page-head"><p class="eyebrow">Life OS · Experience</p><h1 id="life-heading">Life is not a reward.</h1><p>Keep identity, people, care, faith, enjoyment, and meaningful experiences inside the plan—not waiting at the end of it.</p></div>
-    <div class="life-principles"><div><span>Build</span><strong>Create the future</strong></div><div><span>Maintain</span><strong>Protect what matters</strong></div><div><span>Experience</span><strong>Live in the present</strong></div></div>
-    <div class="grid two-column life-grid">
-      <div class="stack">
-        <article class="card identity-card"><div class="card-head"><div><p class="eyebrow">Identity + values</p><h2>Operate from who you choose to be</h2><p>Use these as decision filters, not standards for self-punishment.</p></div></div><div class="identity-grid">${lifeObjectField("identity", "principles", "Guiding principles", "What remains true when pressure rises?")}${lifeObjectField("identity", "vision", "Long-term vision", "What kind of life are you building?")}${lifeObjectField("identity", "boundaries", "Boundaries", "What protects your time, money, dignity, and peace?")}${lifeObjectField("identity", "commitments", "Behavioural commitments", "What do you practise regardless of mood?")}${lifeObjectField("identity", "patterns", "Patterns to notice", "Observe recurring loops without turning them into identity.")}</div></article>
-        <article class="card relationships-card"><div class="card-head"><div><p class="eyebrow">Relationships</p><h2>Keep people inside real life</h2><p>Optional reminders for intentions you choose. Nobody is scored.</p></div><button class="button button-secondary button-small" data-add="contact">+ Person</button></div>${contactOpportunity ? `<div class="life-opportunity"><span>Reconnection opportunity</span><strong>${escapeHTML(contactOpportunity.contact.name)}</strong><small>${escapeHTML(contactOpportunity.contact.intention || contactDueLabel(contactOpportunity))}</small></div>` : ""}<div class="contact-list">${upcomingContacts.length ? upcomingContacts.map(contactTemplate).join("") : '<div class="empty">Add someone only when a reminder would genuinely help you act with care.</div>'}</div></article>
-        <article class="card experiences-card"><div class="card-head"><div><p class="eyebrow">Experiences + enjoyment</p><h2>Plan a life you can actually enter</h2><p>Ideas can remain free, affordable, and pressure-free.</p></div><button class="button button-secondary button-small" data-add="experience">+ Experience</button></div><div class="enjoyment-budget"><span>Available within current protection</span><strong>${currency(totals.enjoymentAvailable)}</strong><button class="text-button" data-add="moneySettings">Set allowance</button></div>${experience ? `<div class="life-opportunity experience-opportunity"><span>${experience.affordable ? "Affordable next experience" : "Keep visible without pressure"}</span><strong>${escapeHTML(experience.experience.name)}</strong><small>${experience.experience.costEstimate ? `${currency(experience.experience.costEstimate)} estimated` : "No spending required"}</small></div>` : ""}<div class="experience-list">${openExperiences.length ? openExperiences.map(item => experienceTemplate(item, totals)).join("") : '<div class="empty">Add one activity, outing, hobby, celebration, or place you would genuinely enjoy.</div>'}</div></article>
-      </div>
-      <aside class="stack">
-        <article class="card care-card"><div class="card-head"><div><p class="eyebrow">Personal care</p><h2>Care without earning it</h2></div></div>${lifeObjectField("care", "appearance", "Appearance + clothing", "What would help you feel prepared and self-respecting?")}${lifeObjectField("care", "interests", "Interests", "What do you want to explore for its own sake?")}${lifeObjectField("care", "selfCare", "Care intention", "One practical act of care that fits real life.")}</article>
-        <article class="card faith-card"><div class="card-head"><div><p class="eyebrow">Faith + reflection</p><h2>Private grounding</h2><p>Optional and private by default.</p></div></div>${lifeObjectField("faith", "prayer", "Prayer intention", "What practice would help you become still?")}${lifeObjectField("faith", "reading", "Scripture or spiritual reading", "What are you reading or returning to?")}${lifeObjectField("faith", "reflection", "Current reflection", "What feels important to sit with?")}</article>
-        <article class="card journal-card"><div class="card-head"><div><p class="eyebrow">Private reflections</p><h2>Remember what life felt like</h2><p>Encrypted during device sync and secure handoff. Standard exported backups remain readable files.</p></div><button class="button button-secondary button-small" data-add="journal">+ Write</button></div><div class="journal-list">${recentJournal.length ? recentJournal.map(journalTemplate).join("") : '<div class="empty">No entry is required. Write only when reflection would be useful.</div>'}</div></article>
-      </aside>
-    </div>`;
+    <div class="page-head compact-page-head"><p class="eyebrow">Life</p><h1 id="life-heading">Make plans worth looking forward to.</h1><p>People, experiences, style, faith and the life around the work.</p></div>
+    <nav class="section-tabs" aria-label="Life sections">${[["overview","Overview"],["people","People"],["plans","Plans"],["personal","Personal"]].map(([key,label]) => `<button class="${lifeSection === key ? "active" : ""}" data-life-section="${key}">${label}</button>`).join("")}</nav>
+    ${content}`;
+}
+
+function lifeOverviewWorkspace(contacts, experiences, totals) {
+  const nextContact = contacts[0];
+  const nextExperience = experiences.find(item => item.status !== "completed");
+  const personalNotes = [state.life.care?.appearance, state.life.care?.interests, state.life.faith?.reading].filter(Boolean).length;
+  const openPlans = experiences.filter(item => item.status !== "completed").length;
+  return `<article class="life-hero-card overview-hero"><div><p class="eyebrow">Next experience</p><h2>${escapeHTML(nextExperience?.name || "Keep room for a good life.")}</h2><p>${nextExperience ? (nextExperience.targetDate ? `Coming up ${formatCompactDate(nextExperience.targetDate)}` : "Ready when you are") : "Add something worth looking forward to."}</p></div><button data-life-section="plans">Open plans</button></article><div class="overview-launch-grid life-overview-launchers"><button data-life-section="people"><i>01</i><span><small>People</small><strong>${nextContact ? escapeHTML(nextContact.name) : "Connections"}</strong><em>${nextContact ? escapeHTML(contactDueLabel({ contact: nextContact, days: nextContact.nextContactDate ? daysFromToday(dateFromKey(nextContact.nextContactDate)) : null })) : "Keep the right people in view"}</em></span><b>↗</b></button><button data-life-section="plans"><i>02</i><span><small>Plans</small><strong>${openPlans} open</strong><em>${currency(totals.enjoymentAvailable)} available for enjoyment</em></span><b>↗</b></button><button data-life-section="personal"><i>03</i><span><small>Personal</small><strong>${personalNotes ? `${personalNotes} areas set` : "Your space"}</strong><em>Identity, style, faith and notes</em></span><b>↗</b></button><button data-add="experience"><i>＋</i><span><small>Quick action</small><strong>Add a plan</strong><em>Put something good on the calendar</em></span><b>↗</b></button></div>`;
+}
+
+function lifePeopleWorkspace(contacts, opportunity) {
+  return `<article class="card relationships-card"><div class="card-head"><div><p class="eyebrow">People</p><h2>Connection, without scoring it.</h2><p>Optional reminders for calls, messages and plans you actually want to make.</p></div><button class="button button-primary button-small" data-add="contact">+ Person</button></div>${opportunity ? `<div class="life-opportunity"><span>Good moment to reconnect</span><strong>${escapeHTML(opportunity.contact.name)}</strong><small>${escapeHTML(opportunity.contact.intention || contactDueLabel(opportunity))}</small></div>` : ""}<div class="contact-list">${contacts.length ? contacts.map(contactTemplate).join("") : '<div class="premium-empty"><strong>Your people will appear here.</strong><span>Add someone when keeping a plan visible would help.</span><button data-add="contact">Add person</button></div>'}</div></article>`;
+}
+
+function lifePlansWorkspace(experiences, opportunity, totals) {
+  const linkedStacks = state.finances.stacks.filter(stack => stack.status !== "archived" && (stack.experienceId || stack.purchaseId));
+  const purchases = state.finances.plannedPurchases.filter(item => item.status === "planned");
+  return `<div class="grid two-column"><div class="stack"><article class="card experiences-card"><div class="card-head"><div><p class="eyebrow">Plans and experiences</p><h2>Put good things on the calendar.</h2><p>Outings, hobbies, travel, events and milestones.</p></div><button class="button button-primary button-small" data-add="experience">+ Plan</button></div>${opportunity ? `<div class="life-opportunity experience-opportunity"><span>${opportunity.affordable ? "Ready within the current allowance" : "Keep the plan visible"}</span><strong>${escapeHTML(opportunity.experience.name)}</strong><small>${opportunity.experience.costEstimate ? `${currency(opportunity.experience.costEstimate)} estimated` : "No spending needed"}</small></div>` : ""}<div class="experience-list">${experiences.length ? experiences.map(item => experienceTemplate(item, totals)).join("") : '<div class="premium-empty"><strong>No plans added yet.</strong><span>Add an activity, event, trip or place.</span><button data-add="experience">Add plan</button></div>'}</div></article></div><aside class="stack"><article class="card compact-card"><div class="card-head"><div><p class="eyebrow">Enjoyment money</p><h2>${currency(totals.enjoymentAvailable)} available</h2><p>After current personal commitments and protected money.</p></div><button class="surface-link" data-add="moneySettings">Set</button></div></article><article class="card compact-card"><div class="card-head"><div><p class="eyebrow">Funded plans</p><h2>Connected STACKS</h2></div><button class="surface-link" data-destination="wealth" data-section="stacks">Open STACKS</button></div><div class="stack-preview-list">${linkedStacks.length ? linkedStacks.map(stack => `<button data-edit-stack="${stack.id}"><span>${escapeHTML(stack.name)}<small>${escapeHTML(accountLabel(stack.backingAccount))}</small></span><strong>${currency(fromMinor(Math.max(0, stackLedgerTotals().balancesMinor[stack.id] || 0)))}</strong></button>`).join("") : '<div class="premium-empty compact"><span>Link a stack to a plan or purchase when useful.</span></div>'}</div></article><article class="card compact-card"><div class="card-head"><div><p class="eyebrow">Next purchases</p><h2>Things on the list</h2></div><button class="surface-link" data-add="purchase">+ Add</button></div><div class="simple-list">${purchases.length ? purchases.slice(0,6).map(item => `<button data-edit-purchase="${item.id}"><span>${escapeHTML(item.name)}</span><strong>${currency(item.amount)}</strong></button>`).join("") : '<div class="premium-empty compact"><span>Your purchase list is open.</span></div>'}</div></article></aside></div>`;
+}
+
+function lifePersonalWorkspace(journal) {
+  const sections = {
+    identity: `<article class="card identity-card"><div class="card-head"><div><p class="eyebrow">Identity</p><h2>The principles you operate by.</h2><p>Decision filters for the life you are already building.</p></div></div><div class="identity-grid">${lifeObjectField("identity", "principles", "Guiding principles", "What stays true when pressure rises?")}${lifeObjectField("identity", "vision", "Long-term vision", "What does the life look like?")}${lifeObjectField("identity", "boundaries", "Boundaries", "What protects your time, money and peace?")}${lifeObjectField("identity", "commitments", "Commitments", "What do you choose to practise consistently?")}${lifeObjectField("identity", "patterns", "Patterns worth knowing", "Useful observations, without judgment.")}</div></article>`,
+    care: `<article class="card care-card"><div class="card-head"><div><p class="eyebrow">Style and care</p><h2>Feel prepared and put together.</h2></div></div>${lifeObjectField("care", "appearance", "Appearance and clothing", "Style, wardrobe or grooming plans")}${lifeObjectField("care", "interests", "Interests", "What are you exploring for its own sake?")}${lifeObjectField("care", "selfCare", "Current care plan", "One practical thing that feels good")}</article>`,
+    faith: `<article class="card faith-card"><div class="card-head"><div><p class="eyebrow">Faith</p><h2>Private grounding.</h2><p>Optional and private by default.</p></div></div>${lifeObjectField("faith", "prayer", "Prayer", "Current intention")}${lifeObjectField("faith", "reading", "Reading", "Scripture or spiritual reading")}${lifeObjectField("faith", "reflection", "Reflection", "Anything worth sitting with")}</article>`,
+    journal: `<article class="card journal-card"><div class="card-head"><div><p class="eyebrow">Notes</p><h2>Private reflections.</h2><p>Encrypted during device sync and secure handoff.</p></div><button class="button button-primary button-small" data-add="journal">+ Write</button></div><div class="journal-list">${journal.length ? journal.map(journalTemplate).join("") : '<div class="premium-empty"><strong>Your private notes will appear here.</strong><span>Write only when there is something worth keeping.</span><button data-add="journal">Write note</button></div>'}</div></article>`
+  };
+  return `<nav class="subsection-tabs" aria-label="Personal sections">${[["identity","Identity"],["care","Style & Care"],["faith","Faith"],["journal","Notes"]].map(([key,label]) => `<button class="${lifePersonalSection === key ? "active" : ""}" data-life-personal-section="${key}">${label}</button>`).join("")}</nav>${sections[lifePersonalSection] || sections.identity}`;
 }
 
 function lifeObjectField(group, key, label, placeholder) {
@@ -1728,46 +1803,45 @@ function journalTemplate(entry) {
 function renderMoney() {
   const totals = moneyTotals();
   const titles = {
-    overview: ["Financial OS", "Know your position.", "Actual cash, obligations and decisions—without counting the same pound twice."],
+    overview: ["Wealth", "Money, clearly patterned.", "Income, cash, allocations and commitments in one connected position."],
     stacks: ["Stacks", "Every pound has a purpose.", "Virtual allocations backed by real recorded money."],
-    empire: ["Income Empire", "Every stream. One dashboard.", "Revenue, profit, cash, capital and pending payments kept distinct."],
-    report: ["50X Money Report", "Review the portfolio.", "A monthly record of money made, kept, allocated and enjoyed."]
+    empire: ["Income", "Every stream. One dashboard.", "Revenue, profit, cash, capital and pending payments kept distinct."],
+    money: ["Money", "Accounts and commitments.", "Balances, bills, budgets, obligations and source records."],
+    report: ["Reports", "The portfolio in view.", "Monthly records of money made, kept, allocated and enjoyed."]
   };
   const [eyebrow, heading, note] = titles[moneySection] || titles.overview;
-  const content = moneySection === "stacks" ? stacksWorkspace(totals) : moneySection === "empire" ? incomeEmpireWorkspace(totals) : moneySection === "report" ? moneyReportWorkspace(totals) : moneyOverviewWorkspace(totals);
-  document.getElementById("view-money").innerHTML = `
-    <div class="page-head money-page-head"><p class="eyebrow">${eyebrow}</p><h1 id="money-heading">${heading}</h1><p>${note}</p></div>
-    <nav class="money-workspace-nav" aria-label="Money workspaces">${[["overview","Overview"],["stacks","Stacks"],["empire","Income Empire"],["report","Report"]].map(([key,label]) => `<button class="${moneySection === key ? "active" : ""}" data-money-section="${key}">${label}</button>`).join("")}</nav>
+  const content = moneySection === "stacks" ? stacksWorkspace(totals) : moneySection === "empire" ? incomeEmpireWorkspace(totals) : moneySection === "money" ? moneyManagementWorkspace(totals) : moneySection === "report" ? moneyReportWorkspace(totals) : moneyOverviewWorkspace(totals);
+  document.getElementById("view-wealth").innerHTML = `
+    <div class="page-head compact-page-head"><p class="eyebrow">${eyebrow}</p><h1 id="wealth-heading">${heading}</h1><p>${note}</p></div>
+    <nav class="section-tabs wealth-tabs" aria-label="Wealth sections">${[["overview","Overview"],["empire","Income"],["stacks","Stacks"],["money","Money"],["report","Reports"]].map(([key,label]) => `<button class="${moneySection === key ? "active" : ""}" data-money-section="${key}">${label}</button>`).join("")}</nav>
     ${content}`;
 }
 
 function moneyOverviewWorkspace(totals = moneyTotals()) {
+  const empire = incomeEmpireMetrics("month");
+  const stacks = state.finances.stacks.filter(item => item.status === "active").sort((a, b) => a.order - b.order).slice(0, 4);
+  const nextBill = totals.billSchedule.find(item => item.hasOutstanding && Number.isFinite(item.days));
+  const cues = financialCues().slice(0, 1);
+  return `<article class="wealth-position-card"><div><p class="eyebrow">Current position</p><h2>${currency(totals.safeToSpend)}</h2><span>available after personal plans</span></div><div class="wealth-position-metrics"><span><small>Recorded cash</small><strong>${currency(totals.available)}</strong></span><span><small>Profit this month</small><strong class="${empire.profitMinor < 0 ? "negative" : "positive"}">${currency(fromMinor(empire.profitMinor))}</strong></span><span><small>Stacked</small><strong>${currency(totals.savingsCurrent)}</strong></span></div><button data-money-section="money">Open money records</button></article>
+    ${cues.length ? `<button class="overview-cue ${cues[0].tone}" data-money-section="${cues[0].action}"><span><small>Smart cue</small><strong>${escapeHTML(cues[0].title)}</strong><em>${escapeHTML(cues[0].message)}</em></span><b>↗</b></button>` : ""}
+    <div class="overview-launch-grid wealth-overview-launchers"><button data-money-section="empire"><i>01</i><span><small>Income</small><strong>${currency(fromMinor(empire.revenueMinor))}</strong><em>${currency(fromMinor(empire.cashReceivedMinor))} received this month</em></span><b>↗</b></button><button data-money-section="stacks"><i>02</i><span><small>STACKS</small><strong>${currency(totals.savingsCurrent)}</strong><em>${stacks.length} active purpose${stacks.length === 1 ? "" : "s"}</em></span><b>↗</b></button><button data-money-section="money"><i>03</i><span><small>Money</small><strong>${nextBill ? escapeHTML(nextBill.bill.name) : "Accounts clear"}</strong><em>${nextBill ? `${currency(nextBill.bill.amount)} · ${escapeHTML(billDueLabel(nextBill))}` : "Balances and commitments"}</em></span><b>↗</b></button><button data-money-section="report"><i>04</i><span><small>Reports</small><strong>Monthly view</strong><em>Income, cash, stacks and movement</em></span><b>↗</b></button></div><div class="overview-quick-row"><button data-add="incomeEntry">＋ Income</button><button data-add="stackAdd">↗ Stack</button><button data-add="transaction">＋ Transaction</button><button data-add="bill">＋ Bill</button></div>`;
+}
+
+function moneyManagementWorkspace(totals = moneyTotals()) {
   const transactions = [...state.finances.transactions].sort((a, b) => b.date.localeCompare(a.date));
   const transfers = [...state.finances.transfers].sort((a, b) => b.date.localeCompare(a.date));
-  return `
-    <div class="money-summary">${moneyStat("Personal safe", currency(totals.safeToSpend), "After personal protection")}${moneyStat("Personal cash", currency(totals.personal), "Business excluded")}${moneyStat("Business free", currency(totals.businessFree), "After business bills")}${moneyStat("Protected", currency(totals.protectedCash), totals.overdueBills ? `${currency(totals.overdueBills)} overdue` : "Bills, reserve + plans")}</div>
-    ${financialCuesCard()}
-    <div class="grid two-column">
-      <div class="stack">
-        ${financialTruthCard(totals)}
-        ${reconciliationCard(totals)}
-        <article class="card bills-card"><div class="card-head"><div><p class="eyebrow">Bill calendar</p><h2>Due dates, without surprises</h2><p>Recurring bills, one-offs, autopay, and what is actually paid.</p></div><button class="button button-secondary button-small" data-add="bill">+ Bill</button></div>${billInsight(totals)}<div class="bills-list">${totals.billSchedule.length ? totals.billSchedule.map(billTemplate).join("") : '<div class="empty">No bills yet. Add the first due date you want the system to watch.</div>'}</div></article>
-        ${incomeForecastCard(totals)}
-        ${incomeAllocationCard()}
-        ${cashFlowForecastCard(totals)}
-        ${plannedPurchasesCard(totals)}
-        ${budgetCard(totals)}
-        ${subscriptionAuditCard(totals)}
-        <article class="card"><div class="card-head"><div><p class="eyebrow">Cash ledger</p><h2>Transactions + transfers</h2><p>Record reality. A transfer moves money between accounts without creating income.</p></div><div class="card-actions"><button class="button button-secondary button-small" data-add="transfer">+ Transfer</button><button class="button button-secondary button-small" data-add="transaction">+ Transaction</button></div></div><div class="ledger-list">${[...transactions.map(item => ({ ...item, ledgerKind: "transaction" })), ...transfers.map(item => ({ ...item, ledgerKind: "transfer" }))].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 24).map(item => item.ledgerKind === "transfer" ? transferTemplate(item) : transactionTemplate(item)).join("") || '<div class="empty">No cash movement recorded yet.</div>'}</div></article>
-        <article class="card"><div class="card-head"><div><p class="eyebrow">Starting position</p><h2>Opening balances</h2></div></div><div class="balance-grid">${balanceField("personal", "Personal cash")}${balanceField("business", "Business cash")}${balanceField("physical", "Physical cash")}${balanceField("trading", "Trading wallets")}${balanceField("held", "Money held for others")}</div><p class="privacy-note">Use opening balances once, then keep the ledger current.</p></article>
-      </div>
-      <aside class="stack">${spendingGuardrailCard(totals)}${cashCoverCard(totals)}${stackPreviewCard(totals)}${moneyCollectionCard("obligation", "Liabilities + obligations", "What must be restored or repaid", state.finances.obligations, item => `${escapeHTML(item.name)} · ${currency(Math.max(0, item.target - item.paid))} left${item.monthlyPayment ? ` · ${currency(item.monthlyPayment)}/mo` : ""}`)}${moneyCollectionCard("investment", "Investments", "Visible, but unavailable until realised", state.finances.investments, item => `${escapeHTML(item.name)} · ${currency(item.current)} current value`)}</aside>
-    </div>`;
+  const sections = {
+    accounts: `${financialTruthCard(totals)}<div class="grid two-column"><div class="stack">${reconciliationCard(totals)}<article class="card"><div class="card-head"><div><p class="eyebrow">Balances</p><h2>Recorded cash locations</h2></div></div><div class="balance-grid">${balanceField("personal", "Personal cash")}${balanceField("business", "Business cash")}${balanceField("physical", "Physical cash")}${balanceField("trading", "Trading wallets")}${balanceField("held", "Money held for others")}</div><p class="privacy-note">Set the opening position once, then use the ledger.</p></article></div><aside class="stack">${cashCoverCard(totals)}${moneyCollectionCard("investment", "Investments", "Tracked separately from available cash", state.finances.investments, item => `${escapeHTML(item.name)} · ${currency(item.current)} current value`)}</aside></div>`,
+    commitments: `<div class="grid two-column"><div class="stack"><article class="card bills-card"><div class="card-head"><div><p class="eyebrow">Payment calendar</p><h2>Bills and due dates</h2><p>Recurring payments, one-offs and what is already covered.</p></div><button class="button button-primary button-small" data-add="bill">+ Bill</button></div>${billInsight(totals)}<div class="bills-list">${totals.billSchedule.length ? totals.billSchedule.map(billTemplate).join("") : '<div class="premium-empty"><strong>Your payment calendar is open.</strong><span>Add a bill when you want its date kept in view.</span><button data-add="bill">Add bill</button></div>'}</div></article>${subscriptionAuditCard(totals)}</div><aside class="stack">${moneyCollectionCard("obligation", "Obligations", "Repayments and money owed", state.finances.obligations, item => `${escapeHTML(item.name)} · ${currency(Math.max(0, item.target - item.paid))} remaining${item.monthlyPayment ? ` · ${currency(item.monthlyPayment)}/mo` : ""}`)}${spendingGuardrailCard(totals)}</aside></div>`,
+    planning: `<div class="grid two-column"><div class="stack">${incomeForecastCard(totals)}${incomeAllocationCard()}${cashFlowForecastCard(totals)}</div><aside class="stack">${budgetCard(totals)}${plannedPurchasesCard(totals)}${stackPreviewCard(totals)}</aside></div>`,
+    ledger: `<article class="card"><div class="card-head"><div><p class="eyebrow">Source records</p><h2>Transactions and transfers</h2><p>A transfer moves existing money. It never becomes income.</p></div><div class="card-actions"><button class="button button-secondary button-small" data-add="transfer">+ Transfer</button><button class="button button-primary button-small" data-add="transaction">+ Transaction</button></div></div><div class="ledger-list">${[...transactions.map(item => ({ ...item, ledgerKind: "transaction" })), ...transfers.map(item => ({ ...item, ledgerKind: "transfer" }))].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 40).map(item => item.ledgerKind === "transfer" ? transferTemplate(item) : transactionTemplate(item)).join("") || '<div class="premium-empty"><strong>Your ledger is ready.</strong><span>Cash movement will appear here.</span><button data-add="transaction">Add transaction</button></div>'}</div></article>`
+  };
+  return `<nav class="subsection-tabs" aria-label="Money record sections">${[["accounts","Accounts"],["commitments","Commitments"],["planning","Planning"],["ledger","Ledger"]].map(([key,label]) => `<button class="${wealthMoneySection === key ? "active" : ""}" data-wealth-money-section="${key}">${label}</button>`).join("")}</nav>${sections[wealthMoneySection] || sections.accounts}`;
 }
 
 function financialTruthCard(totals) {
   const gap = Math.max(totals.personalGap + totals.businessGap, totals.stackGap);
-  return `<article class="card financial-truth-card ${gap ? "urgent" : ""}"><div class="card-head"><div><p class="eyebrow">Financial truth</p><h2>${gap ? `${currency(gap)} protection gap` : "Each account stands on its own"}</h2><p>Personal, business, physical cash and trading wallets remain distinct. Transfers never become income.</p></div><span class="tag">Exact pence</span></div><div class="account-truth-grid"><div class="${totals.personalGap ? "gap" : ""}"><span>Personal position</span><strong>${currency(totals.personal)}</strong><small>${totals.personalGap ? `${currency(totals.personalGap)} short of protection` : `${currency(totals.safeToSpend)} safe to spend`}</small></div><div class="${totals.businessGap ? "gap" : ""}"><span>Business position</span><strong>${currency(totals.business)}</strong><small>${totals.businessGap ? `${currency(totals.businessGap)} short of protection` : `${currency(totals.businessFree)} free after business plans`}</small></div></div><div class="truth-grid"><div><span>Physical cash</span><strong>${currency(totals.physical)}</strong><small>${currency(totals.physicalFree)} unallocated</small></div><div><span>Trading wallets</span><strong>${currency(totals.trading)}</strong><small>Not personal spending</small></div><div><span>Expected</span><strong>${currency(totals.expectedIncome)}</strong><small>Not available</small></div><div><span>Confirmed</span><strong>${currency(totals.confirmedIncome)}</strong><small>Still not received</small></div><div><span>Investments</span><strong>${currency(totals.investments)}</strong><small>Not cash</small></div><div><span>Held for others</span><strong>${currency(totals.held)}</strong><small>Restricted</small></div><div><span>Liabilities</span><strong>${currency(totals.obligations)}</strong><small>Outstanding</small></div><div><span>Stacks</span><strong>${currency(totals.savingsCurrent)}</strong><small>Virtual allocations</small></div></div></article>`;
+  return `<article class="card financial-truth-card ${gap ? "urgent" : ""}"><div class="card-head"><div><p class="eyebrow">Financial position</p><h2>${gap ? `${currency(gap)} still to cover` : "Each account stands on its own"}</h2><p>Personal, business, physical cash and trading wallets remain distinct. Transfers never become income.</p></div><span class="tag">Exact pence</span></div><div class="account-truth-grid"><div class="${totals.personalGap ? "gap" : ""}"><span>Personal position</span><strong>${currency(totals.personal)}</strong><small>${totals.personalGap ? `${currency(totals.personalGap)} of the plan not yet covered` : `${currency(totals.safeToSpend)} safe to spend`}</small></div><div class="${totals.businessGap ? "gap" : ""}"><span>Business position</span><strong>${currency(totals.business)}</strong><small>${totals.businessGap ? `${currency(totals.businessGap)} of the plan not yet covered` : `${currency(totals.businessFree)} free after business plans`}</small></div></div><div class="truth-grid"><div><span>Physical cash</span><strong>${currency(totals.physical)}</strong><small>${currency(totals.physicalFree)} unallocated</small></div><div><span>Trading wallets</span><strong>${currency(totals.trading)}</strong><small>Not personal spending</small></div><div><span>Expected</span><strong>${currency(totals.expectedIncome)}</strong><small>Not available</small></div><div><span>Confirmed</span><strong>${currency(totals.confirmedIncome)}</strong><small>Still not received</small></div><div><span>Investments</span><strong>${currency(totals.investments)}</strong><small>Not cash</small></div><div><span>Held for others</span><strong>${currency(totals.held)}</strong><small>Restricted</small></div><div><span>Liabilities</span><strong>${currency(totals.obligations)}</strong><small>Outstanding</small></div><div><span>Stacks</span><strong>${currency(totals.savingsCurrent)}</strong><small>Virtual allocations</small></div></div></article>`;
 }
 
 function reconciliationCard(totals) {
@@ -1918,8 +1992,8 @@ function financialCues() {
   return cues.filter(cue => !state.finances.financialCueDismissals[cue.key]).slice(0, 4);
 }
 
-function financialCuesCard() {
-  const cues = financialCues();
+function financialCuesCard(limit = 4) {
+  const cues = financialCues().slice(0, limit);
   if (!cues.length) return "";
   return `<article class="card financial-cues-card"><div class="card-head"><div><p class="eyebrow">Smart cues</p><h2>Useful now, quiet otherwise</h2></div></div><div class="financial-cue-list">${cues.map(cue => `<div class="financial-cue ${cue.tone}"><button class="cue-main" data-money-section="${cue.action}"><strong>${escapeHTML(cue.title)}</strong><span>${escapeHTML(cue.message)}</span></button><button class="cue-dismiss" data-dismiss-financial-cue="${escapeHTML(cue.key)}" aria-label="Dismiss cue">×</button></div>`).join("")}</div></article>`;
 }
@@ -2089,7 +2163,7 @@ function cashCoverCard(totals) {
 
 function spendingGuardrailCard(totals) {
   const gap = totals.personalGap;
-  return `<article class="card guardrail-card ${gap ? "urgent" : ""}"><div class="card-head"><div><p class="eyebrow">Personal safe-to-spend</p><h2>${gap ? `${currency(gap)} protection gap` : `${currency(totals.safeToSpend)} flexible`}</h2><p>${gap ? "Personal cash does not fully cover the protected plan." : "Business funds, expected income, investments, and money held for others are excluded."}</p></div><button class="edit-button" data-add="moneySettings" aria-label="Edit spending guardrails">•••</button></div><div class="protection-breakdown"><span>Essential commitments <b>${currency(totals.personalEssentialProtection)}</b></span><span>Stacks <b>${currency(totals.personalStackProtection)}</b></span><span>Reserve still needed <b>${currency(totals.reserveProtection)}</b></span><span>Repayments <b>${currency(totals.repaymentProtection)}</b></span><span>Reserved purchases <b>${currency(totals.personalPurchaseReserve)}</b></span></div><div class="guardrail-formula"><span>Personal cash <b>${currency(totals.personal)}</b></span><i>−</i><span>Protection <b>${currency(totals.personalProtected)}</b></span><i>=</i><span>Safe <b>${currency(totals.safeToSpend)}</b></span></div></article>`;
+  return `<article class="card guardrail-card ${gap ? "urgent" : ""}"><div class="card-head"><div><p class="eyebrow">Personal safe-to-spend</p><h2>${gap ? `${currency(gap)} still to cover` : `${currency(totals.safeToSpend)} flexible`}</h2><p>${gap ? "The current personal plan is not fully covered by recorded cash." : "Business funds, expected income, investments, and money held for others are excluded."}</p></div><button class="edit-button" data-add="moneySettings" aria-label="Edit spending settings">•••</button></div><div class="protection-breakdown"><span>Essential commitments <b>${currency(totals.personalEssentialProtection)}</b></span><span>Stacks <b>${currency(totals.personalStackProtection)}</b></span><span>Reserve still needed <b>${currency(totals.reserveProtection)}</b></span><span>Repayments <b>${currency(totals.repaymentProtection)}</b></span><span>Reserved purchases <b>${currency(totals.personalPurchaseReserve)}</b></span></div><div class="guardrail-formula"><span>Personal cash <b>${currency(totals.personal)}</b></span><i>−</i><span>Committed <b>${currency(totals.personalProtected)}</b></span><i>=</i><span>Safe <b>${currency(totals.safeToSpend)}</b></span></div></article>`;
 }
 
 function subscriptionAuditCard(totals) {
@@ -2150,19 +2224,31 @@ function renderWeek() {
   const openMilestones = state.milestones.filter(item => item.status !== "completed");
   const openBlockers = state.projectBlockers.filter(item => item.status !== "resolved");
   const activeVentures = state.ventures.filter(item => !["paused", "archived"].includes(item.status));
-  document.getElementById("view-week").innerHTML = `
-    <div class="page-head"><p class="eyebrow">Focus OS · Build</p><h1 id="week-heading">Move meaningful work.</h1><p>Goals set direction. Projects create outputs. Today only needs the next visible action.</p></div>
-    <div class="focus-summary">${reviewMetric("Ventures", String(activeVentures.length), "Income-producing operations")}${reviewMetric("Active goals", String(activeGoals.length), "Longer direction")}${reviewMetric("Projects", String(activeProjects.length), "Current workspaces")}${reviewMetric("Milestones", String(openMilestones.length), "Open deliverables")}${reviewMetric("Blockers", String(openBlockers.length), openBlockers.length ? "Needs a decision" : "Nothing stuck")}</div>
-    <article class="week-outcome"><div class="field"><label for="week-outcome">Primary weekly outcome</label><textarea class="outcome-input" id="week-outcome" data-week-field="outcome" data-auto-resize rows="2" placeholder="One measurable result">${escapeHTML(state.week.outcome)}</textarea></div><div class="field"><label for="week-evidence">Evidence of completion</label><textarea id="week-evidence" data-week-field="evidence" placeholder="What proves this is finished?">${escapeHTML(state.week.evidence)}</textarea></div><div class="inline-fields week-details"><div class="field"><label for="week-secondary">Secondary outcome</label><textarea class="week-compact-input" id="week-secondary" data-week-field="secondary" data-auto-resize rows="2">${escapeHTML(state.week.secondary)}</textarea></div><div class="field"><label for="week-why">Why now?</label><textarea class="week-compact-input" id="week-why" data-week-field="why" data-auto-resize rows="2">${escapeHTML(state.week.why)}</textarea></div></div></article>
-    <div class="grid two-column focus-grid">
-      <div class="stack">
-        ${venturePortfolioCard(activeVentures)}
-        ${projectsCard(activeProjects)}
-        <article class="card"><div class="card-head"><div><p class="eyebrow">Flow-matched actions</p><h2>Open work, ranked for your state</h2></div><button class="button button-secondary button-small" data-add="task">+ Action</button></div><div class="task-list">${open.length ? open.map(taskTemplate).join("") : '<div class="empty">No open actions. Add the first visible step.</div>'}</div></article>
-        <article class="card"><div class="card-head"><div><p class="eyebrow">Completed</p><h2>${done.length} actions moved</h2></div></div><div class="task-list">${done.length ? done.map(taskTemplate).join("") : '<div class="empty">Completed actions collect here until the weekly close.</div>'}</div></article>
-      </div>
-      <aside class="stack">${goalsCard(activeGoals)}${inboxCard()}<article class="card card-muted"><div class="card-head"><div><p class="eyebrow">Decision hierarchy</p><h2>Protect what matters</h2></div></div><div class="priority-rule"><strong>1</strong><span><b>Project output</b>One meaningful deliverable.</span></div><div class="priority-rule"><strong>2</strong><span><b>Next action</b>The smallest visible movement.</span></div><div class="priority-rule"><strong>3</strong><span><b>Maintenance</b>Only essential responsibilities.</span></div></article></aside>
-    </div>`;
+  const content = buildSection === "portfolio" ? `<div class="stack">${venturePortfolioCard(activeVentures)}${projectsCard(activeProjects)}</div>` : buildSection === "actions" ? buildActionsWorkspace(open, done) : buildSection === "opportunities" ? `<div class="grid two-column"><div class="stack">${inboxCard()}${goalsCard(activeGoals)}</div><aside class="stack">${buildDecisionsCard()}${buildPausedCard()}</aside></div>` : buildOverviewWorkspace({ open, activeGoals, activeProjects, openMilestones, openBlockers, activeVentures });
+  document.getElementById("view-build").innerHTML = `
+    <div class="page-head compact-page-head"><p class="eyebrow">Build</p><h1 id="build-heading">Turn ideas into assets.</h1><p>Ventures, projects and the next clear move.</p></div>
+    <nav class="section-tabs" aria-label="Build sections">${[["overview","Overview"],["portfolio","Portfolio"],["actions","Actions"],["opportunities","Opportunities"]].map(([key,label]) => `<button class="${buildSection === key ? "active" : ""}" data-build-section="${key}">${label}</button>`).join("")}</nav>
+    ${content}`;
+}
+
+function buildOverviewWorkspace({ open, activeGoals, activeProjects, openMilestones, openBlockers, activeVentures }) {
+  const next = open.find(item => !taskBlocker(item));
+  const monthlyProfit = incomeEmpireMetrics("month").profitMinor;
+  return `<article class="build-direction-card overview-hero"><div><p class="eyebrow">This week</p><textarea data-week-field="outcome" data-auto-resize rows="2" placeholder="Name the result that moves everything forward">${escapeHTML(state.week.outcome)}</textarea><input data-week-field="evidence" value="${escapeHTML(state.week.evidence)}" placeholder="What proves it is complete?" /></div><button data-build-section="actions">Open actions</button></article>${next ? `<div class="overview-next-move"><span><small>Best next move</small><strong>${escapeHTML(next.name)}</strong><em>${escapeHTML(taskReason(next))} · ${next.duration} min</em></span><div><button class="mini-check" data-task-toggle="${next.id}" aria-label="Complete ${escapeHTML(next.name)}">✓</button><button data-edit-task="${next.id}" aria-label="Open ${escapeHTML(next.name)}">↗</button></div></div>` : ""}<div class="overview-launch-grid build-overview-launchers"><button data-build-section="portfolio"><i>01</i><span><small>Portfolio</small><strong>${activeVentures.length} venture${activeVentures.length === 1 ? "" : "s"}</strong><em>${currency(fromMinor(monthlyProfit))} profit this month</em></span><b>↗</b></button><button data-build-section="portfolio"><i>02</i><span><small>Projects</small><strong>${activeProjects.length} active</strong><em>${openMilestones.length} open milestone${openMilestones.length === 1 ? "" : "s"}</em></span><b>↗</b></button><button data-build-section="actions"><i>03</i><span><small>Actions</small><strong>${open.length} ready</strong><em>${openBlockers.length ? `${openBlockers.length} awaiting a decision` : "Clear to move"}</em></span><b>↗</b></button><button data-build-section="opportunities"><i>04</i><span><small>Opportunities</small><strong>${state.inbox.length} captured</strong><em>${activeGoals.length} active goal${activeGoals.length === 1 ? "" : "s"}</em></span><b>↗</b></button></div><div class="overview-quick-row"><button data-add="task">＋ Action</button><button data-add="project">＋ Project</button><button data-add="venture">＋ Venture</button><button data-add="inbox">＋ Capture</button></div>`;
+}
+
+function buildActionsWorkspace(open, done) {
+  return `<div class="grid two-column"><div class="stack"><article class="card"><div class="card-head"><div><p class="eyebrow">Current actions</p><h2>Best next moves</h2><p>Ranked by impact, timing, energy and project direction.</p></div><button class="button button-primary button-small" data-add="task">+ Action</button></div><div class="task-list">${open.length ? open.map(taskTemplate).join("") : '<div class="premium-empty"><strong>Your action list is open.</strong><span>Add the next visible move.</span><button data-add="task">Add action</button></div>'}</div></article></div><aside class="stack"><article class="card"><div class="card-head"><div><p class="eyebrow">Weekly direction</p><h2>Keep the main result visible</h2></div></div><div class="field"><label for="week-outcome">Outcome</label><textarea id="week-outcome" data-week-field="outcome">${escapeHTML(state.week.outcome)}</textarea></div><div class="field"><label for="week-evidence">Finish line</label><textarea id="week-evidence" data-week-field="evidence">${escapeHTML(state.week.evidence)}</textarea></div><div class="field"><label for="week-secondary">Also useful</label><textarea id="week-secondary" data-week-field="secondary">${escapeHTML(state.week.secondary)}</textarea></div></article><details class="card completed-actions"><summary><span><small>Completed this week</small><strong>${done.length} moved</strong></span><b>+</b></summary><div class="task-list">${done.length ? done.map(taskTemplate).join("") : '<div class="premium-empty compact"><span>Completed actions will collect here.</span></div>'}</div></details></aside></div>`;
+}
+
+function buildDecisionsCard() {
+  const decisions = [...state.projectDecisions].sort((a,b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0,6);
+  return `<article class="card compact-card"><div class="card-head"><div><p class="eyebrow">Recent decisions</p><h2>What has been decided</h2></div><button class="button button-secondary button-small" data-add="decision">+ Decision</button></div><div class="simple-list">${decisions.length ? decisions.map(item => `<button data-edit-decision="${item.id}"><span>${escapeHTML(item.text)}</span><strong>›</strong></button>`).join("") : '<div class="premium-empty compact"><span>Decisions will appear here when recorded.</span></div>'}</div></article>`;
+}
+
+function buildPausedCard() {
+  const items = state.ventures.filter(item => item.status === "paused");
+  return `<article class="card compact-card"><div class="card-head"><div><p class="eyebrow">On the shelf</p><h2>Paused without being lost</h2></div></div><div class="simple-list">${items.length ? items.map(item => `<button data-edit-venture="${item.id}"><span>${escapeHTML(item.name)}</span><strong>${escapeHTML(item.status)}</strong></button>`).join("") : '<div class="premium-empty compact"><span>No paused ventures.</span></div>'}</div></article>`;
 }
 
 function goalsCard(goals = state.goals.filter(item => item.status === "active")) {
@@ -2208,6 +2294,44 @@ function inboxCard() {
 
 function inboxTemplate(item) {
   return `<div class="inbox-item"><button class="inbox-copy" data-edit-inbox="${item.id}"><span class="tag">${escapeHTML(item.type || "idea")}</span><strong>${escapeHTML(item.text)}</strong><small>${formatCompactDate(new Date(item.createdAt || Date.now()))}</small></button><button class="inbox-promote" data-inbox-task="${item.id}" aria-label="Turn into action">→</button></div>`;
+}
+
+function renderMore() {
+  const content = moreSection === "routines" ? moreRoutinesWorkspace() : moreSection === "calendar" ? maintenanceCard() : moreSection === "review" ? moreReviewWorkspace() : moreOverviewWorkspace();
+  document.getElementById("view-more").innerHTML = `
+    <div class="page-head compact-page-head"><p class="eyebrow">More</p><h1 id="more-heading">The rest of the system.</h1><p>Routines, dates, reviews, privacy and settings.</p></div>
+    <nav class="section-tabs" aria-label="More sections">${[["overview","Overview"],["routines","Routines"],["calendar","Calendar"],["review","Review"]].map(([key,label]) => `<button class="${moreSection === key ? "active" : ""}" data-more-section="${key}">${label}</button>`).join("")}</nav>
+    ${content}`;
+}
+
+function moreOverviewWorkspace() {
+  const daily = todayState();
+  const mode = state.modes[daily.mode] || state.modes.standard;
+  const routineDone = daily.routine.filter(Boolean).length;
+  const nextDate = maintenanceSchedule().find(item => !item.actionDone);
+  const metrics = weekMetrics();
+  return `<div class="more-launch-grid"><button data-more-section="routines"><i>01</i><span><small>Routines</small><strong>${escapeHTML(mode.label)} pace</strong><em>${routineDone}/${mode.routine.length} steps today</em></span><b>↗</b></button><button data-more-section="calendar"><i>02</i><span><small>Calendar</small><strong>${escapeHTML(nextDate?.item.name || "Dates in view")}</strong><em>${nextDate ? escapeHTML(maintenanceDueLabel(nextDate)) : "Add appointments and renewals"}</em></span><b>↗</b></button><button data-more-section="review"><i>03</i><span><small>Review</small><strong>${metrics.tasksDone} outputs moved</strong><em>${metrics.daysChecked} active days this week</em></span><b>↗</b></button><button id="open-settings-more"><i>04</i><span><small>Settings</small><strong>Privacy and devices</strong><em>Sync, backup, reminders and app lock</em></span><b>↗</b></button></div><article class="more-philosophy"><p class="eyebrow">50X Life OS</p><h2>Build. Maintain. Experience.</h2><p>The system keeps the details patterned so you can get on with the life itself.</p></article>`;
+}
+
+function moreRoutinesWorkspace() {
+  const sections = {
+    modes: `<article class="card"><div class="card-head"><div><p class="eyebrow">Operating pace</p><h2>Minimum, Standard and Peak</h2><p>Choose the pace that fits the day. Nothing resets when plans change.</p></div></div><div class="mode-editor-list">${Object.entries(state.modes).map(([key, mode]) => modeCard(key, mode)).join("")}</div></article>`,
+    cues: `<article class="card"><div class="card-head"><div><p class="eyebrow">Preparation cues</p><h2>Make the start obvious.</h2><p>Prepare, place and trigger the action before the moment arrives.</p></div><button class="button button-primary button-small" data-add="cue">+ Cue</button></div><div class="architecture-flow">${state.cues.length ? state.cues.map((cue, index) => cueTemplate(cue, index)).join("") : '<div class="premium-empty"><strong>Your cues will appear here.</strong><span>Add one preparation that makes an action easier to start.</span><button data-add="cue">Add cue</button></div>'}</div></article>`,
+    scripts: `<article class="card"><div class="card-head"><div><p class="eyebrow">If–then scripts</p><h2>Decisions made in advance.</h2><p>Short responses for situations that repeat.</p></div><button class="button button-primary button-small" data-add="script">+ Script</button></div><div class="script-list">${state.scripts.length ? state.scripts.map(script => `<div class="script-card" data-edit-script="${script.id}" role="button" tabindex="0"><p><strong>If</strong> ${escapeHTML(script.trigger)}, <strong>then</strong> ${escapeHTML(script.response)}</p></div>`).join("") : '<div class="premium-empty"><strong>Your scripts will appear here.</strong><span>Add a response when a situation repeats.</span><button data-add="script">Add script</button></div>'}</div></article>`
+  };
+  return `<nav class="subsection-tabs" aria-label="Routine sections">${[["modes","Pace"],["cues","Cues"],["scripts","Scripts"]].map(([key,label]) => `<button class="${routineSection === key ? "active" : ""}" data-routine-section="${key}">${label}</button>`).join("")}</nav>${sections[routineSection] || sections.modes}`;
+}
+
+function moreReviewWorkspace() {
+  const metrics = weekMetrics();
+  const coach = weeklyCoach();
+  const monthName = new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" }).format(new Date());
+  const sections = {
+    week: `<div class="review-metrics compact-review-metrics">${reviewMetric("Active days", `${metrics.daysChecked}`, "This week")}${reviewMetric("Energy", metrics.energy ? `${metrics.energy.toFixed(1)}/5` : "—", "Average check-in")}${reviewMetric("Routine", `${metrics.routine}%`, "Steps kept")}${reviewMetric("Outputs", String(metrics.tasksDone), "Actions completed")}</div>${weeklyCoachCard(coach)}<div class="grid two-column"><article class="card"><div class="card-head"><div><p class="eyebrow">Week in view</p><h2>What carries forward?</h2></div></div><div class="reflection-prompts">${reflectionField("win", "What moved?", "The progress worth keeping")}${reflectionField("friction", "Anything to streamline?", "A process, cue or setup to change")}${reflectionField("lesson", "What worked well?", "A useful pattern from the week")}${reflectionField("next", "What’s next?", "The result that deserves attention")}</div><button class="button button-primary button-wide" data-close-week>Close this week</button></article><aside class="stack">${weeklyFinancialReviewCard()}<article class="card"><div class="card-head"><div><p class="eyebrow">Next week’s pace</p><h2>Choose the operating range.</h2></div></div><div class="recovery-grid">${[["restore","Light","Keep it simple"],["maintain","Standard","Balanced movement"],["expand","Peak","More room to build"]].map(([key,label,note]) => `<button class="recovery-option ${state.reflection.recovery === key ? "selected" : ""}" data-recovery="${key}"><strong>${label}</strong><small>${note}</small></button>`).join("")}</div></article></aside></div>`,
+    month: `<div class="grid two-column"><div class="stack">${monthlyEvidenceCard()}<article class="card"><div class="card-head"><div><p class="eyebrow">${monthName}</p><h2>Monthly decisions</h2></div></div>${monthlyField("financial", "Wealth position", "What changed in cash, commitments, investments or liabilities?")}${monthlyField("business", "Business movement", "What value, systems or revenue moved?")}${monthlyField("lifestyle", "Life and experiences", "What made the month enjoyable or memorable?")}${monthlyField("adjustment", "One useful adjustment", "What would make next month run better?")}${monthlyField("decisions", "Decisions for next month", "Start, stop, continue or deliberately defer")}</article></div><aside class="stack"><article class="card compact-card"><div class="card-head"><div><p class="eyebrow">Money report</p><h2>Open the financial month.</h2><p>Revenue, profit, cash, STACKS and upcoming payments.</p></div><button class="button button-primary button-small" data-destination="wealth" data-section="report">Open report</button></div></article><article class="card"><div class="card-head"><div><p class="eyebrow">Life areas</p><h2>Context, not a score.</h2></div></div><div class="rating-list">${DIMENSIONS.map((item, index) => ratingTemplate(item, index)).join("")}</div></article></aside></div>`,
+    history: `<article class="card history-card"><div class="card-head"><div><p class="eyebrow">Archive</p><h2>Previous weeks</h2><p>The record of what moved and what you decided.</p></div><span class="tag">${state.history.length} archived</span></div>${historyView()}</article>`
+  };
+  return `<nav class="subsection-tabs" aria-label="Review sections">${[["week","Week"],["month","Month"],["history","History"]].map(([key,label]) => `<button class="${reviewSection === key ? "active" : ""}" data-review-section="${key}">${label}</button>`).join("")}</nav>${sections[reviewSection] || sections.week}`;
 }
 
 function renderArchitecture() {
@@ -2319,7 +2443,22 @@ function closeWeek() {
 }
 
 function goToView(view) {
-  activeView = view;
+  const aliases = { today: "home", money: "wealth", week: "build", architecture: "more", review: "more" };
+  activeView = aliases[view] || view;
+  if (view === "money") moneySection = "overview";
+  if (view === "week") buildSection = "overview";
+  if (view === "architecture") moreSection = "routines";
+  if (view === "review") moreSection = "review";
+  render();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function goToDestination(destination, section = "") {
+  activeView = destination;
+  if (destination === "wealth" && section) moneySection = section;
+  if (destination === "build" && section) buildSection = section;
+  if (destination === "life" && section) lifeSection = section;
+  if (destination === "more" && section) moreSection = section;
   render();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -3096,7 +3235,7 @@ async function checkReminders() {
     { key: `morning-${today}`, due: minutesSince(reminder.morning, now), window: 120, title: "Choose your honest capacity", body: "Check your energy, select a mode, and protect one meaningful outcome." },
     { key: `evening-${today}`, due: minutesSince(reminder.evening, now), window: 180, title: "Close the human day", body: "Protect one real interaction, take deliberate rest, then prepare tomorrow's first action." }
   ];
-  if (String(now.getDay()) === String(reminder.weeklyDay)) checks.push({ key: `weekly-${today}`, due: minutesSince(reminder.weeklyTime, now), window: 240, title: "Weekly review", body: "Close the loop, choose recovery, and define what matters next." });
+  if (String(now.getDay()) === String(reminder.weeklyDay)) checks.push({ key: `weekly-${today}`, due: minutesSince(reminder.weeklyTime, now), window: 240, title: "Weekly review", body: "See what moved, choose next week’s pace, and set the direction." });
   for (const item of checks) {
     if (item.due >= 0 && item.due <= item.window && !reminder.lastFired[item.key]) {
       reminder.lastFired[item.key] = new Date().toISOString();
@@ -3798,12 +3937,77 @@ document.addEventListener("click", async event => {
     return;
   }
   if (target.dataset.viewTarget) return goToView(target.dataset.viewTarget);
+  if (target.dataset.destination) return goToDestination(target.dataset.destination, target.dataset.section || "");
+  if (target.dataset.homeAction) {
+    const actions = {
+      income: { destination: "wealth", section: "empire", editor: "incomeEntry" },
+      stack: { destination: "wealth", section: "stacks", editor: "stackAdd" },
+      task: { destination: "build", section: "actions", editor: "task" },
+      plan: { destination: "life", section: "plans", editor: "experience" }
+    };
+    const action = actions[target.dataset.homeAction];
+    if (!action) return;
+    activeView = action.destination;
+    if (action.destination === "wealth") moneySection = action.section;
+    if (action.destination === "build") buildSection = action.section;
+    if (action.destination === "life") lifeSection = action.section;
+    render();
+    openEditor(action.editor);
+    return;
+  }
   if (target.dataset.moneySection) {
+    activeView = "wealth";
     moneySection = target.dataset.moneySection;
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  if (target.dataset.wealthMoneySection) {
+    wealthMoneySection = target.dataset.wealthMoneySection;
     renderMoney();
     window.scrollTo({ top: 0, behavior: "smooth" });
     return;
   }
+  if (target.dataset.buildSection) {
+    activeView = "build";
+    buildSection = target.dataset.buildSection;
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  if (target.dataset.lifeSection) {
+    activeView = "life";
+    lifeSection = target.dataset.lifeSection;
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  if (target.dataset.lifePersonalSection) {
+    lifePersonalSection = target.dataset.lifePersonalSection;
+    renderLife();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  if (target.dataset.moreSection) {
+    activeView = "more";
+    moreSection = target.dataset.moreSection;
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  if (target.dataset.routineSection) {
+    routineSection = target.dataset.routineSection;
+    renderMore();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  if (target.dataset.reviewSection) {
+    reviewSection = target.dataset.reviewSection;
+    renderMore();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  if (target.id === "open-settings-more") return openSettings();
   if (target.dataset.incomePeriod) {
     incomePeriod = target.dataset.incomePeriod;
     renderMoney();

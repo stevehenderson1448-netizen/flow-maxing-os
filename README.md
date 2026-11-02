@@ -1,10 +1,11 @@
 # 50X Life OS
 
-A dependency-free, mobile-first personal command centre organised around six modules and one philosophy: **Build · Maintain · Experience**.
+A dependency-free, mobile-first personal command centre organised around five clear destinations and one philosophy: **Build · Maintain · Experience**.
 
 ## Included systems
 
-- Adaptive daily command centre using energy, available time, routines, deadlines, bills, and life-maintenance dates
+- Compact Home command centre using energy, routines, priorities, deadlines, payments, plans, and smart cues
+- Five-destination mobile navigation: Home, Wealth, Build, Life, and More, with focused tabs inside each section
 - A dedicated Life module for identity, relationships, experiences, personal care, faith, and private reflection
 - Build/Maintain/Experience daily planning with explicit user-controlled operating modes
 - Daily human-connection and protected-rest foundations with seven-day consistency feedback
@@ -12,7 +13,7 @@ A dependency-free, mobile-first personal command centre organised around six mod
 - Goal and project workspaces with milestones, dependencies, blockers, decisions, links, and linked next actions
 - Editable Minimum, Standard, and Peak routine modes
 - Cue-response architecture with task preparation, placement, launch, fallback, and if-then scripts
-- Routine and recovery intelligence plus an evidence-based weekly coach
+- User-controlled pace suggestions plus an evidence-based weekly review
 - Weekly rollover, monthly evidence snapshots, eight-week trends, and archived reflections
 - Exact-pence safe-to-spend engine with personal, business, restricted, expected, invested, and held money kept separate
 - STACKS virtual allocation ledger with Add Bread, Move Bread, Take Bread Out, reversible history, goal progress, and reconciliation against real cash locations
@@ -29,11 +30,11 @@ A dependency-free, mobile-first personal command centre organised around six mod
 - End-to-end encrypted phone/desktop sync with automatic Inbox merging, one-time device handoffs, and portable backup files
 - Backed-up version-12 migration with recoverable upgrade snapshots and legacy savings converted into auditable opening stack allocations
 - Account-safe transfers, confirmed bill dates, protected spending budgets, weekly balance reconciliation, and received-income allocation
-- Compact mobile Today command surface with event-based routine cues and explicit fallback actions
+- Compact tabbed overviews that keep detail screens available without turning every landing page into a long feed
 
 The current assistant is deliberately local and rule-based. It does not send records to an external model. A future model provider can be added behind the existing permissions and approval controls without making the core app dependent on AI.
 
-The verified 3.0 audit, architecture, data model, migration strategy, and roadmap are documented in `docs/50X-LIFE-OS-3.0-AUDIT.md`.
+The verified 3.0 financial architecture is documented in `docs/50X-LIFE-OS-3.0-AUDIT.md`. The V3.1 route audit, navigation blueprint, retain/refactor decisions, and data-preservation plan are documented in `docs/50X-LIFE-OS-3.1-EXPERIENCE-AUDIT.md`.
 
 ## Live app
 
@@ -66,4 +67,4 @@ HTTPS is required for offline installation and the service worker on a deployed 
 
 ## Verification
 
-`tests/smoke.cjs` verifies version-12 migration and rollback data, account-safe money calculations, stack cash separation, Income Empire no-double-counting, linked transfers, reversible records, dialog closing, and all six modules plus every Money workspace at 320px, 375px, and 430px widths. It requires Node.js plus Playwright.
+`tests/smoke.cjs` verifies version-12 migration and rollback data, account-safe money calculations, stack cash separation, Income Empire no-double-counting, linked transfers, reversible records, dialog closing, and all five destinations plus their tabbed workspaces at 320px, 375px, and 430px widths. It requires Node.js plus Playwright.

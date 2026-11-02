@@ -116,11 +116,12 @@ async function testMigrationAndMoney(browser, baseUrl) {
   assert.equal(state.finances.stackEntries[0].amountMinor, 5000);
   assert.equal(state.finances.incomeStreams.length, 5);
 
-  await tap(page.locator('.nav-item[data-view-target="money"]'));
-  await page.locator("#view-money.active").waitFor();
-  const moneyText = await page.locator("#view-money").innerText();
-  assert.match(moneyText, /Personal safe\s+£450\.00/i);
-  assert.match(moneyText, /Business free\s+£545\.00/i);
+  await tap(page.locator('.nav-item[data-view-target="wealth"]'));
+  await page.locator("#view-wealth.active").waitFor();
+  await tap(page.locator('[data-money-section="money"]').first());
+  const moneyText = await page.locator("#view-wealth").innerText();
+  assert.match(moneyText, /Personal position\s+£1,000\.00\s+£450\.00 safe to spend/i);
+  assert.match(moneyText, /Business position\s+£670\.00\s+£545\.00 free after business plans/i);
   assert.match(moneyText, /Expected\s+£5,000\.00\s+Not available/i);
   assert.doesNotMatch(moneyText, /£500\.00 overdue/);
 
@@ -167,7 +168,7 @@ async function testMigrationAndMoney(browser, baseUrl) {
   assert.equal(profitState.finances.transactions.length, 1);
   assert.equal(profitState.finances.transactions[0].account, "trading");
   const profitEntryId = profitState.finances.incomeEntries[0].id;
-  const empireText = await page.locator("#view-money").innerText();
+  const empireText = await page.locator("#view-wealth").innerText();
   assert.match(empireText, /Revenue\s+£800\.00/i);
   assert.match(empireText, /Net profit\s+£800\.00/i);
 
@@ -182,7 +183,7 @@ async function testMigrationAndMoney(browser, baseUrl) {
   const capitalState = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), storageKey);
   assert.equal(capitalState.finances.transfers.filter(item => item.empireEntryId).length, 1);
   assert.equal(capitalState.finances.transactions.length, 1);
-  assert.match(await page.locator("#view-money").innerText(), /Revenue\s+£800\.00/i);
+  assert.match(await page.locator("#view-wealth").innerText(), /Revenue\s+£800\.00/i);
 
   await tap(page.locator('.empire-truth-card [data-add="incomeEntry"]'));
   await page.locator('[name="streamId"]').selectOption({ label: "Digital Business / Client Work" });
@@ -194,8 +195,8 @@ async function testMigrationAndMoney(browser, baseUrl) {
   await page.locator("#editor-dialog").waitFor({ state: "hidden" });
   const recordedState = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), storageKey);
   assert.equal(recordedState.finances.transactions.length, 1, "Recorded revenue must not create received cash");
-  assert.match(await page.locator("#view-money").innerText(), /Revenue\s+£1,000\.00/i);
-  assert.match(await page.locator("#view-money").innerText(), /Cash received\s+£800\.00/i);
+  assert.match(await page.locator("#view-wealth").innerText(), /Revenue\s+£1,000\.00/i);
+  assert.match(await page.locator("#view-wealth").innerText(), /Cash received\s+£800\.00/i);
 
   await tap(page.locator('.empire-truth-card [data-add="incomeEntry"]'));
   await page.locator('[name="streamId"]').selectOption({ label: "Video Clipping" });
@@ -211,7 +212,7 @@ async function testMigrationAndMoney(browser, baseUrl) {
   await page.locator('[name="amount"]').fill("250");
   await tap(page.locator("#save-item"));
   await page.locator("#editor-dialog").waitFor({ state: "hidden" });
-  const distinctionText = await page.locator("#view-money").innerText();
+  const distinctionText = await page.locator("#view-wealth").innerText();
   assert.match(distinctionText, /Payments pending\s+£500\.00/i);
   assert.match(distinctionText, /Unrealized result\s+£250\.00/i);
   assert.match(distinctionText, /Revenue\s+£1,000\.00/i);
@@ -220,7 +221,7 @@ async function testMigrationAndMoney(browser, baseUrl) {
   assert.equal(await page.locator("[data-income-range]").count(), 2);
   await page.locator('[data-income-range="start"]').fill("2026-11-01");
   await page.locator('[data-income-range="start"]').dispatchEvent("change");
-  assert.match(await page.locator("#view-money").innerText(), /Revenue\s+£1,000\.00/i);
+  assert.match(await page.locator("#view-wealth").innerText(), /Revenue\s+£1,000\.00/i);
   await tap(page.locator('[data-income-period="month"]'));
 
   await tap(page.locator(`[data-add="allocationPlan"][data-income-entry-id="${profitEntryId}"]`));
@@ -248,7 +249,7 @@ async function testMigrationAndMoney(browser, baseUrl) {
   assert.ok(reversedState.finances.incomeEntries.find(item => item.id === profitEntryId).reversedAt);
   assert.equal(reversedState.finances.transactions.length, 2);
   assert.ok(reversedState.finances.transactions.some(item => item.reversalOf === profitState.finances.transactions[0].id));
-  const reversedText = await page.locator("#view-money").innerText();
+  const reversedText = await page.locator("#view-wealth").innerText();
   assert.match(reversedText, /Revenue\s+£200\.00/i);
   assert.match(reversedText, /Cash received\s+£0\.00/i);
   assert.match(reversedText, /Payments pending\s+£500\.00/i);
@@ -274,10 +275,11 @@ async function testMigrationAndMoney(browser, baseUrl) {
     createdAt: "2026-11-01T09:00:00.000Z"
   }];
   const transferred = await openWithFixture(browser, baseUrl, transferFixture);
-  await tap(transferred.page.locator('.nav-item[data-view-target="money"]'));
-  const transferredText = await transferred.page.locator("#view-money").innerText();
-  assert.match(transferredText, /Personal safe\s+£550\.00/i);
-  assert.match(transferredText, /Business free\s+£445\.00/i);
+  await tap(transferred.page.locator('.nav-item[data-view-target="wealth"]'));
+  await tap(transferred.page.locator('[data-money-section="money"]').first());
+  const transferredText = await transferred.page.locator("#view-wealth").innerText();
+  assert.match(transferredText, /Personal position\s+£1,100\.00\s+£550\.00 safe to spend/i);
+  assert.match(transferredText, /Business position\s+£570\.00\s+£445\.00 free after business plans/i);
   await transferred.context.close();
 }
 
@@ -289,19 +291,45 @@ async function testMobileAndDialogs(browser, baseUrl) {
     page.on("pageerror", error => pageErrors.push(error.message));
     await page.goto(baseUrl, { waitUntil: "networkidle" });
 
-    assert.equal(await page.locator(".today-priority-card").count(), 1);
-    assert.equal(await page.locator(".today-secondary").getAttribute("open"), null);
+    assert.equal(await page.locator(".home-focus-card").count(), 1);
 
-    for (const view of ["today", "life", "money", "week", "architecture", "review"]) {
+    for (const view of ["home", "wealth", "build", "life", "more"]) {
       await tap(page.locator(`.nav-item[data-view-target="${view}"]`));
       await page.locator(`#view-${view}.active`).waitFor();
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       assert.ok(overflow <= 1, `${view} overflows by ${overflow}px at ${width}px`);
-      if (view === "money") {
-        for (const section of ["overview", "stacks", "empire", "report"]) {
+      const landingHeight = await page.locator(`#view-${view}`).evaluate(element => element.scrollHeight);
+      assert.ok(landingHeight <= (view === "home" ? 1200 : 1050), `${view} landing is ${landingHeight}px tall at ${width}px`);
+      if (view === "wealth") {
+        for (const section of ["overview", "empire", "stacks", "money", "report"]) {
           await tap(page.locator(`[data-money-section="${section}"]`).first());
           const sectionOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-          assert.ok(sectionOverflow <= 1, `money/${section} overflows by ${sectionOverflow}px at ${width}px`);
+          assert.ok(sectionOverflow <= 1, `wealth/${section} overflows by ${sectionOverflow}px at ${width}px`);
+          if (section === "overview") {
+            const overviewHeight = await page.locator("#view-wealth").evaluate(element => element.scrollHeight);
+            assert.ok(overviewHeight <= 1050, `wealth overview is ${overviewHeight}px tall at ${width}px`);
+          }
+        }
+      }
+      if (view === "build") {
+        for (const section of ["overview", "portfolio", "actions", "opportunities"]) {
+          await tap(page.locator(`[data-build-section="${section}"]`).first());
+          const sectionOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+          assert.ok(sectionOverflow <= 1, `build/${section} overflows by ${sectionOverflow}px at ${width}px`);
+        }
+      }
+      if (view === "life") {
+        for (const section of ["overview", "people", "plans", "personal"]) {
+          await tap(page.locator(`[data-life-section="${section}"]`).first());
+          const sectionOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+          assert.ok(sectionOverflow <= 1, `life/${section} overflows by ${sectionOverflow}px at ${width}px`);
+        }
+      }
+      if (view === "more") {
+        for (const section of ["overview", "routines", "calendar", "review"]) {
+          await tap(page.locator(`[data-more-section="${section}"]`).first());
+          const sectionOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+          assert.ok(sectionOverflow <= 1, `more/${section} overflows by ${sectionOverflow}px at ${width}px`);
         }
       }
     }
@@ -320,7 +348,10 @@ async function main() {
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   const baseUrl = `http://127.0.0.1:${address.port}/`;
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE } : {})
+  });
   try {
     await testMigrationAndMoney(browser, baseUrl);
     await testMobileAndDialogs(browser, baseUrl);
