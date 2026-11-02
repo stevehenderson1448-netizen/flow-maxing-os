@@ -5,7 +5,8 @@ A dependency-free, mobile-first personal command centre organised around five cl
 ## Included systems
 
 - Compact Home command centre using energy, routines, priorities, deadlines, payments, plans, and smart cues
-- Three-part Home workspace with Command, a proper day/week Schedule, and a dedicated Smart Cues view
+- Three-part Home workspace with Command, a proper recurring day/week Schedule, and a dedicated Smart Cues view
+- Personalised recurring blocks for morning foundations, focused business work, training, connection, tomorrow setup and weekly review
 - Timed schedule blocks linked to actions, alongside automatic bill, deadline, maintenance, and life-plan entries
 - Five-destination mobile navigation: Home, Wealth, Build, Life, and More, with focused tabs inside each section
 - A dedicated Life module for identity, relationships, experiences, personal care, faith, and private reflection

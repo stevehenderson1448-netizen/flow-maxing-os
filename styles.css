@@ -4897,8 +4897,8 @@ input, textarea, select { border-color: var(--line); color: var(--ink); backgrou
   .schedule-item { grid-template-columns: 62px minmax(0,1fr) auto; gap: 8px; }
   .schedule-time-grid { grid-template-columns: 1fr 1fr; }
   .schedule-time-grid .schedule-date-field { grid-column: 1 / -1; }
-  .schedule-meta-grid { grid-template-columns: 1fr 1fr; }
-  .schedule-meta-grid .schedule-link-field { grid-column: 1 / -1; }
+  .schedule-meta-grid { grid-template-columns: 1fr; }
+  .schedule-meta-grid .schedule-link-field { grid-column: auto; }
   .smart-cue-detail { align-items: flex-start; flex-direction: column; }
   .smart-cue-detail button { width: 100%; }
 }

@@ -6,7 +6,7 @@ const { chromium } = require("playwright");
 
 const root = path.resolve(__dirname, "..");
 const storageKey = "flow-maxing-os-v1";
-const backupKey = "50x-life-os-pre-v13-backup";
+const backupKey = "50x-life-os-pre-v14-backup";
 
 const mimeTypes = {
   ".css": "text/css",
@@ -102,7 +102,7 @@ async function testMigrationAndMoney(browser, baseUrl) {
   const state = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), storageKey);
   const backup = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), backupKey);
 
-  assert.equal(state.version, 13);
+  assert.equal(state.version, 14);
   assert.equal(backup.fromVersion, 10);
   assert.deepEqual(state.finances.bills.map(item => item.name), ["Rent", "Business AI development tools"]);
   assert.deepEqual(state.finances.budgets.map(item => item.name).sort(), ["Food", "Transport"]);
@@ -115,6 +115,9 @@ async function testMigrationAndMoney(browser, baseUrl) {
   assert.equal(state.finances.stackEntries.length, 1);
   assert.equal(state.finances.stackEntries[0].amountMinor, 5000);
   assert.equal(state.finances.incomeStreams.length, 5);
+  assert.ok(state.scheduleEvents.some(item => item.title === "Focused business work" && item.repeat === "weekdays"));
+  assert.ok(state.cues.some(item => item.name === "Flexible wake recovery"));
+  assert.ok(state.cues.some(item => item.name === "Daily human connection"));
 
   await tap(page.locator('.nav-item[data-view-target="wealth"]'));
   await page.locator("#view-wealth.active").waitFor();
@@ -321,9 +324,12 @@ async function testMobileAndDialogs(browser, baseUrl) {
     await page.locator('[name="title"]').fill("Gym session");
     await page.locator('[name="startTime"]').fill("18:00");
     await page.locator('[name="endTime"]').fill("19:15");
+    await page.locator('[name="repeat"]').selectOption("weekly");
     await tap(page.locator("#save-item"));
     await page.locator("#editor-dialog").waitFor({ state: "hidden" });
     assert.match(await page.locator(".schedule-agenda").innerText(), /Gym session/);
+    const scheduleState = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), storageKey);
+    assert.equal(scheduleState.scheduleEvents.find(item => item.title === "Gym session").repeat, "weekly");
     await tap(page.locator('[data-home-section="cues"]'));
     assert.equal(await page.locator(".smart-cue-workspace").count(), 1);
     await tap(page.getByRole("tab", { name: "Command" }));

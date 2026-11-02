@@ -2,11 +2,11 @@ const STORAGE_KEY = "flow-maxing-os-v1";
 const SECURITY_KEY = "50x-life-os-security-v1";
 const CLOUD_SYNC_KEY = "50x-life-os-cloud-sync-v1";
 const MIGRATION_BACKUP_KEY = "50x-life-os-pre-v8-backup";
-const LATEST_MIGRATION_BACKUP_KEY = "50x-life-os-pre-v13-backup";
+const LATEST_MIGRATION_BACKUP_KEY = "50x-life-os-pre-v14-backup";
 const PRE_RESTORE_BACKUP_KEY = "50x-life-os-before-snapshot-restore";
 const PRE_REPLACEMENT_BACKUP_KEY = "50x-life-os-before-data-replacement";
 const CORRUPT_STATE_QUARANTINE_KEY = "50x-life-os-corrupt-state";
-const CURRENT_STATE_VERSION = 13;
+const CURRENT_STATE_VERSION = 14;
 const LIVE_URL = "https://stevehenderson1448-netizen.github.io/flow-maxing-os/";
 const SYNC_RELAY = "https://mantledb.sh/v2";
 const SYNC_PATH = "life-os";
@@ -29,8 +29,33 @@ const CUE_DEFAULTS = [
   { name: "Evening shutdown", cue: "When I plug in my phone for the night", response: "I write tomorrow's priority and close work", setup: "Keep a notebook beside the charging station", remove: "Turn off unnecessary work alerts" },
   { name: "Tomorrow setup", cue: "When my evening reflection ends", response: "I choose tomorrow's important task and prepare everything needed to begin", setup: "Put the materials at the exact place where the action will start", remove: "Do not leave decisions or packing for the morning" },
   { name: "Gym preparation", cue: "When I finish dinner and tomorrow includes training", response: "I pack my gym clothes, shoes, water bottle, towel, and headphones", setup: "Put the packed bag and shoes beside the door", remove: "Do not rely on rushed morning packing" },
-  { name: "Leave on time", cue: "When I check tomorrow's calendar during shutdown", response: "I gather the keys, documents, directions, and anything I need to take", setup: "Place everything together beside the door", remove: "Do not search for essentials when it is time to leave" }
+  { name: "Leave on time", cue: "When I check tomorrow's calendar during shutdown", response: "I gather the keys, documents, directions, and anything I need to take", setup: "Place everything together beside the door", remove: "Do not search for essentials when it is time to leave" },
+  { name: "Flexible wake recovery", cue: "When I wake later than planned", response: "I switch to Minimum mode and begin with water, daylight, three breaths, and one clear move", setup: "Keep the Minimum routine visible and the first useful task prepared", remove: "Do not spend the morning redesigning or punishing the day" },
+  { name: "Daily human connection", cue: "When focused work is closed for the day", response: "I call, message, or make a plan with one person", setup: "Choose the person during the evening setup so the action is obvious", remove: "Do not replace genuine contact with passive scrolling" }
 ];
+
+function personalisedScheduleDefaults() {
+  const monday = dateFromKey(weekStartKey());
+  const onDay = offset => {
+    const date = new Date(monday);
+    date.setDate(date.getDate() + offset);
+    return dayKey(date);
+  };
+  const block = (id, title, date, startTime, endTime, type, repeat, notes) => ({ id, title, date, startTime, endTime, type, repeat, taskId: "", notes, status: "planned", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+  return [
+    block("50x-morning-launch", "Morning launch window", onDay(0), "08:30", "08:45", "routine", "weekdays", "Water, daylight and no feeds. On a later wake day, start this sequence when you wake instead of abandoning it."),
+    block("50x-mind-foundation", "Breathwork + meditation", onDay(0), "08:45", "09:00", "routine", "weekdays", "Five minutes of breathing, then ten minutes of meditation. The prepared seat is the cue."),
+    block("50x-reading", "Read before inputs", onDay(0), "09:00", "09:15", "personal", "weekdays", "Read the book already placed nearby before news, messages or social media."),
+    block("50x-business-focus", "Focused business work", onDay(0), "09:30", "11:00", "focus", "weekdays", "One defined business output. Prepare the file and first visible action the night before."),
+    block("50x-midday-reset", "Food + outside reset", onDay(0), "13:00", "13:30", "personal", "weekdays", "Eat properly, leave the desk and get daylight before deciding what comes next."),
+    block("50x-gym-mon", "Training / movement", onDay(0), "18:00", "19:00", "routine", "weekly", "Bag packed the night before and placed by the door. A walk is the minimum version."),
+    block("50x-gym-wed", "Training / movement", onDay(2), "18:00", "19:00", "routine", "weekly", "Bag packed the night before and placed by the door. A walk is the minimum version."),
+    block("50x-gym-fri", "Training / movement", onDay(4), "18:00", "19:00", "routine", "weekly", "Bag packed the night before and placed by the door. A walk is the minimum version."),
+    block("50x-connection", "Human connection", onDay(0), "19:30", "19:45", "social", "weekdays", "Call someone, send a proper message, or create a link-up. Keep it genuine and low pressure."),
+    block("50x-tomorrow-setup", "Tomorrow setup", onDay(0), "22:15", "22:30", "routine", "daily", "Choose tomorrow's outcome, prepare the first task, check the calendar and pack anything needed."),
+    block("50x-weekly-review", "Weekly reset", onDay(6), "18:00", "18:30", "personal", "weekly", "Review money, business movement, plans, people and what deserves attention next week.")
+  ];
+}
 
 const TASK_SETUP_DEFAULTS = {
   "Define this week's business needle-mover": { preparation: "Review the weekly outcome and open the decision notes", placement: "Leave the notes open on the clear desk", launchCue: "After morning meditation, sit at the desk and read the weekly outcome", fallback: "Write one sentence naming the result that matters most" },
@@ -105,7 +130,7 @@ const defaultState = () => ({
   milestones: [],
   projectDecisions: [],
   projectBlockers: [],
-  scheduleEvents: [],
+  scheduleEvents: personalisedScheduleDefaults(),
   inbox: [],
   history: [],
   modes: clone(DEFAULT_MODES),
@@ -269,6 +294,7 @@ function normalizeScheduleEvents(items) {
     startTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(item.startTime || "") ? item.startTime : "09:00",
     endTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(item.endTime || "") ? item.endTime : "",
     type: ["focus", "appointment", "routine", "social", "personal", "travel", "other"].includes(item.type) ? item.type : "other",
+    repeat: ["none", "daily", "weekdays", "weekly"].includes(item.repeat) ? item.repeat : "none",
     taskId: String(item.taskId || ""),
     notes: String(item.notes || ""),
     status: item.status === "completed" ? "completed" : "planned",
@@ -727,11 +753,13 @@ function normalizeState(input) {
     const match = CUE_DEFAULTS.find(item => item.name.toLowerCase() === String(cue.name).toLowerCase());
     return { id: cue.id || crypto.randomUUID(), ...match, ...cue, setup: cue.setup ?? match?.setup ?? "Prepare the environment before the cue arrives", remove: cue.remove ?? match?.remove ?? "Remove the easiest competing action" };
   });
-  if (inputVersion < 7) {
+  if (inputVersion < 14) {
     CUE_DEFAULTS.forEach(cue => {
       if (!cues.some(item => item.name.toLowerCase() === cue.name.toLowerCase())) cues.push({ id: crypto.randomUUID(), ...cue });
     });
   }
+  const sourceScheduleEvents = Array.isArray(input.scheduleEvents) ? input.scheduleEvents : [];
+  const scheduleEvents = normalizeScheduleEvents(sourceScheduleEvents.length || inputVersion >= 14 ? sourceScheduleEvents : personalisedScheduleDefaults());
   const daily = input.daily && typeof input.daily === "object" ? input.daily : {};
   Object.values(daily).forEach(day => {
     if (day.mode === "recovery") day.mode = "minimum";
@@ -756,7 +784,7 @@ function normalizeState(input) {
     milestones: normalizeMilestones(input.milestones),
     projectDecisions: normalizeProjectRecords(input.projectDecisions, "decision"),
     projectBlockers: normalizeProjectRecords(input.projectBlockers, "blocker"),
-    scheduleEvents: normalizeScheduleEvents(input.scheduleEvents),
+    scheduleEvents,
     inbox: normalizeInbox(input.inbox),
     history: Array.isArray(input.history) ? input.history : [],
     modes: normalizeModes(input.modes),
@@ -1747,8 +1775,18 @@ function scheduleDayKeys(startKey = scheduleDate, count = 7) {
   return Array.from({ length: count }, (_, index) => dayKey(addDays(start, index)));
 }
 
+function scheduleEventOccursOn(event, dateKey) {
+  if (dateKey < event.date) return false;
+  if (event.date === dateKey) return true;
+  if (event.repeat === "daily") return true;
+  const date = dateFromKey(dateKey);
+  if (event.repeat === "weekdays") return date.getDay() >= 1 && date.getDay() <= 5;
+  if (event.repeat === "weekly") return date.getDay() === dateFromKey(event.date).getDay();
+  return false;
+}
+
 function scheduleItemsForDate(dateKey) {
-  const custom = state.scheduleEvents.filter(item => item.date === dateKey).map(item => ({ id: item.id, kind: "custom", time: item.startTime, endTime: item.endTime, title: item.title, meta: `${item.type}${item.taskId ? " · linked action" : ""}`, status: item.status, editor: true }));
+  const custom = state.scheduleEvents.filter(item => scheduleEventOccursOn(item, dateKey)).map(item => ({ id: item.id, kind: "custom", time: item.startTime, endTime: item.endTime, title: item.title, meta: `${item.type}${item.repeat !== "none" ? ` · ${item.repeat}` : ""}${item.taskId ? " · linked action" : ""}`, status: item.status, editor: true }));
   const scheduledTaskIds = new Set(custom.map(item => state.scheduleEvents.find(event => event.id === item.id)?.taskId).filter(Boolean));
   const tasks = state.tasks.filter(item => !item.done && item.dueDate === dateKey && !scheduledTaskIds.has(item.id)).map(item => ({ id: item.id, kind: "task", time: "", title: item.name, meta: `${item.duration} min · deadline`, destination: "build", section: "actions" }));
   const experiences = state.life.experiences.filter(item => item.status === "planned" && item.targetDate === dateKey).map(item => ({ id: item.id, kind: "life", time: "", title: item.name, meta: "Life plan", destination: "life", section: "plans" }));
@@ -2719,7 +2757,7 @@ function taskEditor(item) {
 }
 
 function scheduleEditor(item) {
-  return `<div class="field"><label>What is happening?</label><input name="title" required value="${escapeHTML(item?.title || "")}" placeholder="Focused work, gym, appointment…" /></div><div class="schedule-time-grid"><div class="field schedule-date-field"><label>Date</label><input name="date" type="date" required value="${item?.date || scheduleDate}" /></div><div class="field"><label>Starts</label><input name="startTime" type="time" required value="${item?.startTime || "09:00"}" /></div><div class="field"><label>Ends</label><input name="endTime" type="time" value="${item?.endTime || ""}" /></div></div><div class="schedule-meta-grid"><div class="field"><label>Type</label><select name="type">${[["focus","Focus"],["appointment","Appointment"],["routine","Routine"],["social","Social"],["personal","Personal"],["travel","Travel"],["other","Other"]].map(([value,label]) => `<option value="${value}" ${(item?.type || "focus") === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Status</label><select name="status"><option value="planned" ${item?.status !== "completed" ? "selected" : ""}>Planned</option><option value="completed" ${item?.status === "completed" ? "selected" : ""}>Completed</option></select></div><div class="field schedule-link-field"><label>Linked action</label><select name="taskId"><option value="">None</option>${state.tasks.filter(task => !task.done || task.id === item?.taskId).map(task => `<option value="${task.id}" ${item?.taskId === task.id ? "selected" : ""}>${escapeHTML(task.name)}</option>`).join("")}</select></div></div><div class="field"><label>Preparation or notes</label><textarea name="notes" placeholder="What should be ready before this starts?">${escapeHTML(item?.notes || "")}</textarea></div>`;
+  return `<div class="field"><label>What is happening?</label><input name="title" required value="${escapeHTML(item?.title || "")}" placeholder="Focused work, gym, appointment…" /></div><div class="schedule-time-grid"><div class="field schedule-date-field"><label>Date</label><input name="date" type="date" required value="${item?.date || scheduleDate}" /></div><div class="field"><label>Starts</label><input name="startTime" type="time" required value="${item?.startTime || "09:00"}" /></div><div class="field"><label>Ends</label><input name="endTime" type="time" value="${item?.endTime || ""}" /></div></div><div class="schedule-meta-grid"><div class="field"><label>Type</label><select name="type">${[["focus","Focus"],["appointment","Appointment"],["routine","Routine"],["social","Social"],["personal","Personal"],["travel","Travel"],["other","Other"]].map(([value,label]) => `<option value="${value}" ${(item?.type || "focus") === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Repeats</label><select name="repeat">${[["none","Does not repeat"],["daily","Every day"],["weekdays","Weekdays"],["weekly","Every week"]].map(([value,label]) => `<option value="${value}" ${(item?.repeat || "none") === value ? "selected" : ""}>${label}</option>`).join("")}</select></div><div class="field"><label>Status</label><select name="status"><option value="planned" ${item?.status !== "completed" ? "selected" : ""}>Planned</option><option value="completed" ${item?.status === "completed" ? "selected" : ""}>Completed</option></select></div><div class="field schedule-link-field"><label>Linked action</label><select name="taskId"><option value="">None</option>${state.tasks.filter(task => !task.done || task.id === item?.taskId).map(task => `<option value="${task.id}" ${item?.taskId === task.id ? "selected" : ""}>${escapeHTML(task.name)}</option>`).join("")}</select></div></div><div class="field"><label>Preparation or notes</label><textarea name="notes" placeholder="What should be ready before this starts?">${escapeHTML(item?.notes || "")}</textarea></div>`;
 }
 
 function billPaymentEditor(billId, period) {
@@ -3184,7 +3222,7 @@ async function saveEditor() {
     const daily = todayState();
     if (setupChanged && daily.tomorrowTaskId === item.id) daily.tomorrowReady = false;
   }
-  if (editor.type === "schedule") Object.assign(item, { title: data.title.trim(), date: data.date, startTime: data.startTime, endTime: data.endTime || "", type: data.type, taskId: data.taskId || "", notes: data.notes.trim(), status: data.status, createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
+  if (editor.type === "schedule") Object.assign(item, { title: data.title.trim(), date: data.date, startTime: data.startTime, endTime: data.endTime || "", type: data.type, repeat: data.repeat, taskId: data.taskId || "", notes: data.notes.trim(), status: data.status, createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
   if (editor.type === "inbox") Object.assign(item, { text: data.text.trim(), type: data.type, createdAt: item.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
   if (editor.type === "maintenance") Object.assign(item, { name: data.name.trim(), category: data.category, dueDate: data.dueDate, recurrence: data.recurrence, remindDays: Number(data.remindDays), notes: data.notes.trim(), createdAt: item.createdAt || new Date().toISOString(), completedPeriods: item.completedPeriods || [] });
   if (editor.type === "cue") Object.assign(item, { name: data.name.trim(), cue: data.cue.trim(), response: data.response.trim(), setup: data.setup.trim(), remove: data.remove.trim() });
